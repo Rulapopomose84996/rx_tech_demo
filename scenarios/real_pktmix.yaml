@@ -1,0 +1,5 @@
+scenario: real_pktmix
+traffic_profile: real_distribution
+face_count: 3
+target_rate_gbps: 4.8
+duration_seconds: 60

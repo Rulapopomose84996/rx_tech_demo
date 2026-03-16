@@ -1,0 +1,19 @@
+add_executable(test_parser test_parser.cpp)
+target_link_libraries(test_parser PRIVATE rxtech_benchmark_core)
+add_test(NAME test_parser COMMAND test_parser)
+rxtech_apply_warnings(test_parser)
+
+add_executable(test_spsc_ring test_spsc_ring.cpp)
+target_link_libraries(test_spsc_ring PRIVATE rxtech_benchmark_core)
+add_test(NAME test_spsc_ring COMMAND test_spsc_ring)
+rxtech_apply_warnings(test_spsc_ring)
+
+add_executable(test_metrics test_metrics.cpp)
+target_link_libraries(test_metrics PRIVATE rxtech_benchmark_core)
+add_test(NAME test_metrics COMMAND test_metrics)
+rxtech_apply_warnings(test_metrics)
+
+add_executable(test_scenario_loader test_scenario_loader.cpp)
+target_link_libraries(test_scenario_loader PRIVATE rxtech_benchmark_core)
+add_test(NAME test_scenario_loader COMMAND test_scenario_loader)
+rxtech_apply_warnings(test_scenario_loader)

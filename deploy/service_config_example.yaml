@@ -1,0 +1,4 @@
+backend: socket
+mode: rx_only
+scenario: scenarios/single_face_steady.yaml
+output_dir: /var/lib/rx_tech_demo/results

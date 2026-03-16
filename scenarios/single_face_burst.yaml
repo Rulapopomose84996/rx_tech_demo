@@ -1,0 +1,5 @@
+scenario: single_face_burst
+traffic_profile: burst
+face_count: 1
+target_rate_gbps: 4.8
+duration_seconds: 30

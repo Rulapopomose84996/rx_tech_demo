@@ -1,0 +1,9 @@
+[Unit]
+Description=rx_tech_demo placeholder service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/rxbench_socket
+
+[Install]
+WantedBy=multi-user.target

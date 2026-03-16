@@ -1,0 +1,5 @@
+scenario: three_face_burst
+traffic_profile: burst
+face_count: 3
+target_rate_gbps: 4.8
+duration_seconds: 30
