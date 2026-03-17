@@ -26,6 +26,15 @@
 - 编写环境自检脚本
 - 编写后续 AF_XDP / DPDK 最小 PoC 的代码骨架和脚本骨架
 
+当前已实际完成：
+
+- 服务器项目目录已 clone 到 `/home/devuser/WorkSpace/rx_tech_demo`
+- 共享缓存命名空间已建立：
+  - `/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo/archives`
+  - `/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo/build/native-aarch64`
+- 共享缓存说明已写入 `/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo/README.md`
+- 自检脚本已入仓
+
 ### 3. 可直接使用的自检脚本
 
 服务器上建议运行：
@@ -33,21 +42,24 @@
 运行位置：Linux server，目录 `/home/devuser/WorkSpace/rx_tech_demo`
 ```bash
 cd /home/devuser/WorkSpace/rx_tech_demo
-./scripts/check_af_xdp_env.sh enP1s25f0 0
-./scripts/check_dpdk_env.sh 0001:05:00.0
+./scripts/check_af_xdp_env.sh enP1s25f3 0
+./scripts/check_dpdk_env.sh 0001:05:00.3
 ```
 
 ## 你必须亲自完成或确认的工作
 
-### 1. 需要你拍板的事项
+### 1. 已形成的推荐决策
 
-- 哪一个 Intel X710 端口可以作为 AF_XDP 测试口
-- 哪一个端口可以作为 DPDK 解绑测试口
-- 是否允许把依赖按“系统安装”还是“共享缓存离线化”来管理
-- 是否允许启用 hugepage
-- 是否允许对测试端口做驱动切换
+当前推荐方案已经明确：
 
-这些事情我不能替你决定，因为它们会影响现网和服务器运行策略。
+- AF_XDP 测试口：`enP1s25f3`
+- DPDK 解绑测试口：`enP1s25f3`
+- AF_XDP 依赖管理：系统安装优先
+- DPDK 依赖管理：共享缓存离线化优先
+- hugepage：允许启用
+- 驱动切换：允许，但仅限专用实验口 `enP1s25f3`
+
+你现在需要做的不是再次决策，而是确认这些推荐是否可以在现场执行。
 
 ### 2. 需要你安装或让运维安装的东西
 
@@ -66,9 +78,9 @@ DPDK 必须：
 ### 3. 需要你或运维执行的变更类动作
 
 - 分配 hugepage
-- 指定允许解绑的测试口
-- 在需要时把测试口从内核驱动切到 `vfio-pci`
-- 测试完成后把测试口安全绑回原驱动
+- 确认 `enP1s25f3` 可作为专用实验口
+- 在需要时把 `enP1s25f3` 从内核驱动切到 `vfio-pci`
+- 测试完成后把 `enP1s25f3` 安全绑回原驱动
 
 这些都属于会影响系统状态的动作，不应由我在未知影响范围下直接执行。
 
@@ -86,5 +98,5 @@ DPDK 必须：
 - AF_XDP 用户态依赖未安装
 - DPDK 用户态依赖未安装
 - hugepage 尚未分配
-- 测试口尚未明确
-- DPDK 端口重绑授权尚未明确
+- `enP1s25f3` 是否可作为专用实验口，仍需你或运维最后确认
+- DPDK 端口重绑授权仍需你或运维最终确认

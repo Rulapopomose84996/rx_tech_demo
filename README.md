@@ -18,6 +18,9 @@
 - socket / AF_XDP / DPDK 后端占位
 - unit / integration 测试骨架
 - 场景、脚本、部署、文档模板
+- 服务器工作区已完成 clone：`/home/devuser/WorkSpace/rx_tech_demo`
+- 本项目共享缓存命名空间已完成建立：`/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo`
+- 已提供 AF_XDP / DPDK 环境自检脚本
 
 ## 开发约束
 
@@ -26,13 +29,14 @@
 - 远程验证以 `ssh kds` 登录服务器为准
 - 服务器工作区统一使用 `/home/devuser/WorkSpace/rx_tech_demo`
 - 构建时统一使用 `/home/devuser/WorkSpace/ThirdPartyCache` 作为共享第三方依赖缓存
+- 本项目专用缓存命名空间为 `/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo`
 
 ## 远程工作流
 
 1. 本地编辑并按功能分类提交
 2. 推送到远程仓库
 3. 通过 `ssh kds` 登录服务器
-4. 在 `/home/devuser/WorkSpace` 下 clone 或 pull 项目
+4. 在 `/home/devuser/WorkSpace/rx_tech_demo` 下 pull 项目
 5. 使用共享第三方缓存执行服务器构建
 6. 在服务器上运行测试或压测
 
@@ -44,3 +48,20 @@ Linux server:
 cd /home/devuser/WorkSpace/rx_tech_demo
 ./scripts/build_server_shared_cache.sh
 ```
+
+## 环境自检
+
+Linux server:
+
+```bash
+cd /home/devuser/WorkSpace/rx_tech_demo
+./scripts/check_af_xdp_env.sh enP1s25f3 0
+./scripts/check_dpdk_env.sh 0001:05:00.3
+```
+
+当前推荐决策：
+
+- AF_XDP 测试口：`enP1s25f3`
+- DPDK 解绑测试口：`enP1s25f3`
+- AF_XDP 依赖管理：系统安装优先
+- DPDK 依赖管理：共享缓存离线化优先
