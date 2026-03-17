@@ -21,6 +21,7 @@
 - 服务器工作区已完成 clone：`/home/devuser/WorkSpace/rx_tech_demo`
 - 本项目共享缓存命名空间已完成建立：`/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo`
 - 已提供 AF_XDP / DPDK 环境自检脚本
+- 已提供最小 BPF / XDP attach / AF_XDP bind 验证脚本
 
 ## 开发约束
 
@@ -65,3 +66,17 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 - DPDK 解绑测试口：`enP1s25f3`
 - AF_XDP 依赖管理：系统安装优先
 - DPDK 依赖管理：共享缓存离线化优先
+
+## 最小 AF_XDP 验证
+
+Linux server:
+
+```bash
+cd /home/devuser/WorkSpace/rx_tech_demo
+./scripts/compile_min_xdp.sh
+./scripts/attach_min_xdp.sh enP1s25f3
+bpftool net
+./scripts/build_af_xdp_bind_probe.sh
+./build_af_xdp_probe/af_xdp_bind_probe enP1s25f3 0
+./scripts/detach_xdp.sh enP1s25f3
+```

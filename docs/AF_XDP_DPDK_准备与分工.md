@@ -34,6 +34,7 @@
   - `/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo/build/native-aarch64`
 - 共享缓存说明已写入 `/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo/README.md`
 - 自检脚本已入仓
+- 最小 BPF / XDP attach / AF_XDP bind 验证脚本已入仓
 
 ### 3. 可直接使用的自检脚本
 
@@ -44,6 +45,18 @@
 cd /home/devuser/WorkSpace/rx_tech_demo
 ./scripts/check_af_xdp_env.sh enP1s25f3 0
 ./scripts/check_dpdk_env.sh 0001:05:00.3
+```
+
+最小 AF_XDP 验证入口：
+
+```bash
+cd /home/devuser/WorkSpace/rx_tech_demo
+./scripts/compile_min_xdp.sh
+./scripts/attach_min_xdp.sh enP1s25f3
+bpftool net
+./scripts/build_af_xdp_bind_probe.sh
+./build_af_xdp_probe/af_xdp_bind_probe enP1s25f3 0
+./scripts/detach_xdp.sh enP1s25f3
 ```
 
 ## 你必须亲自完成或确认的工作
@@ -95,8 +108,15 @@ DPDK 必须：
 
 我已经尽量把“无需改变系统状态”的工作做掉了，当前真正卡住项目推进的主要是：
 
-- AF_XDP 用户态依赖未安装
+- AF_XDP 仍缺 `libxdp` 与最小 attach / bind 实测闭环
 - DPDK 用户态依赖未安装
 - hugepage 尚未分配
 - `enP1s25f3` 是否可作为专用实验口，仍需你或运维最后确认
 - DPDK 端口重绑授权仍需你或运维最终确认
+
+根据 2026-03-17 终端日志，AF_XDP 方向已新增进展：
+
+- `libbpf` 已在服务器上安装完成
+- `pkg-config --modversion libbpf` 返回 `0.8.1`
+- `ldconfig -p` 已能看到 `libbpf.so`
+- `check_af_xdp_env.sh` 已确认 XDP 与 XSKMAP 能力存在
