@@ -8,8 +8,10 @@ OUT="${OUT_DIR}/xdp_redirect_kern.bpf.o"
 
 mkdir -p "${OUT_DIR}"
 
-clang -O2 -g -target bpf -D__TARGET_ARCH_arm64 \
-      -I/usr/include/aarch64-linux-gnu \
-      -c "${SRC}" -o "${OUT}"
+CLANG_BIN="${CLANG_BIN:-/usr/bin/clang}"
+
+"${CLANG_BIN}" -O2 -target bpf -D__TARGET_ARCH_arm64 \
+               -I/usr/include/aarch64-linux-gnu \
+               -c "${SRC}" -o "${OUT}"
 
 echo "${OUT}"

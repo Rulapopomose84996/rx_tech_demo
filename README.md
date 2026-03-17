@@ -22,6 +22,7 @@
 - 本项目共享缓存命名空间已完成建立：`/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo`
 - 已提供 AF_XDP / DPDK 环境自检脚本
 - 已提供最小 BPF / XDP attach / AF_XDP bind 验证脚本
+- 已在服务器上完成一轮最小 AF_XDP 实测闭环
 
 ## 开发约束
 
@@ -66,6 +67,14 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 - DPDK 解绑测试口：`enP1s25f3`
 - AF_XDP 依赖管理：系统安装优先
 - DPDK 依赖管理：共享缓存离线化优先
+
+当前 AF_XDP 最小实测结果：
+
+- `libbpf 0.8.1` 已安装并可用
+- 最小 `.bpf.o` 已在服务器上成功生成
+- 最小 XDP 程序已成功 attach 到 `enP1s25f3`
+- 最小 AF_XDP socket bind probe 已成功绑定 `enP1s25f3 queue 0`
+- 实验结束后已将目标口上的 XDP 程序卸除
 
 ## 最小 AF_XDP 验证
 

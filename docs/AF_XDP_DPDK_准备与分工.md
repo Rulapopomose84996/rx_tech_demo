@@ -35,6 +35,7 @@
 - 共享缓存说明已写入 `/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo/README.md`
 - 自检脚本已入仓
 - 最小 BPF / XDP attach / AF_XDP bind 验证脚本已入仓
+- 已完成一轮服务器最小 AF_XDP 实测闭环
 
 ### 3. 可直接使用的自检脚本
 
@@ -120,3 +121,11 @@ DPDK 必须：
 - `pkg-config --modversion libbpf` 返回 `0.8.1`
 - `ldconfig -p` 已能看到 `libbpf.so`
 - `check_af_xdp_env.sh` 已确认 XDP 与 XSKMAP 能力存在
+- 最小 `.bpf.o` 已成功生成
+- 最小 XDP attach 已成功
+- 最小 AF_XDP bind probe 已成功
+
+本轮实测还确认了两个环境特征：
+
+- `/usr/local/corex/bin/clang` 不包含可用的 BPF target，不能直接用于生成 `.bpf.o`
+- 该 4.19 内核下不应把带 BTF 调试信息的对象直接拿去 attach，因此最小 BPF 编译脚本默认不携带 `-g`
