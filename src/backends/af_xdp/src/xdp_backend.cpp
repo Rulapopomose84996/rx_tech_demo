@@ -51,6 +51,7 @@ struct XdpBackend::Impl {
         static_cast<std::uint64_t>(kFrameSize) * static_cast<std::uint64_t>(kFrameCount);
 
     std::string ifname;
+    std::string bind_mode = "auto";
     std::uint32_t queue_id = 0;
     int ifindex = 0;
     int xsks_map_fd = -1;
@@ -113,6 +114,12 @@ struct XdpBackend::Impl {
         cfg.libbpf_flags = XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD;
         cfg.xdp_flags = 0;
         cfg.bind_flags = XDP_USE_NEED_WAKEUP;
+
+        if (bind_mode == "copy") {
+            cfg.bind_flags |= XDP_COPY;
+        } else if (bind_mode == "zerocopy") {
+            cfg.bind_flags |= XDP_ZEROCOPY;
+        }
 
         if (xsk_socket__create(&socket.xsk,
                                ifname.c_str(),
@@ -204,6 +211,7 @@ bool XdpBackend::init(const RxConfig& config) {
     }
 
     impl_->ifname = config.interface_name;
+    impl_->bind_mode = config.xdp_bind_mode;
     impl_->queue_id = config.queue_id;
     impl_->ifindex = if_nametoindex(config.interface_name.c_str());
     if (impl_->ifindex == 0) {
@@ -230,6 +238,11 @@ bool XdpBackend::init(const RxConfig& config) {
     stats_.xdp_attach_mode = "driver";
     stats_.xsk_mode = impl_->socket.zerocopy ? "zerocopy" : "copy";
     stats_.xsk_bind_flags = XDP_USE_NEED_WAKEUP;
+    if (impl_->bind_mode == "copy") {
+        stats_.xsk_bind_flags |= XDP_COPY;
+    } else if (impl_->bind_mode == "zerocopy") {
+        stats_.xsk_bind_flags |= XDP_ZEROCOPY;
+    }
     stats_.umem_size = Impl::kUmemSize;
     stats_.frame_size = Impl::kFrameSize;
     stats_.fill_ring_size = Impl::kFillRingSize;

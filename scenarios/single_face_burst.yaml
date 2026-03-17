@@ -1,5 +1,9 @@
 scenario: single_face_burst
 traffic_profile: burst
+packet_size_profile: fixed_512
+packet_size_bytes: 512
+burst_window_ms: 50
+burst_multiplier: 1.5
 face_count: 1
 target_rate_gbps: 4.8
 duration_seconds: 30

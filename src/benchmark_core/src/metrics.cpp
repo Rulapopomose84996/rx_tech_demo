@@ -21,6 +21,18 @@ void MetricsCollector::on_drop() {
     ++dropped_packets_;
 }
 
+void MetricsCollector::on_error() {
+    ++backend_errors_;
+}
+
+void MetricsCollector::on_pool_exhaustion() {
+    ++pool_exhaustion_count_;
+}
+
+void MetricsCollector::on_packet_latency_ns(std::uint64_t latency_ns) {
+    latencies_ns_.push_back(latency_ns);
+}
+
 void MetricsCollector::on_ring_depth(std::size_t depth) {
     ring_high_watermark_ = std::max<std::uint64_t>(ring_high_watermark_, depth);
 }
@@ -37,6 +49,8 @@ RunSummary MetricsCollector::finalize(const std::string& backend,
     summary.rx_bytes = rx_bytes_;
     summary.parsed_packets = parsed_packets_;
     summary.dropped_packets = dropped_packets_;
+    summary.backend_errors = backend_errors_;
+    summary.pool_exhaustion_count = pool_exhaustion_count_;
     summary.ring_high_watermark = ring_high_watermark_;
 
     if (duration_seconds > 0U) {
@@ -53,6 +67,14 @@ RunSummary MetricsCollector::finalize(const std::string& backend,
         std::sort(bursts_.begin(), bursts_.end());
         const std::size_t index = static_cast<std::size_t>((bursts_.size() - 1U) * 0.99);
         summary.batch_p99 = static_cast<std::uint64_t>(bursts_[index]);
+    }
+
+    if (!latencies_ns_.empty()) {
+        std::sort(latencies_ns_.begin(), latencies_ns_.end());
+        const std::size_t p50_index = (latencies_ns_.size() - 1U) / 2U;
+        const std::size_t p99_index = static_cast<std::size_t>((latencies_ns_.size() - 1U) * 0.99);
+        summary.latency_p50_us = static_cast<double>(latencies_ns_[p50_index]) / 1000.0;
+        summary.latency_p99_us = static_cast<double>(latencies_ns_[p99_index]) / 1000.0;
     }
 
     return summary;

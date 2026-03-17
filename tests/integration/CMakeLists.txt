@@ -10,4 +10,5 @@ target_link_libraries(rxtech_integration_tests
 )
 
 add_test(NAME rxtech_integration_tests COMMAND rxtech_integration_tests)
+set_tests_properties(rxtech_integration_tests PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(rxtech_integration_tests)

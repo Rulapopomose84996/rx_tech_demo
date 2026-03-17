@@ -1,5 +1,7 @@
 scenario: single_face_steady
 traffic_profile: steady
+packet_size_profile: fixed_512
+packet_size_bytes: 512
 face_count: 1
 target_rate_gbps: 4.8
 duration_seconds: 30

@@ -12,6 +12,11 @@ int main() {
     rxtech::BenchContext context;
     context.config = rxtech::load_default_config();
     context.config.output_dir = "results/test_smoke";
+    context.config.bind_address = "127.0.0.1";
+    context.config.udp_port = 19999;
+    context.config.enable_internal_traffic = true;
+    context.config.duration_seconds = 1U;
+    context.config.packet_size_bytes = 256U;
     context.scenario = rxtech::load_scenario("smoke");
     context.backend = std::make_unique<rxtech::SocketBackend>();
     context.mode = std::make_unique<rxtech::RxOnlyMode>();

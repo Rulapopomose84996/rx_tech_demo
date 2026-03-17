@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <stdexcept>
 
 #include "cli_args.h"
@@ -74,29 +75,48 @@ ModeProcessorPtr make_mode(const std::string& mode_name) {
 }  // namespace
 
 int run_app(const std::string& backend_name, int argc, char** argv) {
-    const CliArgs args = parse_cli_args(argc, argv);
-
-    BenchContext context;
-    context.config = load_default_config();
-    context.config.backend_name = backend_name;
-    context.config.mode_name = args.mode.empty() ? "rx_only" : args.mode;
-    context.config.scenario_path = args.scenario_path;
-    context.config.output_dir = args.output_dir.empty() ? "results" : args.output_dir;
-    if (!args.interface_name.empty()) {
-        context.config.interface_name = args.interface_name;
-    }
-    if (!args.queue_id.empty()) {
-        context.config.queue_id = static_cast<std::uint32_t>(std::stoul(args.queue_id));
-    }
-    if (!args.duration_seconds.empty()) {
-        context.config.duration_seconds = static_cast<std::uint32_t>(std::stoul(args.duration_seconds));
-    }
-    context.scenario = load_scenario(context.config.scenario_path);
-    context.backend = make_backend(backend_name);
-    context.mode = make_mode(context.config.mode_name);
-    context.metrics = std::make_unique<MetricsCollector>();
-
     try {
+        const CliArgs args = parse_cli_args(argc, argv);
+
+        BenchContext context;
+        context.config = args.config_path.empty() ? load_default_config() : load_config_file(args.config_path);
+        context.config.backend_name = backend_name;
+        if (!args.mode.empty()) {
+            context.config.mode_name = args.mode;
+        }
+        if (!args.scenario_path.empty()) {
+            context.config.scenario_path = args.scenario_path;
+        }
+        if (!args.output_dir.empty()) {
+            context.config.output_dir = args.output_dir;
+        }
+        if (!args.interface_name.empty()) {
+            context.config.interface_name = args.interface_name;
+        }
+        if (!args.queue_id.empty()) {
+            context.config.queue_id = static_cast<std::uint32_t>(std::stoul(args.queue_id));
+        }
+        if (!args.duration_seconds.empty()) {
+            context.config.duration_seconds = static_cast<std::uint32_t>(std::stoul(args.duration_seconds));
+        }
+        if (!args.max_burst.empty()) {
+            context.config.max_burst = static_cast<std::uint32_t>(std::stoul(args.max_burst));
+        }
+        if (!args.cpu_cores.empty()) {
+            context.config.cpu_cores.clear();
+            std::stringstream stream(args.cpu_cores);
+            std::string item;
+            while (std::getline(stream, item, ',')) {
+                if (!item.empty()) {
+                    context.config.cpu_cores.push_back(std::stoi(item));
+                }
+            }
+        }
+        context.scenario = load_scenario(context.config.scenario_path);
+        context.backend = make_backend(backend_name);
+        context.mode = make_mode(context.config.mode_name);
+        context.metrics = std::make_unique<MetricsCollector>();
+
         BenchRunner runner;
         const RunSummary summary = runner.run(context);
         std::cout << "backend=" << summary.backend

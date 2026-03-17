@@ -58,10 +58,17 @@ void write_summary_json(const RunSummary& summary, const std::string& output_dir
     out << "  \"backend\": \"" << summary.backend << "\",\n";
     out << "  \"mode\": \"" << summary.mode << "\",\n";
     out << "  \"scenario\": \"" << summary.scenario << "\",\n";
+    out << "  \"packet_size_profile\": \"" << summary.packet_size_profile << "\",\n";
     out << "  \"xdp_attach_mode\": \"" << summary.xdp_attach_mode << "\",\n";
     out << "  \"xsk_mode\": \"" << summary.xsk_mode << "\",\n";
     out << "  \"rx_packets\": " << summary.rx_packets << ",\n";
     out << "  \"rx_bytes\": " << summary.rx_bytes << ",\n";
+    out << "  \"parsed_packets\": " << summary.parsed_packets << ",\n";
+    out << "  \"dropped_packets\": " << summary.dropped_packets << ",\n";
+    out << "  \"backend_errors\": " << summary.backend_errors << ",\n";
+    out << "  \"nic_drops\": " << summary.nic_drops << ",\n";
+    out << "  \"pool_exhaustion_count\": " << summary.pool_exhaustion_count << ",\n";
+    out << "  \"ring_high_watermark\": " << summary.ring_high_watermark << ",\n";
     out << "  \"rx_polls\": " << summary.rx_polls << ",\n";
     out << "  \"empty_polls\": " << summary.empty_polls << ",\n";
     out << "  \"queue_id\": " << summary.queue_id << ",\n";
@@ -73,6 +80,13 @@ void write_summary_json(const RunSummary& summary, const std::string& output_dir
     out << "  \"completion_ring_size\": " << summary.completion_ring_size << ",\n";
     out << "  \"actual_rx_gbps\": " << summary.actual_rx_gbps << ",\n";
     out << "  \"actual_rx_mpps\": " << summary.actual_rx_mpps << ",\n";
+    out << "  \"cpu_user_pct\": " << summary.cpu_user_pct << ",\n";
+    out << "  \"cpu_sys_pct\": " << summary.cpu_sys_pct << ",\n";
+    out << "  \"cpu_peak_pct\": " << summary.cpu_peak_pct << ",\n";
+    out << "  \"latency_p50_us\": " << summary.latency_p50_us << ",\n";
+    out << "  \"latency_p99_us\": " << summary.latency_p99_us << ",\n";
+    out << "  \"batch_avg\": " << summary.batch_avg << ",\n";
+    out << "  \"batch_p99\": " << summary.batch_p99 << ",\n";
     out << "  \"empty_poll_ratio\": " << summary.empty_poll_ratio << "\n";
     out << "}\n";
 }
