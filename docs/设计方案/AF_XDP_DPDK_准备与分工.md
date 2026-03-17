@@ -174,6 +174,30 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 ./scripts/check_dpdk_env.sh 0001:05:00.3
 ```
 
+### 7.3 服务器测试标准入口
+
+说明：
+
+- 麒麟 V10 ARM64 服务器上的旧版 `CTest` 已实测存在顶层递归发现不稳定的问题
+- 本项目正式测试不使用顶层 `ctest`，也不把 `ctest --test-dir build/tests/unit` 作为验收入口
+- 正式测试固定为进入具体测试目录后执行 `ctest --output-on-failure`
+
+单元测试：
+
+```bash
+cd /home/devuser/WorkSpace/rx_tech_demo
+cd build/tests/unit
+ctest --output-on-failure
+```
+
+集成测试：
+
+```bash
+cd /home/devuser/WorkSpace/rx_tech_demo
+cd build/tests/integration
+ctest --output-on-failure
+```
+
 ## 8. 文档闭环要求
 
 从 `2026-03-17` 起，后续若发生以下变化，必须先更新本文件，再同步其他文档：

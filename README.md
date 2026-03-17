@@ -53,6 +53,26 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 ./scripts/build_server_shared_cache.sh
 ```
 
+## 服务器测试
+
+Linux server:
+
+说明：
+
+- 麒麟 V10 ARM64 服务器上的旧版 `CTest` 不稳定，不以顶层递归发现作为正式测试入口
+- 正式测试入口固定为 `build/tests/unit` 与 `build/tests/integration`
+- 进入对应测试目录后执行 `ctest --output-on-failure`
+
+```bash
+cd /home/devuser/WorkSpace/rx_tech_demo
+cd build/tests/unit
+ctest --output-on-failure
+
+cd /home/devuser/WorkSpace/rx_tech_demo
+cd build/tests/integration
+ctest --output-on-failure
+```
+
 ## 环境自检
 
 Linux server:
@@ -73,7 +93,7 @@ export LD_LIBRARY_PATH="$PREFIX/lib:${LD_LIBRARY_PATH:-}"
 - AF_XDP 依赖管理：`libbpf` 系统安装 + `libxdp` 共享缓存前缀
 - DPDK 依赖管理：共享缓存离线化优先
 - `2026-03-17` 已确认 `enP1s25f3` 可长期作为专用实验口，并允许在正式 DPDK 压测窗口继续执行驱动重绑
-- AF_XDP / DPDK 基线真源文档：`docs/AF_XDP_DPDK_准备与分工.md`
+- AF_XDP / DPDK 基线真源文档：`docs/设计方案/AF_XDP_DPDK_准备与分工.md`
 
 当前 AF_XDP 最小实测结果：
 

@@ -30,10 +30,20 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 
 ## 服务器测试
 
+说明：
+
+- 麒麟 V10 ARM64 服务器上的旧版 `CTest` 不应依赖顶层递归发现
+- 不把 `ctest --test-dir build/tests/unit` 或顶层 `ctest` 作为正式验收入口
+- 正式测试必须进入具体测试子目录后执行 `ctest --output-on-failure`
+
 ```bash
 cd /home/devuser/WorkSpace/rx_tech_demo
-ctest --test-dir build/tests/unit --output-on-failure
-ctest --test-dir build/tests/integration --output-on-failure
+cd build/tests/unit
+ctest --output-on-failure
+
+cd /home/devuser/WorkSpace/rx_tech_demo
+cd build/tests/integration
+ctest --output-on-failure
 ```
 
 ## 环境自检
