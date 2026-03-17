@@ -14,6 +14,7 @@ struct CliArgs {
     std::string duration_seconds;
     std::string max_burst;
     std::string cpu_cores;
+    bool dry_run = false;
 };
 
 CliArgs parse_cli_args(int argc, char** argv);

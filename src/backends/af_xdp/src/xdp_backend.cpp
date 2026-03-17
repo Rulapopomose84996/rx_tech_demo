@@ -25,6 +25,21 @@
 
 namespace rxtech {
 
+namespace {
+
+BackendInitResult make_xdp_result(bool available, const std::string& reason) {
+    BackendInitResult result;
+    result.available = available;
+    result.reason = reason;
+    return result;
+}
+
+BackendInitResult make_xdp_errno_result(const std::string& reason) {
+    return make_xdp_result(true, reason + ": " + std::strerror(errno));
+}
+
+}  // namespace
+
 struct XdpBackend::Impl {
 #ifdef __linux__
     struct UmemInfo {
@@ -203,11 +218,11 @@ std::string XdpBackend::name() const {
     return "af_xdp";
 }
 
-bool XdpBackend::init(const RxConfig& config) {
+BackendInitResult XdpBackend::init(const RxConfig& config) {
     stats_ = {};
 #ifdef __linux__
     if (!Impl::set_memlock_rlimit()) {
-        return false;
+        return make_xdp_errno_result("setrlimit(RLIMIT_MEMLOCK) failed");
     }
 
     impl_->ifname = config.interface_name;
@@ -215,19 +230,19 @@ bool XdpBackend::init(const RxConfig& config) {
     impl_->queue_id = config.queue_id;
     impl_->ifindex = if_nametoindex(config.interface_name.c_str());
     if (impl_->ifindex == 0) {
-        return false;
+        return make_xdp_errno_result("if_nametoindex() failed for " + config.interface_name);
     }
 
     if (xsk_setup_xdp_prog(impl_->ifindex, &impl_->xsks_map_fd) != 0) {
-        return false;
+        return make_xdp_errno_result("xsk_setup_xdp_prog() failed");
     }
     if (!impl_->configure_umem()) {
         impl_->cleanup();
-        return false;
+        return make_xdp_errno_result("configure_umem() failed");
     }
     if (!impl_->configure_socket()) {
         impl_->cleanup();
-        return false;
+        return make_xdp_errno_result("configure_socket() failed");
     }
 
     std::uint32_t prog_id = 0;
@@ -247,10 +262,12 @@ bool XdpBackend::init(const RxConfig& config) {
     stats_.frame_size = Impl::kFrameSize;
     stats_.fill_ring_size = Impl::kFillRingSize;
     stats_.completion_ring_size = Impl::kCompletionRingSize;
-    return true;
+    BackendInitResult result;
+    result.ok = true;
+    return result;
 #else
     (void)config;
-    return false;
+    return make_xdp_result(false, "AF_XDP backend requires Linux, libbpf and XDP socket support");
 #endif
 }
 

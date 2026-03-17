@@ -14,6 +14,17 @@
 
 namespace rxtech {
 
+namespace {
+
+BackendInitResult make_dpdk_result(bool available, const std::string& reason) {
+    BackendInitResult result;
+    result.available = available;
+    result.reason = reason;
+    return result;
+}
+
+}  // namespace
+
 struct DpdkBackend::Impl {
 #if defined(__linux__) && defined(RXTECH_HAS_DPDK_RUNTIME)
     rte_mempool* mempool = nullptr;
@@ -42,11 +53,11 @@ std::string DpdkBackend::name() const {
     return "dpdk";
 }
 
-bool DpdkBackend::init(const RxConfig& config) {
+BackendInitResult DpdkBackend::init(const RxConfig& config) {
     stats_ = {};
 #if defined(__linux__) && defined(RXTECH_HAS_DPDK_RUNTIME)
     if (impl_ == nullptr) {
-        return false;
+        return make_dpdk_result(false, "DPDK backend internal state is unavailable");
     }
 
     impl_->cleanup();
@@ -82,7 +93,7 @@ bool DpdkBackend::init(const RxConfig& config) {
     const int eal_rc = rte_eal_init(static_cast<int>(argv.size()), argv.data());
     if (eal_rc < 0) {
         ++stats_.rx_errors;
-        return false;
+        return make_dpdk_result(true, "rte_eal_init() failed");
     }
 
     std::uint16_t port_id = static_cast<std::uint16_t>(config.dpdk_port_id);
@@ -95,7 +106,7 @@ bool DpdkBackend::init(const RxConfig& config) {
 
     if (!rte_eth_dev_is_valid_port(port_id)) {
         ++stats_.rx_errors;
-        return false;
+        return make_dpdk_result(true, "invalid DPDK port: " + std::to_string(port_id));
     }
 
     impl_->port_id = port_id;
@@ -107,42 +118,44 @@ bool DpdkBackend::init(const RxConfig& config) {
                                              rte_socket_id());
     if (impl_->mempool == nullptr) {
         ++stats_.rx_errors;
-        return false;
+        return make_dpdk_result(true, "rte_pktmbuf_pool_create() failed");
     }
 
     rte_eth_conf port_conf{};
     if (rte_eth_dev_configure(port_id, 1, 1, &port_conf) < 0) {
         ++stats_.rx_errors;
-        return false;
+        return make_dpdk_result(true, "rte_eth_dev_configure() failed");
     }
     if (rte_eth_rx_queue_setup(port_id,
                                0,
                                static_cast<std::uint16_t>(config.dpdk_rx_desc),
-                               rte_eth_dev_socket_id(port_id),
-                               nullptr,
-                               impl_->mempool) < 0) {
+                                rte_eth_dev_socket_id(port_id),
+                                nullptr,
+                                impl_->mempool) < 0) {
         ++stats_.rx_errors;
-        return false;
+        return make_dpdk_result(true, "rte_eth_rx_queue_setup() failed");
     }
     if (rte_eth_tx_queue_setup(port_id,
                                0,
-                               static_cast<std::uint16_t>(config.dpdk_tx_desc),
-                               rte_eth_dev_socket_id(port_id),
-                               nullptr) < 0) {
+                                static_cast<std::uint16_t>(config.dpdk_tx_desc),
+                                rte_eth_dev_socket_id(port_id),
+                                nullptr) < 0) {
         ++stats_.rx_errors;
-        return false;
+        return make_dpdk_result(true, "rte_eth_tx_queue_setup() failed");
     }
     if (rte_eth_dev_start(port_id) < 0) {
         ++stats_.rx_errors;
-        return false;
+        return make_dpdk_result(true, "rte_eth_dev_start() failed");
     }
 
     impl_->started = true;
     stats_.queue_id = 0;
-    return true;
+    BackendInitResult result;
+    result.ok = true;
+    return result;
 #else
     (void)config;
-    return true;
+    return make_dpdk_result(false, "DPDK runtime not linked; install libdpdk and rebuild on Linux");
 #endif
 }
 
@@ -177,21 +190,8 @@ bool DpdkBackend::recv_burst(RxBurst& burst, std::uint32_t max_burst) {
     }
     return true;
 #else
-    const std::uint32_t packet_count = std::min<std::uint32_t>(max_burst, 4U);
-    static std::vector<std::uint8_t> dummy_payload(128U, 0xCDU);
-    burst.packets.reserve(packet_count);
-    for (std::uint32_t index = 0; index < packet_count; ++index) {
-        PacketDesc packet;
-        packet.data = dummy_payload.data();
-        packet.len = static_cast<std::uint32_t>(dummy_payload.size());
-        packet.ts_ns = steady_clock_now_ns();
-        packet.queue_id = 0;
-        packet.cookie = static_cast<std::uintptr_t>(index);
-        burst.packets.push_back(packet);
-        ++stats_.rx_packets;
-        stats_.rx_bytes += packet.len;
-    }
-    return true;
+    (void)max_burst;
+    return false;
 #endif
 }
 

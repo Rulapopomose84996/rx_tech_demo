@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 import subprocess
 from pathlib import Path
 
@@ -23,6 +24,29 @@ def parse_csv(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def resolve_binary(path: Path) -> Path:
+    candidates = [path]
+    if path.suffix != ".exe":
+        candidates.append(path.with_suffix(".exe"))
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return path
+
+
+def resolve_build_dir(root: Path, requested: str) -> Path:
+    candidates = [
+        root / "build_production/src/apps",
+        root / "build_wsl_cross_dev/src/apps",
+        root / requested,
+        root / "build/src/apps",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return root / requested
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run rx_tech_demo benchmark matrix")
     parser.add_argument("--build-dir", default="build/src/apps", help="directory containing rxbench binaries")
@@ -34,7 +58,7 @@ def main() -> None:
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parents[1]
-    build_dir = root / args.build_dir
+    build_dir = resolve_build_dir(root, args.build_dir)
     output_root = root / args.output_root
     output_root.mkdir(parents=True, exist_ok=True)
 
@@ -48,15 +72,18 @@ def main() -> None:
         "af_xdp": root / "configs/af_xdp_single_face.conf",
         "dpdk": root / "configs/dpdk_single_face.conf",
     }
+    errors: list[str] = []
 
     for backend in parse_csv(args.backends):
-        binary = backend_to_binary[backend]
+        binary = resolve_binary(backend_to_binary[backend])
         config_path = backend_to_config[backend]
         for mode in parse_csv(args.modes):
             for scenario in parse_csv(args.scenarios):
-                scenario_name = Path(scenario).stem
+                scenario_path = root / scenario
+                scenario_name = scenario_path.stem
                 output_dir = output_root / backend / mode / scenario_name
-                output_dir.mkdir(parents=True, exist_ok=True)
+                if not args.dry_run:
+                    output_dir.mkdir(parents=True, exist_ok=True)
                 cmd = [
                     str(binary),
                     "--config",
@@ -64,13 +91,31 @@ def main() -> None:
                     "--mode",
                     mode,
                     "--scenario",
-                    str(root / scenario),
+                    str(scenario_path),
                     "--output",
                     str(output_dir),
                 ]
+                validations = [
+                    ("binary", binary.exists(), binary),
+                    ("config", config_path.exists(), config_path),
+                    ("scenario", scenario_path.exists(), scenario_path),
+                ]
+                validation_text = " ".join(
+                    f"{label}={'ok' if ok else 'missing'}:{path}" for label, ok, path in validations
+                )
+                print(f"[matrix] backend={backend} mode={mode} scenario={scenario_name} {validation_text}")
                 print(" ".join(cmd))
+                for label, ok, path in validations:
+                    if not ok:
+                        errors.append(f"{backend}/{mode}/{scenario_name}: missing {label} -> {path}")
                 if not args.dry_run:
                     subprocess.run(cmd, check=True)
+
+    if errors:
+        print("[matrix] validation failed:", file=sys.stderr)
+        for error in errors:
+            print(f"  - {error}", file=sys.stderr)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

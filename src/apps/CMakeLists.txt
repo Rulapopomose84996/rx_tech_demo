@@ -16,17 +16,17 @@ target_link_libraries(rxtech_app_common
         rxtech_spsc_mode
 )
 
-if(BUILD_SOCKET_BACKEND)
+if(TARGET rxtech_socket_backend)
     target_link_libraries(rxtech_app_common PUBLIC rxtech_socket_backend)
     target_compile_definitions(rxtech_app_common PUBLIC RXTECH_HAS_SOCKET_BACKEND=1)
 endif()
 
-if(BUILD_AF_XDP_BACKEND)
+if(TARGET rxtech_xdp_backend)
     target_link_libraries(rxtech_app_common PUBLIC rxtech_xdp_backend)
     target_compile_definitions(rxtech_app_common PUBLIC RXTECH_HAS_AF_XDP_BACKEND=1)
 endif()
 
-if(BUILD_DPDK_BACKEND)
+if(TARGET rxtech_dpdk_backend)
     target_link_libraries(rxtech_app_common PUBLIC rxtech_dpdk_backend)
     target_compile_definitions(rxtech_app_common PUBLIC RXTECH_HAS_DPDK_BACKEND=1)
 endif()

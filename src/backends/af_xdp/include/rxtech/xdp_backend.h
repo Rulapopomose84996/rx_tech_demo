@@ -15,7 +15,7 @@ public:
     XdpBackend& operator=(const XdpBackend&) = delete;
 
     std::string name() const override;
-    bool init(const RxConfig& config) override;
+    BackendInitResult init(const RxConfig& config) override;
     bool recv_burst(RxBurst& burst, std::uint32_t max_burst) override;
     void release_burst(RxBurst& burst) override;
     BackendStats stats() const override;

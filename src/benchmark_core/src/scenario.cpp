@@ -40,6 +40,8 @@ void assign_step_value(ScenarioStep& step, const std::string& key, const std::st
 
     if (normalized_key == "name") {
         step.name = normalized_value;
+    } else if (normalized_key == "phase") {
+        step.phase = normalized_value;
     } else if (normalized_key == "traffic_profile") {
         step.traffic_profile = normalized_value;
     } else if (normalized_key == "packet_size_profile") {
@@ -91,6 +93,9 @@ void normalize_step_defaults(Scenario& scenario) {
         if (step.name.empty()) {
             step.name = index == 0U ? "measure" : ("step_" + std::to_string(index));
         }
+        if (step.phase.empty()) {
+            step.phase = step.name == "warmup" ? "warmup" : "measure";
+        }
         if (step.traffic_profile.empty()) {
             step.traffic_profile = "steady";
         }
@@ -114,6 +119,10 @@ void normalize_step_defaults(Scenario& scenario) {
 
 }  // namespace
 
+bool is_measure_step(const ScenarioStep& step) {
+    return step.phase != "warmup";
+}
+
 Scenario load_scenario(const std::string& path) {
     Scenario scenario;
     scenario.scenario_name = path.empty() ? "default_scenario" : path;
@@ -122,8 +131,8 @@ Scenario load_scenario(const std::string& path) {
 
     if (path.empty() || path == "smoke") {
         scenario.scenario_name = path.empty() ? "default_scenario" : "smoke";
-        scenario.steps.push_back({"warmup", "steady", "fixed_128", 1.0, 1.0, 1U, 1U, 128U, 0U});
-        scenario.steps.push_back({"measure", "steady", "fixed_512", 4.8, 1.0, 3U, 1U, 512U, 0U});
+        scenario.steps.push_back({"warmup", "warmup", "steady", "fixed_128", 1.0, 1.0, 1U, 1U, 128U, 0U});
+        scenario.steps.push_back({"measure", "measure", "steady", "fixed_512", 4.8, 1.0, 3U, 1U, 512U, 0U});
         return scenario;
     }
 

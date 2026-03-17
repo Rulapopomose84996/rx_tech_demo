@@ -17,12 +17,25 @@
 #ifdef __linux__
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
 #endif
 
 namespace rxtech {
+
+namespace {
+
+#ifdef __linux__
+BackendInitResult make_socket_error(const std::string& message) {
+    BackendInitResult result;
+    result.reason = message + ": " + std::strerror(errno);
+    return result;
+}
+#endif
+
+}  // namespace
 
 struct SocketBackend::Impl {
 #ifdef __linux__
@@ -33,6 +46,8 @@ struct SocketBackend::Impl {
     bool enable_internal_traffic = false;
     std::uint32_t queue_id = 0;
     std::uint32_t packet_size_bytes = 256U;
+    std::uint32_t poll_timeout_ms = 50U;
+    int recv_buffer_bytes = 4 * 1024 * 1024;
 
     void cleanup() {
         if (recv_fd >= 0) {
@@ -58,19 +73,23 @@ std::string SocketBackend::name() const {
     return "socket";
 }
 
-bool SocketBackend::init(const RxConfig& config) {
+BackendInitResult SocketBackend::init(const RxConfig& config) {
     stats_ = {};
 #ifdef __linux__
     impl_->cleanup();
     impl_->queue_id = config.queue_id;
     impl_->packet_size_bytes = std::max<std::uint32_t>(config.packet_size_bytes, 64U);
     impl_->enable_internal_traffic = config.enable_internal_traffic;
+    impl_->poll_timeout_ms = config.socket_poll_timeout_ms;
+    impl_->recv_buffer_bytes = static_cast<int>(
+        std::max<std::uint32_t>(4U * 1024U * 1024U,
+                                impl_->packet_size_bytes * std::max<std::uint32_t>(config.max_burst, 1U) * 256U));
     impl_->send_buffer.assign(impl_->packet_size_bytes, 0xABU);
 
     impl_->recv_fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (impl_->recv_fd < 0) {
         ++stats_.rx_errors;
-        return false;
+        return make_socket_error("socket() failed");
     }
 
     const int reuse = 1;
@@ -78,6 +97,11 @@ bool SocketBackend::init(const RxConfig& config) {
 #ifdef SO_REUSEPORT
     (void)setsockopt(impl_->recv_fd, SOL_SOCKET, SO_REUSEPORT, reinterpret_cast<const char*>(&reuse), sizeof(reuse));
 #endif
+    (void)setsockopt(impl_->recv_fd,
+                     SOL_SOCKET,
+                     SO_RCVBUF,
+                     reinterpret_cast<const char*>(&impl_->recv_buffer_bytes),
+                     sizeof(impl_->recv_buffer_bytes));
 
     const int flags = fcntl(impl_->recv_fd, F_GETFL, 0);
     if (flags >= 0) {
@@ -92,7 +116,9 @@ bool SocketBackend::init(const RxConfig& config) {
     } else if (inet_pton(AF_INET, config.bind_address.c_str(), &impl_->bind_addr.sin_addr) != 1) {
         ++stats_.rx_errors;
         impl_->cleanup();
-        return false;
+        BackendInitResult result;
+        result.reason = "invalid bind_address: " + config.bind_address;
+        return result;
     }
 
     if (bind(impl_->recv_fd,
@@ -100,7 +126,7 @@ bool SocketBackend::init(const RxConfig& config) {
              sizeof(impl_->bind_addr)) != 0) {
         ++stats_.rx_errors;
         impl_->cleanup();
-        return false;
+        return make_socket_error("bind() failed");
     }
 
     if (impl_->enable_internal_traffic) {
@@ -108,7 +134,7 @@ bool SocketBackend::init(const RxConfig& config) {
         if (impl_->send_fd < 0) {
             ++stats_.rx_errors;
             impl_->cleanup();
-            return false;
+            return make_socket_error("send socket() failed");
         }
 
         if (connect(impl_->send_fd,
@@ -116,15 +142,20 @@ bool SocketBackend::init(const RxConfig& config) {
                     sizeof(impl_->bind_addr)) != 0) {
             ++stats_.rx_errors;
             impl_->cleanup();
-            return false;
+            return make_socket_error("connect() failed");
         }
     }
 
     stats_.queue_id = config.queue_id;
-    return true;
+    BackendInitResult result;
+    result.ok = true;
+    return result;
 #else
     (void)config;
-    return true;
+    BackendInitResult result;
+    result.available = false;
+    result.reason = "socket backend requires Linux with recvmmsg support";
+    return result;
 #endif
 }
 
@@ -137,6 +168,19 @@ bool SocketBackend::recv_burst(RxBurst& burst, std::uint32_t max_burst) {
 
     owned_packets_.clear();
     ++stats_.rx_polls;
+
+    pollfd pfd{};
+    pfd.fd = impl_->recv_fd;
+    pfd.events = POLLIN;
+    const int poll_rc = poll(&pfd, 1, static_cast<int>(impl_->poll_timeout_ms));
+    if (poll_rc < 0) {
+        ++stats_.rx_errors;
+        return false;
+    }
+    if (poll_rc == 0 || (pfd.revents & POLLIN) == 0) {
+        ++stats_.empty_polls;
+        return true;
+    }
 
     const std::uint32_t budget = std::max<std::uint32_t>(1U, std::min<std::uint32_t>(max_burst, 32U));
     if (impl_->enable_internal_traffic && impl_->send_fd >= 0) {
@@ -200,19 +244,8 @@ bool SocketBackend::recv_burst(RxBurst& burst, std::uint32_t max_burst) {
 
     return true;
 #else
-    owned_packets_.assign(std::min<std::uint32_t>(max_burst, 4U), std::vector<std::uint8_t>(256U, 0xABU));
-    burst.packets.reserve(owned_packets_.size());
-    for (std::size_t index = 0; index < owned_packets_.size(); ++index) {
-        PacketDesc packet;
-        packet.data = owned_packets_[index].data();
-        packet.len = static_cast<std::uint32_t>(owned_packets_[index].size());
-        packet.ts_ns = steady_clock_now_ns();
-        packet.cookie = static_cast<std::uintptr_t>(index);
-        burst.packets.push_back(packet);
-        ++stats_.rx_packets;
-        stats_.rx_bytes += packet.len;
-    }
-    return true;
+    (void)max_burst;
+    return false;
 #endif
 }
 

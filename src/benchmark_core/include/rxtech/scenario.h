@@ -8,6 +8,7 @@ namespace rxtech {
 
 struct ScenarioStep {
     std::string name;
+    std::string phase = "measure";
     std::string traffic_profile;
     std::string packet_size_profile;
     double target_rate_gbps = 0.0;
@@ -25,6 +26,7 @@ struct Scenario {
     std::vector<ScenarioStep> steps;
 };
 
+bool is_measure_step(const ScenarioStep& step);
 Scenario load_scenario(const std::string& path);
 
 }  // namespace rxtech

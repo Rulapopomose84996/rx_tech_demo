@@ -37,6 +37,31 @@ void MetricsCollector::on_ring_depth(std::size_t depth) {
     ring_high_watermark_ = std::max<std::uint64_t>(ring_high_watermark_, depth);
 }
 
+std::unique_ptr<IMetricsCollector> MetricsCollector::clone_empty() const {
+    return std::make_unique<MetricsCollector>();
+}
+
+bool MetricsCollector::absorb(const IMetricsCollector& other) {
+    const auto* other_metrics = dynamic_cast<const MetricsCollector*>(&other);
+    if (other_metrics == nullptr) {
+        return false;
+    }
+
+    rx_packets_ += other_metrics->rx_packets_;
+    rx_bytes_ += other_metrics->rx_bytes_;
+    parsed_packets_ += other_metrics->parsed_packets_;
+    dropped_packets_ += other_metrics->dropped_packets_;
+    backend_errors_ += other_metrics->backend_errors_;
+    pool_exhaustion_count_ += other_metrics->pool_exhaustion_count_;
+    burst_count_ += other_metrics->burst_count_;
+    burst_sum_ += other_metrics->burst_sum_;
+    burst_max_ = std::max(burst_max_, other_metrics->burst_max_);
+    ring_high_watermark_ = std::max(ring_high_watermark_, other_metrics->ring_high_watermark_);
+    bursts_.insert(bursts_.end(), other_metrics->bursts_.begin(), other_metrics->bursts_.end());
+    latencies_ns_.insert(latencies_ns_.end(), other_metrics->latencies_ns_.begin(), other_metrics->latencies_ns_.end());
+    return true;
+}
+
 RunSummary MetricsCollector::finalize(const std::string& backend,
                                       const std::string& mode,
                                       const std::string& scenario,

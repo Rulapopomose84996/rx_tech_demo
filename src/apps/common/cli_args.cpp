@@ -12,6 +12,10 @@ CliArgs parse_cli_args(int argc, char** argv) {
     for (int index = 1; index < argc; ++index) {
         const std::string current = argv[index];
         if (current.rfind("--", 0) == 0) {
+            if (current == "--dry-run") {
+                args.dry_run = true;
+                continue;
+            }
             if (index + 1 >= argc) {
                 throw std::runtime_error("missing value for argument: " + current);
             }

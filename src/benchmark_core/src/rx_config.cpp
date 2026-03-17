@@ -163,6 +163,8 @@ RxConfig load_config_file(const std::string& path) {
 }
 
 void merge_config(RxConfig& base, const RxConfig& overrides) {
+    const RxConfig defaults = load_default_config();
+
     if (!overrides.backend_name.empty()) {
         base.backend_name = overrides.backend_name;
     }
@@ -191,21 +193,45 @@ void merge_config(RxConfig& base, const RxConfig& overrides) {
         base.config_path = overrides.config_path;
     }
 
-    base.queue_id = overrides.queue_id;
-    base.max_burst = overrides.max_burst;
+    if (overrides.queue_id != defaults.queue_id) {
+        base.queue_id = overrides.queue_id;
+    }
+    if (overrides.max_burst != defaults.max_burst) {
+        base.max_burst = overrides.max_burst;
+    }
     if (overrides.duration_seconds != 0U) {
         base.duration_seconds = overrides.duration_seconds;
     }
-    base.udp_port = overrides.udp_port;
-    base.packet_size_bytes = overrides.packet_size_bytes;
-    base.socket_poll_timeout_ms = overrides.socket_poll_timeout_ms;
-    base.dpdk_port_id = overrides.dpdk_port_id;
-    base.dpdk_socket_mem_mb = overrides.dpdk_socket_mem_mb;
-    base.dpdk_mempool_size = overrides.dpdk_mempool_size;
-    base.dpdk_mbuf_cache_size = overrides.dpdk_mbuf_cache_size;
-    base.dpdk_rx_desc = overrides.dpdk_rx_desc;
-    base.dpdk_tx_desc = overrides.dpdk_tx_desc;
-    base.enable_internal_traffic = overrides.enable_internal_traffic;
+    if (overrides.udp_port != defaults.udp_port) {
+        base.udp_port = overrides.udp_port;
+    }
+    if (overrides.packet_size_bytes != defaults.packet_size_bytes) {
+        base.packet_size_bytes = overrides.packet_size_bytes;
+    }
+    if (overrides.socket_poll_timeout_ms != defaults.socket_poll_timeout_ms) {
+        base.socket_poll_timeout_ms = overrides.socket_poll_timeout_ms;
+    }
+    if (overrides.dpdk_port_id != defaults.dpdk_port_id) {
+        base.dpdk_port_id = overrides.dpdk_port_id;
+    }
+    if (overrides.dpdk_socket_mem_mb != defaults.dpdk_socket_mem_mb) {
+        base.dpdk_socket_mem_mb = overrides.dpdk_socket_mem_mb;
+    }
+    if (overrides.dpdk_mempool_size != defaults.dpdk_mempool_size) {
+        base.dpdk_mempool_size = overrides.dpdk_mempool_size;
+    }
+    if (overrides.dpdk_mbuf_cache_size != defaults.dpdk_mbuf_cache_size) {
+        base.dpdk_mbuf_cache_size = overrides.dpdk_mbuf_cache_size;
+    }
+    if (overrides.dpdk_rx_desc != defaults.dpdk_rx_desc) {
+        base.dpdk_rx_desc = overrides.dpdk_rx_desc;
+    }
+    if (overrides.dpdk_tx_desc != defaults.dpdk_tx_desc) {
+        base.dpdk_tx_desc = overrides.dpdk_tx_desc;
+    }
+    if (overrides.enable_internal_traffic != defaults.enable_internal_traffic) {
+        base.enable_internal_traffic = overrides.enable_internal_traffic;
+    }
     if (!overrides.cpu_cores.empty()) {
         base.cpu_cores = overrides.cpu_cores;
     }

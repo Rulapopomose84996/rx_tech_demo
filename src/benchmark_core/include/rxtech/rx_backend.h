@@ -10,6 +10,12 @@ namespace rxtech {
 
 struct RxConfig;
 
+struct BackendInitResult {
+    bool ok = false;
+    bool available = true;
+    std::string reason;
+};
+
 struct BackendStats {
     std::uint64_t rx_packets = 0;
     std::uint64_t rx_bytes = 0;
@@ -33,7 +39,7 @@ public:
     virtual ~IRxBackend() = default;
 
     virtual std::string name() const = 0;
-    virtual bool init(const RxConfig& config) = 0;
+    virtual BackendInitResult init(const RxConfig& config) = 0;
     virtual bool recv_burst(RxBurst& burst, std::uint32_t max_burst) = 0;
     virtual void release_burst(RxBurst& burst) = 0;
     virtual BackendStats stats() const = 0;
