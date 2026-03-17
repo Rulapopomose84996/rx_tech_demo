@@ -1,59 +1,118 @@
-# AF_XDP / DPDK 准备与分工
+# AF_XDP / DPDK 已完成配置总结
 
-本文档把 `rx_tech_demo` 进入 `AF_XDP` / `DPDK` 实验前的工作拆成两类：
+本文档自 `2026-03-17` 起作为 `rx_tech_demo` 在 `AF_XDP` / `DPDK` 方向上的已完成配置总结文档。
 
-- 我可以直接代做的工作
-- 你必须亲自完成或拍板的工作
+文档定位：
 
-## 我已经能代做的工作
+- 作为本项目 `AF_XDP` / `DPDK` 基线文档
+- 作为后续环境核对、压测执行、回归复查的真实源
+- 如与 `README.md`、`docs/设计方案/平台与环境适配说明.md` 等文档出现表述冲突，以本文件为准
 
-### 1. 服务器只读探查
+## 1. 已确认管理结论
 
-我已经完成或可以继续完成：
+截至 `2026-03-17`，以下事项已明确确认：
 
-- 探查内核、编译器、CMake、NUMA、网卡、驱动、IOMMU、VFIO、hugetlbfs 状态
-- 探查 AF_XDP 所需的 BPF/XDP 内核能力
-- 探查 DPDK 所需的 VFIO / hugepage / 驱动绑定前提
-- 把实探结果写回设计文档
+- `enP1s25f3` 已确认可长期作为专用实验口
+- 已确认进入正式 `DPDK` 压测窗口
+- 已确认允许继续对 `enP1s25f3` 执行驱动重绑
+- 驱动重绑仅允许在 `enP1s25f3` 上执行，不扩展到其他 X710 端口
+- `AF_XDP` 依赖策略已固化为：`libbpf` 系统安装 + `libxdp` 共享缓存前缀
+- `DPDK` 依赖策略已固化为：共享缓存离线化 + 项目自管版本
 
-### 2. 仓库内工程准备
+## 2. 已完成环境与依赖基线
 
-我已经完成或可以继续完成：
+### 2.1 工作区与共享缓存
 
-- 建立项目骨架
-- 建立服务器共享缓存命名空间说明
-- 补充环境适配说明
-- 编写环境自检脚本
-- 编写后续 AF_XDP / DPDK 最小 PoC 的代码骨架和脚本骨架
-
-当前已实际完成：
-
-- 服务器项目目录已 clone 到 `/home/devuser/WorkSpace/rx_tech_demo`
-- 共享缓存命名空间已建立：
+- 服务器工作区：`/home/devuser/WorkSpace/rx_tech_demo`
+- 共享缓存根目录：`/home/devuser/WorkSpace/ThirdPartyCache`
+- 项目缓存命名空间：`/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo`
+- 当前已建立目录：
   - `/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo/archives`
   - `/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo/build/native-aarch64`
-- 共享缓存说明已写入 `/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo/README.md`
-- 自检脚本已入仓
-- 最小 BPF / XDP attach / AF_XDP bind 验证脚本已入仓
-- 已完成一轮服务器最小 AF_XDP 实测闭环
-- AF_XDP backend 已编进正式工程并在服务器上构建通过
-- 收包级别 AF_XDP RX PoC 与 benchmark 脚本已入仓并可执行
 
-### 3. 可直接使用的自检脚本
+### 2.2 AF_XDP 依赖基线
 
-服务器上建议运行：
+- `libbpf`：系统安装，版本 `0.8.1`
+- `libxdp`：共享缓存前缀安装，版本 `1.2.9`
+- `libxdp` 前缀目录：`/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo/build/native-aarch64/xdp-tools-1.2.9-prefix`
+- `libxdp` 来源：`xdp-tools 1.2.9`
+- `libxdp` 构建工具链：
+  - `CLANG=/usr/bin/clang-10`
+  - `LLC=/usr/bin/llc`
+- 说明：
+  - 默认系统路径下 `pkg-config --modversion libxdp` 仍不会返回版本
+  - 使用 `libxdp` 相关自检、构建或验证时，必须先导出前缀环境
 
-运行位置：Linux server，目录 `/home/devuser/WorkSpace/rx_tech_demo`
+推荐环境变量：
+
 ```bash
 cd /home/devuser/WorkSpace/rx_tech_demo
-./scripts/check_af_xdp_env.sh enP1s25f3 0
-./scripts/check_dpdk_env.sh 0001:05:00.3
+PREFIX=/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo/build/native-aarch64/xdp-tools-1.2.9-prefix
+export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+export LD_LIBRARY_PATH="$PREFIX/lib:${LD_LIBRARY_PATH:-}"
 ```
 
-最小 AF_XDP 验证入口：
+### 2.3 DPDK 依赖基线
+
+- `libdpdk`：`19.11.14`
+- `dpdk-devbind.py`：已安装到 `/usr/local/bin/dpdk-devbind.py`
+- `dpdk-testpmd`：已安装到 `/usr/local/bin/dpdk-testpmd`
+- `dpdk-hugepages.py`：当前仍未提供，不阻断现阶段闭环
+
+### 2.4 平台与工具链基线
+
+- 操作系统：`Kylin Linux Advanced Server V10 (GFB)`
+- 内核：`4.19.90-52.23.v2207.gfb08.ky10.aarch64`
+- GCC：`7.3.0`
+- CMake：`3.16.5`
+- `/usr/bin/clang-10`：可用于最小 `.bpf.o` 构建
+- `/usr/bin/llc`：`10.0.1`，已确认支持 `bpf` target
+- `/usr/local/corex/bin/clang`：不用于 `BPF` 目标构建
+- `/usr/local/corex/bin/llc`：不用于 `libxdp` 构建
+
+## 3. 已完成端口与资源基线
+
+### 3.1 实验口基线
+
+- `AF_XDP` 测试口：`enP1s25f3`
+- `DPDK` 解绑测试口：`enP1s25f3`
+- 对应 `BDF`：`0001:05:00.3`
+- 网卡：Intel X710
+- 内核驱动：`i40e`
+- 当前队列能力：`Combined 32`
+- 当前 NUMA 节点：`1`
+- 本地 CPU 范围：`16-31`
+
+### 3.2 DPDK 资源基线
+
+- hugepage 已配置为 `2 x 512MB`
+- 当前 hugepage 位于 `NUMA node 1`
+- `hugetlbfs` 已挂载到 `/dev/hugepages`
+- `enP1s25f3` 已完成一轮 `i40e -> vfio-pci -> dpdk-testpmd -> i40e` 最小闭环回退
+
+## 4. AF_XDP 已完成基线
+
+当前已确认完成：
+
+- `check_af_xdp_env.sh` 已确认 `program_type xdp` 与 `map_type xskmap` 可用
+- 最小 `.bpf.o` 已成功生成
+- 最小 XDP attach 已成功
+- `bpftool net` 已看到 `enP1s25f3 driver id`
+- 最小 AF_XDP bind probe 已成功绑定 `enP1s25f3 queue 0`
+- `AF_XDP RX PoC` 已成功运行
+- 当前 `xdp_attach_mode=driver`
+- 当前 `xsk_mode=copy`
+- 强制 `zerocopy` 时 `xsk_socket__create failed`
+- 因此当前平台结论已明确为：`copy` 路径可用，`zerocopy` 不可用
+
+建议自检入口：
 
 ```bash
 cd /home/devuser/WorkSpace/rx_tech_demo
+PREFIX=/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo/build/native-aarch64/xdp-tools-1.2.9-prefix
+export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+export LD_LIBRARY_PATH="$PREFIX/lib:${LD_LIBRARY_PATH:-}"
+./scripts/check_af_xdp_env.sh enP1s25f3 0
 ./scripts/compile_min_xdp.sh
 ./scripts/attach_min_xdp.sh enP1s25f3
 bpftool net
@@ -62,88 +121,72 @@ bpftool net
 ./scripts/detach_xdp.sh enP1s25f3
 ```
 
-收包级别 AF_XDP RX PoC 与 benchmark 入口：
+## 5. DPDK 已完成基线
+
+当前已确认完成：
+
+- hugepage 已分配并可用
+- `vfio` / `vfio-pci` / `uio_pci_generic` 已存在
+- `libdpdk 19.11.14` 已可用
+- `dpdk-devbind.py` 已可用
+- `dpdk-testpmd` 已可用
+- 已完成 `vfio-pci -> dpdk-testpmd -> i40e` 最小闭环
+- 已验证测试结束后可将 `enP1s25f3` 安全绑回 `i40e` 并恢复 `UP`
+
+建议自检入口：
 
 ```bash
 cd /home/devuser/WorkSpace/rx_tech_demo
-./scripts/build_af_xdp_rx_poc.sh
-sudo ./build_af_xdp_probe/af_xdp_rx_poc enP1s25f3 0 2
-sudo ./scripts/run_af_xdp_benchmark.sh enP1s25f3 0 2 rx_only results/af_xdp_benchmark_script
+./scripts/check_dpdk_env.sh 0001:05:00.3
 ```
 
-## 你必须亲自完成或确认的工作
+正式驱动重绑与压测执行时，继续沿用已验证的回退路径：
 
-### 1. 已形成的推荐决策
+- 绑定到 `vfio-pci`
+- 运行 `dpdk-testpmd` 或正式压测程序
+- 结束后重新绑定回 `i40e`
+- 执行 `ip link set dev enP1s25f3 up`
 
-当前推荐方案已经明确：
+## 6. 当前剩余关注项
 
-- AF_XDP 测试口：`enP1s25f3`
-- DPDK 解绑测试口：`enP1s25f3`
-- AF_XDP 依赖管理：系统安装优先
-- DPDK 依赖管理：共享缓存离线化优先
-- hugepage：允许启用
-- 驱动切换：允许，但仅限专用实验口 `enP1s25f3`
+当前不再属于缺失配置，而属于后续验证重点的事项如下：
 
-你现在需要做的不是再次决策，而是确认这些推荐是否可以在现场执行。
+- 真实受控流量尚未稳定进入 `enP1s25f3 queue 0`
+- `AF_XDP` 当前仅确认 `copy` 路径，不再继续以 `zerocopy` 为当前平台目标
+- `dpdk-hugepages.py` 仍未提供，但不阻断当前正式压测窗口
+- 使用 `libxdp` 相关脚本时，需保持共享缓存前缀环境变量一致
 
-### 2. 需要你安装或让运维安装的东西
+## 7. 标准执行基线
 
-AF_XDP 必须：
+### 7.1 AF_XDP 标准环境
 
-- `libbpf` 开发库
-- 建议同时准备 `libxdp`
+```bash
+cd /home/devuser/WorkSpace/rx_tech_demo
+PREFIX=/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo/build/native-aarch64/xdp-tools-1.2.9-prefix
+export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+export LD_LIBRARY_PATH="$PREFIX/lib:${LD_LIBRARY_PATH:-}"
+```
 
-DPDK 必须：
+### 7.2 DPDK 标准环境
 
-- `libdpdk`
-- `dpdk-devbind.py`
-- 建议同时准备 `dpdk-testpmd`
-- 建议同时准备 `dpdk-hugepages.py`
+```bash
+cd /home/devuser/WorkSpace/rx_tech_demo
+./scripts/check_dpdk_env.sh 0001:05:00.3
+```
 
-### 3. 需要你或运维执行的变更类动作
+## 8. 文档闭环要求
 
-- 分配 hugepage
-- 确认 `enP1s25f3` 可作为专用实验口
-- 在需要时把 `enP1s25f3` 从内核驱动切到 `vfio-pci`
-- 测试完成后把 `enP1s25f3` 安全绑回原驱动
+从 `2026-03-17` 起，后续若发生以下变化，必须先更新本文件，再同步其他文档：
 
-这些都属于会影响系统状态的动作，不应由我在未知影响范围下直接执行。
+- 实验口变更
+- 驱动重绑策略变更
+- 正式压测窗口状态变更
+- `libxdp` / `libdpdk` / hugepage 基线变更
+- AF_XDP 或 DPDK 验收结论变更
 
-## 建议推进顺序
+当前闭环结论：
 
-1. 先运行自检脚本，确认当前缺口
-2. 先补 AF_XDP 依赖和最小 attach 流程
-3. 再补 DPDK hugepage 和用户态工具链
-4. 最后才做 devbind 和 testpmd
-
-## 当前结论
-
-我已经尽量把“无需改变系统状态”的工作做掉了，当前真正卡住项目推进的主要是：
-
-- AF_XDP 仍缺 `libxdp`
-- AF_XDP 仍缺“能把真实测试流量稳定打进 enP1s25f3 queue 0”的 ingress 方案
-- AF_XDP 当前已确认先走 `copy` 路径，`zerocopy` 尚未确认
-- DPDK 用户态依赖未安装
-- hugepage 尚未分配
-- `enP1s25f3` 是否可作为专用实验口，仍需你或运维最后确认
-- DPDK 端口重绑授权仍需你或运维最终确认
-
-根据 2026-03-17 终端日志，AF_XDP 方向已新增进展：
-
-- `libbpf` 已在服务器上安装完成
-- `pkg-config --modversion libbpf` 返回 `0.8.1`
-- `ldconfig -p` 已能看到 `libbpf.so`
-- `check_af_xdp_env.sh` 已确认 XDP 与 XSKMAP 能力存在
-- 最小 `.bpf.o` 已成功生成
-- 最小 XDP attach 已成功
-- 最小 AF_XDP bind probe 已成功
-- 正式脚本已在服务器上完整重跑通过
-- 收包级别 AF_XDP RX PoC 已成功运行，但本轮未注入测试流量，结果为 `packets=0`
-- `rxbench_xdp` 已通过正式工程入口运行，结果文件已生成
-- `AF_XDP RX PoC` 已通过 `xsk_mode=copy` 明确当前不是 zero-copy
-- 使用 `enP1s25f0 -> enP1s25f3` 的受控 raw UDP 发流时，发送成功，但 `enP1s25f3` 的主机侧 `rx_packets` / `rx-0.packets` 仍未增长
-
-本轮实测还确认了两个环境特征：
-
-- `/usr/local/corex/bin/clang` 不包含可用的 BPF target，不能直接用于生成 `.bpf.o`
-- 该 4.19 内核下不应把带 BTF 调试信息的对象直接拿去 attach，因此最小 BPF 编译脚本默认不携带 `-g`
+- `enP1s25f3` 长期专用实验口：已确认
+- 正式 `DPDK` 压测窗口：已确认
+- 继续对 `enP1s25f3` 执行驱动重绑：已确认
+- 本文件：已转为完成态基线文档，并作为真实源使用
