@@ -168,7 +168,8 @@ static int configure_umem(struct xsk_umem_info* umem) {
 static int configure_socket(struct xsk_socket_info* xsk,
                             const char* ifname,
                             uint32_t queue_id,
-                            int xsks_map_fd) {
+                            int xsks_map_fd,
+                            const char* bind_mode) {
     struct xsk_socket_config cfg;
     memset(&cfg, 0, sizeof(cfg));
     cfg.rx_size = RX_RING_SIZE;
@@ -176,6 +177,17 @@ static int configure_socket(struct xsk_socket_info* xsk,
     cfg.libbpf_flags = XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD;
     cfg.xdp_flags = 0;
     cfg.bind_flags = XDP_USE_NEED_WAKEUP;
+
+    if (bind_mode != NULL) {
+        if (strcmp(bind_mode, "copy") == 0) {
+            cfg.bind_flags |= XDP_COPY;
+        } else if (strcmp(bind_mode, "zerocopy") == 0) {
+            cfg.bind_flags |= XDP_ZEROCOPY;
+        } else if (strcmp(bind_mode, "auto") != 0) {
+            fprintf(stderr, "unsupported bind mode: %s\n", bind_mode);
+            return -1;
+        }
+    }
 
     if (xsk_socket__create(&xsk->xsk,
                            ifname,
@@ -233,6 +245,7 @@ int main(int argc, char** argv) {
     const uint32_t queue_id = argc > 2 ? (uint32_t)strtoul(argv[2], NULL, 10) : 0U;
     const uint32_t duration_seconds = argc > 3 ? (uint32_t)strtoul(argv[3], NULL, 10) : 3U;
     const char* obj_path = argc > 4 ? argv[4] : "build_af_xdp_probe/xdp_redirect_kern.bpf.o";
+    const char* bind_mode = argc > 5 ? argv[5] : "auto";
     const int ifindex = if_nametoindex(ifname);
     if (ifindex == 0) {
         fprintf(stderr, "if_nametoindex(%s) failed\n", ifname);
@@ -258,7 +271,7 @@ int main(int argc, char** argv) {
     struct xsk_socket_info xsk;
     memset(&xsk, 0, sizeof(xsk));
     xsk.umem = &umem;
-    if (configure_socket(&xsk, ifname, queue_id, xdp_prog.xsks_map_fd) != 0) {
+    if (configure_socket(&xsk, ifname, queue_id, xdp_prog.xsks_map_fd, bind_mode) != 0) {
         detach_xdp(&xdp_prog, ifindex);
         return 5;
     }
@@ -311,7 +324,7 @@ int main(int argc, char** argv) {
     const double bps = ((double)bytes * 8.0) / seconds;
     const double empty_poll_ratio = polls > 0 ? ((double)empty_polls / (double)polls) : 0.0;
 
-    printf("AF_XDP RX PoC success: if=%s queue=%u duration=%u packets=%llu bytes=%llu polls=%llu pps=%.2f bps=%.2f xdp_attach_mode=driver bind_flags=%u xsk_mode=%s empty_poll_ratio=%.4f\n",
+    printf("AF_XDP RX PoC success: if=%s queue=%u duration=%u packets=%llu bytes=%llu polls=%llu pps=%.2f bps=%.2f xdp_attach_mode=driver bind_mode=%s bind_flags=%u xsk_mode=%s empty_poll_ratio=%.4f\n",
            ifname,
            queue_id,
            duration_seconds,
@@ -320,6 +333,7 @@ int main(int argc, char** argv) {
            (unsigned long long)polls,
            pps,
            bps,
+           bind_mode,
            (unsigned int)xsk.bind_flags,
            xsk.zerocopy ? "zerocopy" : "copy",
            empty_poll_ratio);
