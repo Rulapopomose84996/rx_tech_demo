@@ -22,5 +22,13 @@ int main() {
     assert(summary.pool_exhaustion_count == 1U);
     assert(summary.latency_p50_us > 0.0);
     assert(summary.latency_p99_us >= summary.latency_p50_us);
+
+    auto other = metrics.clone_empty();
+    other->on_burst(2U, 256U);
+    other->on_drop();
+    assert(metrics.absorb(*other));
+    const rxtech::RunSummary merged = metrics.finalize("socket", "rx_only", "smoke", 1U);
+    assert(merged.rx_packets == 6U);
+    assert(merged.dropped_packets == 2U);
     return 0;
 }

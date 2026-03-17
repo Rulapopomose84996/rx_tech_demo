@@ -4,7 +4,7 @@
 #include "rxtech/rx_config.h"
 
 int main() {
-    const char* path = "test_rx_config.conf";
+    const char* path = "results/test_rx_config_generated.conf";
     {
         std::ofstream out(path, std::ios::trunc);
         out << "backend: socket\n";

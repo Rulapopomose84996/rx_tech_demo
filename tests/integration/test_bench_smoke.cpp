@@ -24,6 +24,9 @@ int main() {
 
     rxtech::BenchRunner runner;
     const rxtech::RunSummary summary = runner.run(context);
+    assert(summary.run_status == "success");
+    assert(summary.measure_step_count == 1U);
+    assert(summary.total_step_count == 2U);
     assert(summary.rx_packets > 0U);
     return 0;
 }
