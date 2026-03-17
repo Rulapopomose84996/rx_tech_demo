@@ -26,6 +26,37 @@
 - AF_XDP backend 已编进正式工程并在服务器上构建通过
 - `libxdp 1.2.9` 已通过共享缓存前缀补齐
 
+当前代码侧已进一步补齐：
+
+- CLI 已支持 `--dry-run`，可在本地只解析配置与场景，不启动真实 backend
+- benchmark core 已支持 step 级执行结果输出，产物包含 `summary.json/csv` 与 `steps.json/csv`
+- `summary` 已增加运行状态、backend 可用性与 CPU 指标可用性标记，避免本地伪成功结果混入正式数据
+- `run_matrix.py --dry-run` 已可校验二进制、配置和场景路径
+- `report_compare.py` 已可同时聚合 summary 与 step 级结果
+
+## 无服务器阶段
+
+当暂时无法使用服务器时，当前推荐目标不是给出正式性能结论，而是优先推进：
+
+- 配置与场景装载
+- benchmark core 的 step 执行与结果格式
+- `socket` 本地 loopback 运行链路
+- `AF_XDP` / `DPDK` 的失败路径和不可用状态表达
+- 脚本 dry-run 与结果聚合能力
+
+当前不应在无服务器阶段宣称完成：
+
+- `AF_XDP` 真实 ingress 闭环
+- `DPDK` 正式 benchmark 实测
+- 基于真实 NUMA / RSS / IRQ 固化后的公平性结论
+
+本地推荐验证方式：
+
+- 优先在 `WSL/Linux` 中执行 `scripts/build_production.sh`
+- 需要只检查参数时，执行 `rxbench_* --dry-run`
+- 需要校验矩阵编排时，执行 `python3 scripts/run_matrix.py --dry-run`
+- 需要聚合现有本地结果时，执行 `python3 scripts/report_compare.py`
+
 ## 开发约束
 
 - 禁止在本地 Windows 工作区直接编译
