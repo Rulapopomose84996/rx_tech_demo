@@ -9,7 +9,6 @@
 #include "rxtech/time_utils.h"
 
 #ifdef __linux__
-#define _GNU_SOURCE
 #include <net/if.h>
 #include <poll.h>
 #include <sys/mman.h>
@@ -18,6 +17,10 @@
 
 #include <bpf/bpf.h>
 #include <bpf/xsk.h>
+
+#ifndef SOL_XDP
+#define SOL_XDP 283
+#endif
 #endif
 
 namespace rxtech {
@@ -35,6 +38,7 @@ struct XdpBackend::Impl {
         xsk_ring_cons rx;
         xsk_ring_prod tx;
         xsk_socket* xsk = nullptr;
+        bool zerocopy = false;
     };
 
     static constexpr std::uint32_t kRxRingSize = 256U;
@@ -122,6 +126,14 @@ struct XdpBackend::Impl {
 
         if (xsk_socket__update_xskmap(socket.xsk, xsks_map_fd) != 0) {
             return false;
+        }
+
+        xdp_options opts{};
+        socklen_t opts_len = sizeof(opts);
+        if (getsockopt(xsk_socket__fd(socket.xsk), SOL_XDP, XDP_OPTIONS, &opts, &opts_len) == 0) {
+            socket.zerocopy = (opts.flags & XDP_OPTIONS_ZEROCOPY) != 0;
+        } else {
+            socket.zerocopy = false;
         }
 
         pfd.fd = xsk_socket__fd(socket.xsk);
@@ -215,7 +227,8 @@ bool XdpBackend::init(const RxConfig& config) {
         stats_.xdp_prog_id = prog_id;
     }
     stats_.queue_id = impl_->queue_id;
-    stats_.xdp_attach_mode = "auto";
+    stats_.xdp_attach_mode = "driver";
+    stats_.xsk_mode = impl_->socket.zerocopy ? "zerocopy" : "copy";
     stats_.xsk_bind_flags = XDP_USE_NEED_WAKEUP;
     stats_.umem_size = Impl::kUmemSize;
     stats_.frame_size = Impl::kFrameSize;

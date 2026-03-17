@@ -10,10 +10,17 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/resource.h>
+#include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
 
+#include <bpf/bpf.h>
+#include <bpf/libbpf.h>
 #include <bpf/xsk.h>
+
+#ifndef SOL_XDP
+#define SOL_XDP 283
+#endif
 
 enum {
     RX_RING_SIZE = 256,
@@ -37,6 +44,16 @@ struct xsk_socket_info {
     struct xsk_ring_prod tx;
     struct xsk_socket* xsk;
     struct xsk_umem_info* umem;
+    int fd;
+    uint16_t bind_flags;
+    bool zerocopy;
+};
+
+struct xdp_prog_info {
+    struct bpf_object* obj;
+    int prog_fd;
+    int xsks_map_fd;
+    bool attached;
 };
 
 static uint64_t monotonic_ns(void) {
@@ -50,6 +67,58 @@ static int set_memlock_rlimit(void) {
     rlim.rlim_cur = RLIM_INFINITY;
     rlim.rlim_max = RLIM_INFINITY;
     return setrlimit(RLIMIT_MEMLOCK, &rlim);
+}
+
+static int load_and_attach_xdp(struct xdp_prog_info* prog, int ifindex, const char* obj_path) {
+    memset(prog, 0, sizeof(*prog));
+    prog->prog_fd = -1;
+    prog->xsks_map_fd = -1;
+
+    prog->obj = bpf_object__open_file(obj_path, NULL);
+    if (prog->obj == NULL) {
+        fprintf(stderr, "bpf_object__open_file failed: %s\n", obj_path);
+        return -1;
+    }
+
+    if (bpf_object__load(prog->obj) != 0) {
+        fprintf(stderr, "bpf_object__load failed\n");
+        return -1;
+    }
+
+    struct bpf_program* program = bpf_object__find_program_by_name(prog->obj, "rxtech_xdp_redirect");
+    if (program == NULL) {
+        fprintf(stderr, "find xdp program failed\n");
+        return -1;
+    }
+    prog->prog_fd = bpf_program__fd(program);
+    if (prog->prog_fd < 0) {
+        fprintf(stderr, "bpf_program__fd failed\n");
+        return -1;
+    }
+
+    prog->xsks_map_fd = bpf_object__find_map_fd_by_name(prog->obj, "xsks_map");
+    if (prog->xsks_map_fd < 0) {
+        fprintf(stderr, "find xsks_map fd failed\n");
+        return -1;
+    }
+
+    if (bpf_set_link_xdp_fd(ifindex, prog->prog_fd, 0) != 0) {
+        fprintf(stderr, "bpf_set_link_xdp_fd attach failed: %s\n", strerror(errno));
+        return -1;
+    }
+    prog->attached = true;
+    return 0;
+}
+
+static void detach_xdp(struct xdp_prog_info* prog, int ifindex) {
+    if (prog->attached) {
+        (void)bpf_set_link_xdp_fd(ifindex, -1, 0);
+        prog->attached = false;
+    }
+    if (prog->obj != NULL) {
+        bpf_object__close(prog->obj);
+        prog->obj = NULL;
+    }
 }
 
 static int configure_umem(struct xsk_umem_info* umem) {
@@ -124,6 +193,18 @@ static int configure_socket(struct xsk_socket_info* xsk,
         return -1;
     }
 
+    xsk->fd = xsk_socket__fd(xsk->xsk);
+    xsk->bind_flags = cfg.bind_flags;
+
+    struct xdp_options opts;
+    socklen_t opts_len = sizeof(opts);
+    memset(&opts, 0, sizeof(opts));
+    if (getsockopt(xsk->fd, SOL_XDP, XDP_OPTIONS, &opts, &opts_len) == 0) {
+        xsk->zerocopy = (opts.flags & XDP_OPTIONS_ZEROCOPY) != 0;
+    } else {
+        xsk->zerocopy = false;
+    }
+
     return 0;
 }
 
@@ -151,6 +232,7 @@ int main(int argc, char** argv) {
     const char* ifname = argc > 1 ? argv[1] : "enP1s25f3";
     const uint32_t queue_id = argc > 2 ? (uint32_t)strtoul(argv[2], NULL, 10) : 0U;
     const uint32_t duration_seconds = argc > 3 ? (uint32_t)strtoul(argv[3], NULL, 10) : 3U;
+    const char* obj_path = argc > 4 ? argv[4] : "build_af_xdp_probe/xdp_redirect_kern.bpf.o";
     const int ifindex = if_nametoindex(ifname);
     if (ifindex == 0) {
         fprintf(stderr, "if_nametoindex(%s) failed\n", ifname);
@@ -162,9 +244,8 @@ int main(int argc, char** argv) {
         return 2;
     }
 
-    int xsks_map_fd = -1;
-    if (xsk_setup_xdp_prog(ifindex, &xsks_map_fd) != 0) {
-        fprintf(stderr, "xsk_setup_xdp_prog failed\n");
+    struct xdp_prog_info xdp_prog;
+    if (load_and_attach_xdp(&xdp_prog, ifindex, obj_path) != 0) {
         return 3;
     }
 
@@ -177,19 +258,21 @@ int main(int argc, char** argv) {
     struct xsk_socket_info xsk;
     memset(&xsk, 0, sizeof(xsk));
     xsk.umem = &umem;
-    if (configure_socket(&xsk, ifname, queue_id, xsks_map_fd) != 0) {
+    if (configure_socket(&xsk, ifname, queue_id, xdp_prog.xsks_map_fd) != 0) {
+        detach_xdp(&xdp_prog, ifindex);
         return 5;
     }
 
     struct pollfd pfd;
     memset(&pfd, 0, sizeof(pfd));
-    pfd.fd = xsk_socket__fd(xsk.xsk);
+    pfd.fd = xsk.fd;
     pfd.events = POLLIN;
 
     const uint64_t deadline = monotonic_ns() + ((uint64_t)duration_seconds * 1000000000ULL);
     uint64_t packets = 0;
     uint64_t bytes = 0;
     uint64_t polls = 0;
+    uint64_t empty_polls = 0;
 
     while (monotonic_ns() < deadline) {
         ++polls;
@@ -202,6 +285,7 @@ int main(int argc, char** argv) {
         uint32_t idx_rx = 0;
         const uint32_t received = xsk_ring_cons__peek(&xsk.rx, RX_RING_SIZE, &idx_rx);
         if (received == 0) {
+            ++empty_polls;
             recycle_completions(&umem, CQ_RING_SIZE);
             continue;
         }
@@ -222,18 +306,29 @@ int main(int argc, char** argv) {
         recycle_completions(&umem, received);
     }
 
-    printf("AF_XDP RX PoC success: if=%s queue=%u duration=%u packets=%llu bytes=%llu polls=%llu\n",
+    const double seconds = duration_seconds > 0 ? (double)duration_seconds : 1.0;
+    const double pps = (double)packets / seconds;
+    const double bps = ((double)bytes * 8.0) / seconds;
+    const double empty_poll_ratio = polls > 0 ? ((double)empty_polls / (double)polls) : 0.0;
+
+    printf("AF_XDP RX PoC success: if=%s queue=%u duration=%u packets=%llu bytes=%llu polls=%llu pps=%.2f bps=%.2f xdp_attach_mode=driver bind_flags=%u xsk_mode=%s empty_poll_ratio=%.4f\n",
            ifname,
            queue_id,
            duration_seconds,
            (unsigned long long)packets,
            (unsigned long long)bytes,
-           (unsigned long long)polls);
+           (unsigned long long)polls,
+           pps,
+           bps,
+           (unsigned int)xsk.bind_flags,
+           xsk.zerocopy ? "zerocopy" : "copy",
+           empty_poll_ratio);
 
     xsk_socket__delete(xsk.xsk);
     xsk_umem__delete(umem.umem);
     if (umem.buffer != NULL) {
         munmap(umem.buffer, UMEM_SIZE);
     }
+    detach_xdp(&xdp_prog, ifindex);
     return 0;
 }

@@ -59,6 +59,7 @@ void write_summary_json(const RunSummary& summary, const std::string& output_dir
     out << "  \"mode\": \"" << summary.mode << "\",\n";
     out << "  \"scenario\": \"" << summary.scenario << "\",\n";
     out << "  \"xdp_attach_mode\": \"" << summary.xdp_attach_mode << "\",\n";
+    out << "  \"xsk_mode\": \"" << summary.xsk_mode << "\",\n";
     out << "  \"rx_packets\": " << summary.rx_packets << ",\n";
     out << "  \"rx_bytes\": " << summary.rx_bytes << ",\n";
     out << "  \"rx_polls\": " << summary.rx_polls << ",\n";

@@ -11,6 +11,7 @@ struct RunSummary {
     std::string mode;
     std::string scenario;
     std::string xdp_attach_mode;
+    std::string xsk_mode;
     std::uint64_t rx_packets = 0;
     std::uint64_t rx_bytes = 0;
     std::uint64_t parsed_packets = 0;

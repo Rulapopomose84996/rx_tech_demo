@@ -52,6 +52,7 @@ RunSummary BenchRunner::run(BenchContext& context) {
     summary.fill_ring_size = backend_stats.fill_ring_size;
     summary.completion_ring_size = backend_stats.completion_ring_size;
     summary.xdp_attach_mode = backend_stats.xdp_attach_mode;
+    summary.xsk_mode = backend_stats.xsk_mode;
     if (summary.rx_polls > 0U) {
         summary.empty_poll_ratio =
             static_cast<double>(summary.empty_polls) / static_cast<double>(summary.rx_polls);

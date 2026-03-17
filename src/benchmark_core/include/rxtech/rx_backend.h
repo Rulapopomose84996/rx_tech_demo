@@ -25,6 +25,7 @@ struct BackendStats {
     std::uint32_t fill_ring_size = 0;
     std::uint32_t completion_ring_size = 0;
     std::string xdp_attach_mode = "pending";
+    std::string xsk_mode = "pending";
 };
 
 class IRxBackend {
