@@ -120,7 +120,9 @@ DPDK 必须：
 
 我已经尽量把“无需改变系统状态”的工作做掉了，当前真正卡住项目推进的主要是：
 
-- AF_XDP 仍缺 `libxdp`、带流量的 RX 验证和 zero-copy/copy 判定
+- AF_XDP 仍缺 `libxdp`
+- AF_XDP 仍缺“能把真实测试流量稳定打进 enP1s25f3 queue 0”的 ingress 方案
+- AF_XDP 当前已确认先走 `copy` 路径，`zerocopy` 尚未确认
 - DPDK 用户态依赖未安装
 - hugepage 尚未分配
 - `enP1s25f3` 是否可作为专用实验口，仍需你或运维最后确认
@@ -138,6 +140,8 @@ DPDK 必须：
 - 正式脚本已在服务器上完整重跑通过
 - 收包级别 AF_XDP RX PoC 已成功运行，但本轮未注入测试流量，结果为 `packets=0`
 - `rxbench_xdp` 已通过正式工程入口运行，结果文件已生成
+- `AF_XDP RX PoC` 已通过 `xsk_mode=copy` 明确当前不是 zero-copy
+- 使用 `enP1s25f0 -> enP1s25f3` 的受控 raw UDP 发流时，发送成功，但 `enP1s25f3` 的主机侧 `rx_packets` / `rx-0.packets` 仍未增长
 
 本轮实测还确认了两个环境特征：
 
