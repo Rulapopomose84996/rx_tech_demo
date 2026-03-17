@@ -74,6 +74,7 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 - 最小 `.bpf.o` 已在服务器上成功生成
 - 最小 XDP 程序已成功 attach 到 `enP1s25f3`
 - 最小 AF_XDP socket bind probe 已成功绑定 `enP1s25f3 queue 0`
+- 收包级别 AF_XDP RX PoC 已成功运行 2 秒轮询
 - 实验结束后已将目标口上的 XDP 程序卸除
 
 ## 最小 AF_XDP 验证

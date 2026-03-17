@@ -109,7 +109,7 @@ DPDK 必须：
 
 我已经尽量把“无需改变系统状态”的工作做掉了，当前真正卡住项目推进的主要是：
 
-- AF_XDP 仍缺 `libxdp` 与真实收包级别 PoC
+- AF_XDP 仍缺 `libxdp`、带流量的 RX 验证和 zero-copy/copy 判定
 - DPDK 用户态依赖未安装
 - hugepage 尚未分配
 - `enP1s25f3` 是否可作为专用实验口，仍需你或运维最后确认
@@ -125,6 +125,7 @@ DPDK 必须：
 - 最小 XDP attach 已成功
 - 最小 AF_XDP bind probe 已成功
 - 正式脚本已在服务器上完整重跑通过
+- 收包级别 AF_XDP RX PoC 已成功运行，但本轮未注入测试流量，结果为 `packets=0`
 
 本轮实测还确认了两个环境特征：
 
