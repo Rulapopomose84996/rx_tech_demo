@@ -58,10 +58,21 @@ void write_summary_json(const RunSummary& summary, const std::string& output_dir
     out << "  \"backend\": \"" << summary.backend << "\",\n";
     out << "  \"mode\": \"" << summary.mode << "\",\n";
     out << "  \"scenario\": \"" << summary.scenario << "\",\n";
+    out << "  \"xdp_attach_mode\": \"" << summary.xdp_attach_mode << "\",\n";
     out << "  \"rx_packets\": " << summary.rx_packets << ",\n";
     out << "  \"rx_bytes\": " << summary.rx_bytes << ",\n";
+    out << "  \"rx_polls\": " << summary.rx_polls << ",\n";
+    out << "  \"empty_polls\": " << summary.empty_polls << ",\n";
+    out << "  \"queue_id\": " << summary.queue_id << ",\n";
+    out << "  \"xdp_prog_id\": " << summary.xdp_prog_id << ",\n";
+    out << "  \"xsk_bind_flags\": " << summary.xsk_bind_flags << ",\n";
+    out << "  \"umem_size\": " << summary.umem_size << ",\n";
+    out << "  \"frame_size\": " << summary.frame_size << ",\n";
+    out << "  \"fill_ring_size\": " << summary.fill_ring_size << ",\n";
+    out << "  \"completion_ring_size\": " << summary.completion_ring_size << ",\n";
     out << "  \"actual_rx_gbps\": " << summary.actual_rx_gbps << ",\n";
-    out << "  \"actual_rx_mpps\": " << summary.actual_rx_mpps << "\n";
+    out << "  \"actual_rx_mpps\": " << summary.actual_rx_mpps << ",\n";
+    out << "  \"empty_poll_ratio\": " << summary.empty_poll_ratio << "\n";
     out << "}\n";
 }
 

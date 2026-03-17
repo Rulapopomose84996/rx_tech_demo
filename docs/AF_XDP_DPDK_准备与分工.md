@@ -36,6 +36,8 @@
 - 自检脚本已入仓
 - 最小 BPF / XDP attach / AF_XDP bind 验证脚本已入仓
 - 已完成一轮服务器最小 AF_XDP 实测闭环
+- AF_XDP backend 已编进正式工程并在服务器上构建通过
+- 收包级别 AF_XDP RX PoC 与 benchmark 脚本已入仓并可执行
 
 ### 3. 可直接使用的自检脚本
 
@@ -58,6 +60,15 @@ bpftool net
 ./scripts/build_af_xdp_bind_probe.sh
 ./build_af_xdp_probe/af_xdp_bind_probe enP1s25f3 0
 ./scripts/detach_xdp.sh enP1s25f3
+```
+
+收包级别 AF_XDP RX PoC 与 benchmark 入口：
+
+```bash
+cd /home/devuser/WorkSpace/rx_tech_demo
+./scripts/build_af_xdp_rx_poc.sh
+sudo ./build_af_xdp_probe/af_xdp_rx_poc enP1s25f3 0 2
+sudo ./scripts/run_af_xdp_benchmark.sh enP1s25f3 0 2 rx_only results/af_xdp_benchmark_script
 ```
 
 ## 你必须亲自完成或确认的工作
@@ -126,6 +137,7 @@ DPDK 必须：
 - 最小 AF_XDP bind probe 已成功
 - 正式脚本已在服务器上完整重跑通过
 - 收包级别 AF_XDP RX PoC 已成功运行，但本轮未注入测试流量，结果为 `packets=0`
+- `rxbench_xdp` 已通过正式工程入口运行，结果文件已生成
 
 本轮实测还确认了两个环境特征：
 

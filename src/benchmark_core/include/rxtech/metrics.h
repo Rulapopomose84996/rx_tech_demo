@@ -10,14 +10,25 @@ struct RunSummary {
     std::string backend;
     std::string mode;
     std::string scenario;
+    std::string xdp_attach_mode;
     std::uint64_t rx_packets = 0;
     std::uint64_t rx_bytes = 0;
     std::uint64_t parsed_packets = 0;
     std::uint64_t dropped_packets = 0;
     std::uint64_t ring_high_watermark = 0;
+    std::uint64_t rx_polls = 0;
+    std::uint64_t empty_polls = 0;
+    std::uint32_t queue_id = 0;
+    std::uint32_t xdp_prog_id = 0;
+    std::uint32_t xsk_bind_flags = 0;
+    std::uint64_t umem_size = 0;
+    std::uint32_t frame_size = 0;
+    std::uint32_t fill_ring_size = 0;
+    std::uint32_t completion_ring_size = 0;
     double actual_rx_gbps = 0.0;
     double actual_rx_mpps = 0.0;
     double batch_avg = 0.0;
+    double empty_poll_ratio = 0.0;
     std::uint64_t batch_p99 = 0;
 };
 

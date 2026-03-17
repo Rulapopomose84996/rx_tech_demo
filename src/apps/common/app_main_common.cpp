@@ -82,6 +82,15 @@ int run_app(const std::string& backend_name, int argc, char** argv) {
     context.config.mode_name = args.mode.empty() ? "rx_only" : args.mode;
     context.config.scenario_path = args.scenario_path;
     context.config.output_dir = args.output_dir.empty() ? "results" : args.output_dir;
+    if (!args.interface_name.empty()) {
+        context.config.interface_name = args.interface_name;
+    }
+    if (!args.queue_id.empty()) {
+        context.config.queue_id = static_cast<std::uint32_t>(std::stoul(args.queue_id));
+    }
+    if (!args.duration_seconds.empty()) {
+        context.config.duration_seconds = static_cast<std::uint32_t>(std::stoul(args.duration_seconds));
+    }
     context.scenario = load_scenario(context.config.scenario_path);
     context.backend = make_backend(backend_name);
     context.mode = make_mode(context.config.mode_name);
@@ -93,6 +102,7 @@ int run_app(const std::string& backend_name, int argc, char** argv) {
         std::cout << "backend=" << summary.backend
                   << " mode=" << summary.mode
                   << " scenario=" << summary.scenario
+                  << " queue_id=" << summary.queue_id
                   << " rx_packets=" << summary.rx_packets
                   << std::endl;
     } catch (const std::exception& ex) {

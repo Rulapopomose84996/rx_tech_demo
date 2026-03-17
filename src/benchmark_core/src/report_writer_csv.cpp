@@ -54,14 +54,25 @@ void create_dir_if_needed(const std::string& path) {
 void write_summary_csv(const RunSummary& summary, const std::string& output_dir) {
     create_dir_if_needed(output_dir);
     std::ofstream out(output_dir + "/summary.csv", std::ios::trunc);
-    out << "backend,mode,scenario,rx_packets,rx_bytes,actual_rx_gbps,actual_rx_mpps,batch_avg,batch_p99\n";
+    out << "backend,mode,scenario,xdp_attach_mode,queue_id,xdp_prog_id,xsk_bind_flags,umem_size,frame_size,fill_ring_size,completion_ring_size,rx_packets,rx_bytes,rx_polls,empty_polls,actual_rx_gbps,actual_rx_mpps,empty_poll_ratio,batch_avg,batch_p99\n";
     out << summary.backend << ','
         << summary.mode << ','
         << summary.scenario << ','
+        << summary.xdp_attach_mode << ','
+        << summary.queue_id << ','
+        << summary.xdp_prog_id << ','
+        << summary.xsk_bind_flags << ','
+        << summary.umem_size << ','
+        << summary.frame_size << ','
+        << summary.fill_ring_size << ','
+        << summary.completion_ring_size << ','
         << summary.rx_packets << ','
         << summary.rx_bytes << ','
+        << summary.rx_polls << ','
+        << summary.empty_polls << ','
         << summary.actual_rx_gbps << ','
         << summary.actual_rx_mpps << ','
+        << summary.empty_poll_ratio << ','
         << summary.batch_avg << ','
         << summary.batch_p99 << '\n';
 }

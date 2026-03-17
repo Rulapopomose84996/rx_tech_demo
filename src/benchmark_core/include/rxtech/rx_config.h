@@ -11,7 +11,7 @@ struct RxConfig {
     std::string mode_name = "rx_only";
     std::string scenario_path;
     std::string output_dir = "results";
-    std::string interface_name = "eth0";
+    std::string interface_name = "enP1s25f3";
     std::uint32_t queue_id = 0;
     std::uint32_t max_burst = 64;
     std::uint32_t duration_seconds = 5;

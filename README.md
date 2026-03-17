@@ -23,6 +23,7 @@
 - 已提供 AF_XDP / DPDK 环境自检脚本
 - 已提供最小 BPF / XDP attach / AF_XDP bind 验证脚本
 - 已在服务器上完成一轮最小 AF_XDP 实测闭环
+- AF_XDP backend 已编进正式工程并在服务器上构建通过
 
 ## 开发约束
 
@@ -76,6 +77,7 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 - 最小 AF_XDP socket bind probe 已成功绑定 `enP1s25f3 queue 0`
 - 收包级别 AF_XDP RX PoC 已成功运行 2 秒轮询
 - 实验结束后已将目标口上的 XDP 程序卸除
+- `rxbench_xdp` 与 `run_af_xdp_benchmark.sh` 已可在服务器上运行
 
 ## 最小 AF_XDP 验证
 
@@ -89,4 +91,15 @@ bpftool net
 ./scripts/build_af_xdp_bind_probe.sh
 ./build_af_xdp_probe/af_xdp_bind_probe enP1s25f3 0
 ./scripts/detach_xdp.sh enP1s25f3
+```
+
+## AF_XDP RX PoC 与 Benchmark
+
+Linux server:
+
+```bash
+cd /home/devuser/WorkSpace/rx_tech_demo
+./scripts/build_af_xdp_rx_poc.sh
+sudo ./build_af_xdp_probe/af_xdp_rx_poc enP1s25f3 0 2
+sudo ./scripts/run_af_xdp_benchmark.sh enP1s25f3 0 2 rx_only results/af_xdp_benchmark_script
 ```
