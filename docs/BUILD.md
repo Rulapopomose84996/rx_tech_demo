@@ -50,7 +50,7 @@ ctest --output-on-failure
 
 ```bash
 cd /home/devuser/WorkSpace/rx_tech_demo
-./scripts/check_af_xdp_env.sh enP1s25f3 0
+./scripts/check_af_xdp_env.sh receiver3 0
 ./scripts/check_dpdk_env.sh 0001:05:00.3
 ```
 

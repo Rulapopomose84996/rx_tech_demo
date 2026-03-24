@@ -12,10 +12,10 @@
 
 截至 `2026-03-17`，以下事项已明确确认：
 
-- `enP1s25f3` 已确认可长期作为专用实验口
+- `receiver3` 已确认可长期作为专用实验口
 - 已确认进入正式 `DPDK` 压测窗口
-- 已确认允许继续对 `enP1s25f3` 执行驱动重绑
-- 驱动重绑仅允许在 `enP1s25f3` 上执行，不扩展到其他 X710 端口
+- 已确认允许继续对 `receiver3` 执行驱动重绑
+- 驱动重绑仅允许在 `receiver3` 上执行，不扩展到其他 X710 端口
 - `AF_XDP` 依赖策略已固化为：`libbpf` 系统安装 + `libxdp` 共享缓存前缀
 - `DPDK` 依赖策略已固化为：共享缓存离线化 + 项目自管版本
 
@@ -74,8 +74,8 @@ export LD_LIBRARY_PATH="$PREFIX/lib:${LD_LIBRARY_PATH:-}"
 
 ### 3.1 实验口基线
 
-- `AF_XDP` 测试口：`enP1s25f3`
-- `DPDK` 解绑测试口：`enP1s25f3`
+- `AF_XDP` 测试口：`receiver3`
+- `DPDK` 解绑测试口：`receiver3`
 - 对应 `BDF`：`0001:05:00.3`
 - 网卡：Intel X710
 - 内核驱动：`i40e`
@@ -88,7 +88,7 @@ export LD_LIBRARY_PATH="$PREFIX/lib:${LD_LIBRARY_PATH:-}"
 - hugepage 已配置为 `2 x 512MB`
 - 当前 hugepage 位于 `NUMA node 1`
 - `hugetlbfs` 已挂载到 `/dev/hugepages`
-- `enP1s25f3` 已完成一轮 `i40e -> vfio-pci -> dpdk-testpmd -> i40e` 最小闭环回退
+- `receiver3` 已完成一轮 `i40e -> vfio-pci -> dpdk-testpmd -> i40e` 最小闭环回退
 
 ## 4. AF_XDP 已完成基线
 
@@ -97,8 +97,8 @@ export LD_LIBRARY_PATH="$PREFIX/lib:${LD_LIBRARY_PATH:-}"
 - `check_af_xdp_env.sh` 已确认 `program_type xdp` 与 `map_type xskmap` 可用
 - 最小 `.bpf.o` 已成功生成
 - 最小 XDP attach 已成功
-- `bpftool net` 已看到 `enP1s25f3 driver id`
-- 最小 AF_XDP bind probe 已成功绑定 `enP1s25f3 queue 0`
+- `bpftool net` 已看到 `receiver3 driver id`
+- 最小 AF_XDP bind probe 已成功绑定 `receiver3 queue 0`
 - `AF_XDP RX PoC` 已成功运行
 - 当前 `xdp_attach_mode=driver`
 - 当前 `xsk_mode=copy`
@@ -112,13 +112,13 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 PREFIX=/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo/build/native-aarch64/xdp-tools-1.2.9-prefix
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
 export LD_LIBRARY_PATH="$PREFIX/lib:${LD_LIBRARY_PATH:-}"
-./scripts/check_af_xdp_env.sh enP1s25f3 0
+./scripts/check_af_xdp_env.sh receiver3 0
 ./scripts/compile_min_xdp.sh
-./scripts/attach_min_xdp.sh enP1s25f3
+./scripts/attach_min_xdp.sh receiver3
 bpftool net
 ./scripts/build_af_xdp_bind_probe.sh
-./build_af_xdp_probe/af_xdp_bind_probe enP1s25f3 0
-./scripts/detach_xdp.sh enP1s25f3
+./build_af_xdp_probe/af_xdp_bind_probe receiver3 0
+./scripts/detach_xdp.sh receiver3
 ```
 
 ## 5. DPDK 已完成基线
@@ -131,7 +131,7 @@ bpftool net
 - `dpdk-devbind.py` 已可用
 - `dpdk-testpmd` 已可用
 - 已完成 `vfio-pci -> dpdk-testpmd -> i40e` 最小闭环
-- 已验证测试结束后可将 `enP1s25f3` 安全绑回 `i40e` 并恢复 `UP`
+- 已验证测试结束后可将 `receiver3` 安全绑回 `i40e` 并恢复 `UP`
 
 建议自检入口：
 
@@ -145,13 +145,13 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 - 绑定到 `vfio-pci`
 - 运行 `dpdk-testpmd` 或正式压测程序
 - 结束后重新绑定回 `i40e`
-- 执行 `ip link set dev enP1s25f3 up`
+- 执行 `ip link set dev receiver3 up`
 
 ## 6. 当前剩余关注项
 
 当前不再属于缺失配置，而属于后续验证重点的事项如下：
 
-- 真实受控流量尚未稳定进入 `enP1s25f3 queue 0`
+- 真实受控流量尚未稳定进入 `receiver3 queue 0`
 - `AF_XDP` 当前仅确认 `copy` 路径，不再继续以 `zerocopy` 为当前平台目标
 - `dpdk-hugepages.py` 仍未提供，但不阻断当前正式压测窗口
 - 使用 `libxdp` 相关脚本时，需保持共享缓存前缀环境变量一致
@@ -210,7 +210,7 @@ ctest --output-on-failure
 
 当前闭环结论：
 
-- `enP1s25f3` 长期专用实验口：已确认
+- `receiver3` 长期专用实验口：已确认
 - 正式 `DPDK` 压测窗口：已确认
-- 继续对 `enP1s25f3` 执行驱动重绑：已确认
+- 继续对 `receiver3` 执行驱动重绑：已确认
 - 本文件：已转为完成态基线文档，并作为真实源使用

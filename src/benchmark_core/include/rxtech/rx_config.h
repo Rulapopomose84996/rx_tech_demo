@@ -12,7 +12,7 @@ struct RxConfig {
     std::string scenario_path;
     std::string config_path;
     std::string output_dir = "results";
-    std::string interface_name = "enP1s25f3";
+    std::string interface_name = "receiver3";
     std::string bind_address = "127.0.0.1";
     std::string dpdk_pci_addr;
     std::string xdp_bind_mode = "auto";

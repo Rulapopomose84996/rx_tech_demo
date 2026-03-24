@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-NIC="${1:-enP1s25f3}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+NIC="${1:-receiver3}"
 OBJ="${ROOT_DIR}/build_af_xdp_probe/xdp_redirect_kern.bpf.o"
 
 if [ ! -f "${OBJ}" ]; then

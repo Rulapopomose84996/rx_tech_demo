@@ -241,7 +241,7 @@ static void recycle_completions(struct xsk_umem_info* umem, uint32_t budget) {
 }
 
 int main(int argc, char** argv) {
-    const char* ifname = argc > 1 ? argv[1] : "enP1s25f3";
+    const char* ifname = argc > 1 ? argv[1] : "receiver3";
     const uint32_t queue_id = argc > 2 ? (uint32_t)strtoul(argv[2], NULL, 10) : 0U;
     const uint32_t duration_seconds = argc > 3 ? (uint32_t)strtoul(argv[3], NULL, 10) : 3U;
     const char* obj_path = argc > 4 ? argv[4] : "build_af_xdp_probe/xdp_redirect_kern.bpf.o";

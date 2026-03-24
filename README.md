@@ -113,17 +113,17 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 PREFIX=/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo/build/native-aarch64/xdp-tools-1.2.9-prefix
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
 export LD_LIBRARY_PATH="$PREFIX/lib:${LD_LIBRARY_PATH:-}"
-./scripts/check_af_xdp_env.sh enP1s25f3 0
+./scripts/check_af_xdp_env.sh receiver3 0
 ./scripts/check_dpdk_env.sh 0001:05:00.3
 ```
 
 当前推荐决策：
 
-- AF_XDP 测试口：`enP1s25f3`
-- DPDK 解绑测试口：`enP1s25f3`
+- AF_XDP 测试口：`receiver3`
+- DPDK 解绑测试口：`receiver3`
 - AF_XDP 依赖管理：`libbpf` 系统安装 + `libxdp` 共享缓存前缀
 - DPDK 依赖管理：共享缓存离线化优先
-- `2026-03-17` 已确认 `enP1s25f3` 可长期作为专用实验口，并允许在正式 DPDK 压测窗口继续执行驱动重绑
+- `2026-03-17` 已确认 `receiver3` 可长期作为专用实验口，并允许在正式 DPDK 压测窗口继续执行驱动重绑
 - AF_XDP / DPDK 基线真源文档：`docs/设计方案/AF_XDP_DPDK_准备与分工.md`
 
 当前 AF_XDP 最小实测结果：
@@ -131,8 +131,8 @@ export LD_LIBRARY_PATH="$PREFIX/lib:${LD_LIBRARY_PATH:-}"
 - `libbpf 0.8.1` 已安装并可用
 - `libxdp 1.2.9` 已安装到 `/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo/build/native-aarch64/xdp-tools-1.2.9-prefix`
 - 最小 `.bpf.o` 已在服务器上成功生成
-- 最小 XDP 程序已成功 attach 到 `enP1s25f3`
-- 最小 AF_XDP socket bind probe 已成功绑定 `enP1s25f3 queue 0`
+- 最小 XDP 程序已成功 attach 到 `receiver3`
+- 最小 AF_XDP socket bind probe 已成功绑定 `receiver3 queue 0`
 - 收包级别 AF_XDP RX PoC 已成功运行 2 秒轮询
 - 实验结束后已将目标口上的 XDP 程序卸除
 - `rxbench_xdp` 与 `run_af_xdp_benchmark.sh` 已可在服务器上运行
@@ -147,11 +147,11 @@ PREFIX=/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo/build/native-aarch64
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
 export LD_LIBRARY_PATH="$PREFIX/lib:${LD_LIBRARY_PATH:-}"
 ./scripts/compile_min_xdp.sh
-./scripts/attach_min_xdp.sh enP1s25f3
+./scripts/attach_min_xdp.sh receiver3
 bpftool net
 ./scripts/build_af_xdp_bind_probe.sh
-./build_af_xdp_probe/af_xdp_bind_probe enP1s25f3 0
-./scripts/detach_xdp.sh enP1s25f3
+./build_af_xdp_probe/af_xdp_bind_probe receiver3 0
+./scripts/detach_xdp.sh receiver3
 ```
 
 ## AF_XDP RX PoC 与 Benchmark
@@ -161,6 +161,6 @@ Linux server:
 ```bash
 cd /home/devuser/WorkSpace/rx_tech_demo
 ./scripts/build_af_xdp_rx_poc.sh
-sudo ./build_af_xdp_probe/af_xdp_rx_poc enP1s25f3 0 2
-sudo ./scripts/run_af_xdp_benchmark.sh enP1s25f3 0 2 rx_only results/af_xdp_benchmark_script
+sudo ./build_af_xdp_probe/af_xdp_rx_poc receiver3 0 2
+sudo ./scripts/run_af_xdp_benchmark.sh receiver3 0 2 rx_only results/af_xdp_benchmark_script
 ```

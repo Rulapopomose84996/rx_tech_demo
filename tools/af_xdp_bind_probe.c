@@ -37,7 +37,7 @@ static int configure_ring(int fd, int optname, int size) {
 }
 
 int main(int argc, char** argv) {
-    const char* ifname = argc > 1 ? argv[1] : "enP1s25f3";
+    const char* ifname = argc > 1 ? argv[1] : "receiver3";
     unsigned int queue_id = argc > 2 ? (unsigned int)strtoul(argv[2], NULL, 10) : 0U;
     const int ifindex = if_nametoindex(ifname);
     if (ifindex == 0) {

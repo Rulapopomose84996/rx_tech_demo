@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TARGET_NIC="${1:-enP1s25f0}"
+TARGET_NIC="${1:-receiver0}"
 TARGET_QUEUE="${2:-0}"
 
 echo "[target]"

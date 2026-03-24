@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RX_NIC="${1:-enP1s25f3}"
-TX_IFACE="${2:-enP1s25f0}"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+RX_NIC="${1:-receiver3}"
+TX_IFACE="${2:-receiver0}"
 QUEUE_ID="${3:-0}"
 DURATION="${4:-10}"
 PPS="${5:-1000}"
 PAYLOAD_SIZE="${6:-512}"
 OUTPUT_DIR="${7:-results/af_xdp_controlled}"
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [ "$(id -u)" -eq 0 ]; then
   PRIV_CMD=()
 else
