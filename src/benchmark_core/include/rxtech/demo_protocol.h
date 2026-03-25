@@ -1,17 +1,15 @@
 #pragma once
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 
 namespace rxtech {
 
-constexpr std::uint32_t kDemoMagic = 0x44454D4FU;  // "DEMO"
+constexpr std::uint32_t kDemoMagic = 0x54504458U;  // "TPDX"
 constexpr std::uint16_t kDemoVersion = 1U;
 constexpr std::uint16_t kDemoFlagFirstFragment = 0x0001U;
 constexpr std::uint16_t kDemoFlagLastFragment = 0x0002U;
 constexpr std::size_t kDemoHeaderWireBytes = 32U;
-constexpr std::size_t kDefaultReceiverEndpointCount = 3U;
 
 struct DemoHeader {
     std::uint32_t magic = 0;
@@ -24,6 +22,5 @@ struct DemoHeader {
     std::uint16_t frag_count = 0;
     std::uint16_t frag_payload_bytes = 0;
 };
-
 
 }  // namespace rxtech
