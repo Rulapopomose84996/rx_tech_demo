@@ -27,6 +27,7 @@ int main() {
         out << "packet_size_bytes: 1024\n";
         out << "udp_port: 10001\n";
         out << "use_sender_default_endpoints: true\n";
+        out << "run_until_stopped: true\n";
         out << "reassembly_timeout_ms: 1500\n";
         out << "receiver0_bind_address: 172.20.11.100\n";
         out << "receiver0_udp_port: 5010\n";
@@ -44,7 +45,7 @@ int main() {
         config.duration_seconds != 12U || config.max_burst != 32U ||
         !config.enable_internal_traffic || config.packet_size_bytes != 1024U ||
         config.udp_port != 10001U || config.cpu_cores.size() != 3U ||
-        config.cpu_cores[0] != 16 || !config.use_sender_default_endpoints ||
+        config.cpu_cores[0] != 16 || !config.use_sender_default_endpoints || !config.run_until_stopped ||
         config.reassembly_timeout_ms != 1500U || config.receiver_endpoints.size() != 3U ||
         config.receiver_endpoints[0].port_id != 0U ||
         config.receiver_endpoints[0].bind_address != "172.20.11.100" ||

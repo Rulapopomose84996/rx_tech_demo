@@ -1,7 +1,9 @@
 #include "rxtech/bench_runner.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <csignal>
 #include <stdexcept>
 
 #ifdef __linux__
@@ -13,6 +15,8 @@
 namespace rxtech {
 
 namespace {
+
+std::atomic<bool> g_stop_requested{false};
 
 struct CpuSnapshot {
     bool available = false;
@@ -30,6 +34,28 @@ struct CpuMetrics {
     double user_pct = 0.0;
     double sys_pct = 0.0;
     double peak_pct = 0.0;
+};
+
+void bench_signal_handler(int) {
+    g_stop_requested.store(true);
+}
+
+class SignalHandlerGuard {
+public:
+    SignalHandlerGuard() {
+        previous_sigint_ = std::signal(SIGINT, bench_signal_handler);
+        previous_sigterm_ = std::signal(SIGTERM, bench_signal_handler);
+    }
+
+    ~SignalHandlerGuard() {
+        std::signal(SIGINT, previous_sigint_);
+        std::signal(SIGTERM, previous_sigterm_);
+    }
+
+private:
+    using SignalHandler = void (*)(int);
+    SignalHandler previous_sigint_ = SIG_DFL;
+    SignalHandler previous_sigterm_ = SIG_DFL;
 };
 
 double timeval_diff_seconds(const timeval& start, const timeval& end) {
@@ -243,10 +269,21 @@ void merge_backend_stats(RunSummary& summary, const BackendStats& backend_stats)
 
 }  // namespace
 
+void request_bench_stop() {
+    g_stop_requested.store(true);
+}
+
+void reset_bench_stop() {
+    g_stop_requested.store(false);
+}
+
 RunSummary BenchRunner::run(BenchContext& context) {
     if (!context.backend || !context.mode || !context.metrics) {
         throw std::runtime_error("bench context is incomplete");
     }
+
+    reset_bench_stop();
+    SignalHandlerGuard signal_guard;
 
     RxConfig effective_config = context.config;
     const std::vector<ScenarioStep> steps = build_steps(effective_config, context.scenario);
@@ -304,13 +341,15 @@ RunSummary BenchRunner::run(BenchContext& context) {
             throw std::runtime_error("failed to allocate step metrics collector");
         }
 
+        const bool manual_stop_step = effective_config.run_until_stopped && is_measure_step(step);
         const std::uint32_t step_duration = std::max<std::uint32_t>(1U, step.duration_seconds);
         const CpuSnapshot cpu_start = capture_cpu_snapshot();
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(step_duration);
+        const auto step_start = std::chrono::steady_clock::now();
         std::string step_run_status = "success";
         std::string step_error;
 
-        while (std::chrono::steady_clock::now() < deadline) {
+        while (manual_stop_step ? !g_stop_requested.load() : (std::chrono::steady_clock::now() < deadline)) {
             RxBurst burst;
             const bool ok = context.backend->recv_burst(burst, effective_config.max_burst);
             if (!ok) {
@@ -326,25 +365,33 @@ RunSummary BenchRunner::run(BenchContext& context) {
             context.backend->release_burst(burst);
         }
 
+        const auto step_end = std::chrono::steady_clock::now();
         const CpuMetrics cpu_metrics = diff_cpu_metrics(cpu_start, capture_cpu_snapshot());
+        const auto elapsed_ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(step_end - step_start).count();
+        const std::uint32_t actual_step_duration =
+            manual_stop_step ? std::max<std::uint32_t>(1U, static_cast<std::uint32_t>((elapsed_ms + 999LL) / 1000LL))
+                             : step_duration;
+        ScenarioStep executed_step = step;
+        executed_step.duration_seconds = actual_step_duration;
         RunSummary raw_step_summary =
-            step_metrics->finalize(context.backend->name(), context.mode->name(), context.scenario.scenario_name, step_duration);
+            step_metrics->finalize(context.backend->name(), context.mode->name(), context.scenario.scenario_name, actual_step_duration);
         StepSummary step_summary =
-            make_step_summary(raw_step_summary, step, index, cpu_metrics, step_run_status, step_error);
+            make_step_summary(raw_step_summary, executed_step, index, cpu_metrics, step_run_status, step_error);
         step_results.push_back(step_summary);
 
         if (is_measure_step(step)) {
-            measure_duration_seconds += step_duration;
+            measure_duration_seconds += actual_step_duration;
             if (!aggregate_metrics->absorb(*step_metrics)) {
                 throw std::runtime_error("failed to merge metrics collectors");
             }
             if (cpu_metrics.available) {
                 cpu_available = true;
                 cpu_status = "available";
-                weighted_cpu_duration += step_duration;
-                weighted_cpu_user += cpu_metrics.user_pct * static_cast<double>(step_duration);
-                weighted_cpu_sys += cpu_metrics.sys_pct * static_cast<double>(step_duration);
-                weighted_cpu_peak += cpu_metrics.peak_pct * static_cast<double>(step_duration);
+                weighted_cpu_duration += actual_step_duration;
+                weighted_cpu_user += cpu_metrics.user_pct * static_cast<double>(actual_step_duration);
+                weighted_cpu_sys += cpu_metrics.sys_pct * static_cast<double>(actual_step_duration);
+                weighted_cpu_peak += cpu_metrics.peak_pct * static_cast<double>(actual_step_duration);
             } else if (!cpu_available) {
                 cpu_status = cpu_metrics.status;
             }
@@ -353,6 +400,9 @@ RunSummary BenchRunner::run(BenchContext& context) {
         if (step_run_status != "success") {
             run_status = "error";
             run_error = step_error;
+            break;
+        }
+        if (manual_stop_step && g_stop_requested.load()) {
             break;
         }
     }

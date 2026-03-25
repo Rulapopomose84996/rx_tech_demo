@@ -1,6 +1,7 @@
 #include <cassert>
 #include <fstream>
 #include <memory>
+#include <thread>
 
 #include "rxtech/bench_runner.h"
 #include "rxtech/metrics.h"
@@ -126,6 +127,32 @@ int main() {
         assert(summary.backend_reason == "backend unavailable in test");
         assert(summary.steps.size() == 2U);
         assert(summary.steps.front().run_status == "skipped");
+    }
+
+    {
+        rxtech::BenchContext context;
+        context.config = rxtech::load_default_config();
+        context.config.output_dir = "results/test_until_stopped";
+        context.config.run_until_stopped = true;
+        context.scenario.scenario_name = "manual_mode";
+        context.scenario.steps = {{"measure", "measure", "steady", "fixed", 0.0, 1.0, 1U, 1U, 128U, 0U}};
+        context.backend = std::make_unique<FakeBackend>();
+        context.mode = std::make_unique<rxtech::RxOnlyMode>();
+        context.metrics = std::make_unique<rxtech::MetricsCollector>();
+
+        std::thread stopper([]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(150));
+            rxtech::request_bench_stop();
+        });
+
+        rxtech::BenchRunner runner;
+        const rxtech::RunSummary summary = runner.run(context);
+        stopper.join();
+
+        assert(summary.run_status == "success");
+        assert(summary.measure_step_count == 1U);
+        assert(summary.rx_packets > 0U);
+        assert(summary.scenario_duration_seconds >= 1U);
     }
 
     return 0;

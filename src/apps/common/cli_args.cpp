@@ -16,6 +16,10 @@ CliArgs parse_cli_args(int argc, char** argv) {
                 args.dry_run = true;
                 continue;
             }
+            if (current == "--until-stopped") {
+                args.until_stopped = true;
+                continue;
+            }
             if (index + 1 >= argc) {
                 throw std::runtime_error("missing value for argument: " + current);
             }

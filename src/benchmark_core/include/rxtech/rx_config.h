@@ -33,6 +33,7 @@ struct RxConfig {
     std::uint32_t reassembly_timeout_ms = 1000;
     bool enable_internal_traffic = false;
     bool use_sender_default_endpoints = false;
+    bool run_until_stopped = false;
     std::vector<int> cpu_cores;
     std::vector<ReceiverEndpoint> receiver_endpoints;
 };

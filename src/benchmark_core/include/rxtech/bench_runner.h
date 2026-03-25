@@ -4,6 +4,9 @@
 
 namespace rxtech {
 
+void request_bench_stop();
+void reset_bench_stop();
+
 class BenchRunner {
 public:
     RunSummary run(BenchContext& context);

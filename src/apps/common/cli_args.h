@@ -14,6 +14,7 @@ struct CliArgs {
     std::string duration_seconds;
     std::string max_burst;
     std::string cpu_cores;
+    bool until_stopped = false;
     bool dry_run = false;
 };
 

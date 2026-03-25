@@ -141,6 +141,8 @@ void assign_config_value(RxConfig& config, const std::string& key, const std::st
         if (config.use_sender_default_endpoints) {
             config.receiver_endpoints = make_sender_default_receiver_endpoints();
         }
+    } else if (normalized_key == "run_until_stopped") {
+        config.run_until_stopped = parse_bool(normalized_value);
     } else if (normalized_key == "xdp_bind_mode") {
         config.xdp_bind_mode = normalized_value;
     } else if (normalized_key == "dpdk_port_id") {
@@ -289,6 +291,9 @@ void merge_config(RxConfig& base, const RxConfig& overrides) {
     }
     if (overrides.use_sender_default_endpoints != defaults.use_sender_default_endpoints) {
         base.use_sender_default_endpoints = overrides.use_sender_default_endpoints;
+    }
+    if (overrides.run_until_stopped != defaults.run_until_stopped) {
+        base.run_until_stopped = overrides.run_until_stopped;
     }
     if (!overrides.cpu_cores.empty()) {
         base.cpu_cores = overrides.cpu_cores;

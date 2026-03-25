@@ -147,6 +147,9 @@ RxConfig cli_args_to_overrides(const CliArgs& args) {
     if (!args.max_burst.empty()) {
         overrides.max_burst = static_cast<std::uint32_t>(std::stoul(args.max_burst));
     }
+    if (args.until_stopped) {
+        overrides.run_until_stopped = true;
+    }
     if (!args.cpu_cores.empty()) {
         std::stringstream stream(args.cpu_cores);
         std::string item;
@@ -185,6 +188,7 @@ void print_dry_run(const RxConfig& config, const Scenario& scenario) {
     std::cout << "max_burst=" << config.max_burst << std::endl;
     std::cout << "packet_size_bytes=" << config.packet_size_bytes << std::endl;
     std::cout << "reassembly_timeout_ms=" << config.reassembly_timeout_ms << std::endl;
+    std::cout << "run_until_stopped=" << (config.run_until_stopped ? "true" : "false") << std::endl;
     std::cout << "receiver_endpoints=" << config.receiver_endpoints.size() << std::endl;
     for (std::size_t index = 0; index < config.receiver_endpoints.size(); ++index) {
         const ReceiverEndpoint& endpoint = config.receiver_endpoints[index];
