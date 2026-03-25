@@ -37,6 +37,32 @@ void MetricsCollector::on_ring_depth(std::size_t depth) {
     ring_high_watermark_ = std::max<std::uint64_t>(ring_high_watermark_, depth);
 }
 
+void MetricsCollector::on_port_packet(std::uint32_t port_id, std::uint64_t bytes) {
+    PerPortMetrics& metrics = per_port_metrics_[port_id];
+    ++metrics.rx_packets;
+    metrics.rx_bytes += bytes;
+}
+
+void MetricsCollector::on_reassembled_block(std::uint32_t port_id, std::uint64_t) {
+    ++per_port_metrics_[port_id].reassembled_blocks;
+}
+
+void MetricsCollector::on_missing_fragments(std::uint32_t port_id, std::uint64_t count) {
+    per_port_metrics_[port_id].missing_fragments += count;
+}
+
+void MetricsCollector::on_duplicate_fragment(std::uint32_t port_id) {
+    ++per_port_metrics_[port_id].duplicate_fragments;
+}
+
+void MetricsCollector::on_invalid_header(std::uint32_t port_id) {
+    ++per_port_metrics_[port_id].invalid_header_count;
+}
+
+void MetricsCollector::on_reassembly_timeout(std::uint32_t port_id) {
+    ++per_port_metrics_[port_id].reassembly_timeout_count;
+}
+
 std::unique_ptr<IMetricsCollector> MetricsCollector::clone_empty() const {
     return std::make_unique<MetricsCollector>();
 }
@@ -59,6 +85,16 @@ bool MetricsCollector::absorb(const IMetricsCollector& other) {
     ring_high_watermark_ = std::max(ring_high_watermark_, other_metrics->ring_high_watermark_);
     bursts_.insert(bursts_.end(), other_metrics->bursts_.begin(), other_metrics->bursts_.end());
     latencies_ns_.insert(latencies_ns_.end(), other_metrics->latencies_ns_.begin(), other_metrics->latencies_ns_.end());
+    for (const auto& [port_id, per_port] : other_metrics->per_port_metrics_) {
+        PerPortMetrics& current = per_port_metrics_[port_id];
+        current.rx_packets += per_port.rx_packets;
+        current.rx_bytes += per_port.rx_bytes;
+        current.reassembled_blocks += per_port.reassembled_blocks;
+        current.missing_fragments += per_port.missing_fragments;
+        current.duplicate_fragments += per_port.duplicate_fragments;
+        current.invalid_header_count += per_port.invalid_header_count;
+        current.reassembly_timeout_count += per_port.reassembly_timeout_count;
+    }
     return true;
 }
 
@@ -101,6 +137,27 @@ RunSummary MetricsCollector::finalize(const std::string& backend,
         summary.latency_p50_us = static_cast<double>(latencies_ns_[p50_index]) / 1000.0;
         summary.latency_p99_us = static_cast<double>(latencies_ns_[p99_index]) / 1000.0;
     }
+
+    summary.per_port.reserve(per_port_metrics_.size());
+    for (const auto& [port_id, metrics] : per_port_metrics_) {
+        PerPortSummary per_port;
+        per_port.port_id = port_id;
+        per_port.rx_packets = metrics.rx_packets;
+        per_port.rx_bytes = metrics.rx_bytes;
+        per_port.reassembled_blocks = metrics.reassembled_blocks;
+        per_port.missing_fragments = metrics.missing_fragments;
+        per_port.duplicate_fragments = metrics.duplicate_fragments;
+        per_port.invalid_header_count = metrics.invalid_header_count;
+        per_port.reassembly_timeout_count = metrics.reassembly_timeout_count;
+        if (duration_seconds > 0U) {
+            per_port.throughput_gbps =
+                (static_cast<double>(metrics.rx_bytes) * 8.0) / static_cast<double>(duration_seconds) / 1'000'000'000.0;
+        }
+        summary.per_port.push_back(per_port);
+    }
+    std::sort(summary.per_port.begin(),
+              summary.per_port.end(),
+              [](const PerPortSummary& lhs, const PerPortSummary& rhs) { return lhs.port_id < rhs.port_id; });
 
     return summary;
 }

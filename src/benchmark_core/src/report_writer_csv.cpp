@@ -118,6 +118,20 @@ void write_summary_csv(const RunSummary& summary, const std::string& output_dir)
         << (summary.backend_available ? "true" : "false") << ','
         << (summary.cpu_metrics_available ? "true" : "false") << ','
         << csv_quote(summary.cpu_metrics_status) << '\n';
+
+    std::ofstream per_port_out(output_dir + "/per_port_summary.csv", std::ios::trunc);
+    per_port_out << "port_id,rx_packets,rx_bytes,reassembled_blocks,missing_fragments,duplicate_fragments,invalid_header_count,reassembly_timeout_count,throughput_gbps\n";
+    for (const PerPortSummary& port : summary.per_port) {
+        per_port_out << port.port_id << ','
+                     << port.rx_packets << ','
+                     << port.rx_bytes << ','
+                     << port.reassembled_blocks << ','
+                     << port.missing_fragments << ','
+                     << port.duplicate_fragments << ','
+                     << port.invalid_header_count << ','
+                     << port.reassembly_timeout_count << ','
+                     << port.throughput_gbps << '\n';
+    }
 }
 
 void write_step_summaries_csv(const std::vector<StepSummary>& steps, const std::string& output_dir) {

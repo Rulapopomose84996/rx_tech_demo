@@ -1,11 +1,24 @@
 #pragma once
 
 #include <cstdint>
+#include <unordered_map>
 #include <memory>
 #include <string>
 #include <vector>
 
 namespace rxtech {
+
+struct PerPortSummary {
+    std::uint32_t port_id = 0;
+    std::uint64_t rx_packets = 0;
+    std::uint64_t rx_bytes = 0;
+    std::uint64_t reassembled_blocks = 0;
+    std::uint64_t missing_fragments = 0;
+    std::uint64_t duplicate_fragments = 0;
+    std::uint64_t invalid_header_count = 0;
+    std::uint64_t reassembly_timeout_count = 0;
+    double throughput_gbps = 0.0;
+};
 
 struct StepSummary {
     std::size_t step_index = 0;
@@ -94,6 +107,7 @@ struct RunSummary {
     bool backend_available = true;
     bool cpu_metrics_available = false;
     std::string cpu_metrics_status = "unavailable";
+    std::vector<PerPortSummary> per_port;
     std::vector<StepSummary> steps;
 };
 
@@ -108,6 +122,12 @@ public:
     virtual void on_pool_exhaustion() = 0;
     virtual void on_packet_latency_ns(std::uint64_t latency_ns) = 0;
     virtual void on_ring_depth(std::size_t depth) = 0;
+    virtual void on_port_packet(std::uint32_t port_id, std::uint64_t bytes) = 0;
+    virtual void on_reassembled_block(std::uint32_t port_id, std::uint64_t block_bytes) = 0;
+    virtual void on_missing_fragments(std::uint32_t port_id, std::uint64_t count) = 0;
+    virtual void on_duplicate_fragment(std::uint32_t port_id) = 0;
+    virtual void on_invalid_header(std::uint32_t port_id) = 0;
+    virtual void on_reassembly_timeout(std::uint32_t port_id) = 0;
     virtual std::unique_ptr<IMetricsCollector> clone_empty() const = 0;
     virtual bool absorb(const IMetricsCollector& other) = 0;
     virtual RunSummary finalize(const std::string& backend,
@@ -125,6 +145,12 @@ public:
     void on_pool_exhaustion() override;
     void on_packet_latency_ns(std::uint64_t latency_ns) override;
     void on_ring_depth(std::size_t depth) override;
+    void on_port_packet(std::uint32_t port_id, std::uint64_t bytes) override;
+    void on_reassembled_block(std::uint32_t port_id, std::uint64_t block_bytes) override;
+    void on_missing_fragments(std::uint32_t port_id, std::uint64_t count) override;
+    void on_duplicate_fragment(std::uint32_t port_id) override;
+    void on_invalid_header(std::uint32_t port_id) override;
+    void on_reassembly_timeout(std::uint32_t port_id) override;
     std::unique_ptr<IMetricsCollector> clone_empty() const override;
     bool absorb(const IMetricsCollector& other) override;
     RunSummary finalize(const std::string& backend,
@@ -133,6 +159,16 @@ public:
                         std::uint32_t duration_seconds) override;
 
 private:
+    struct PerPortMetrics {
+        std::uint64_t rx_packets = 0;
+        std::uint64_t rx_bytes = 0;
+        std::uint64_t reassembled_blocks = 0;
+        std::uint64_t missing_fragments = 0;
+        std::uint64_t duplicate_fragments = 0;
+        std::uint64_t invalid_header_count = 0;
+        std::uint64_t reassembly_timeout_count = 0;
+    };
+
     std::uint64_t rx_packets_ = 0;
     std::uint64_t rx_bytes_ = 0;
     std::uint64_t parsed_packets_ = 0;
@@ -145,6 +181,7 @@ private:
     std::uint64_t ring_high_watermark_ = 0;
     std::vector<std::size_t> bursts_;
     std::vector<std::uint64_t> latencies_ns_;
+    std::unordered_map<std::uint32_t, PerPortMetrics> per_port_metrics_;
 };
 
 }  // namespace rxtech

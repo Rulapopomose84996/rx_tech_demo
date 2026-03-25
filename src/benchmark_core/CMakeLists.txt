@@ -2,6 +2,7 @@ add_library(rxtech_benchmark_core
     src/rx_config.cpp
     src/scenario.cpp
     src/parser.cpp
+    src/reassembly.cpp
     src/metrics.cpp
     src/report_writer_json.cpp
     src/report_writer_csv.cpp

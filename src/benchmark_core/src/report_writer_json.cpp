@@ -170,7 +170,27 @@ void write_summary_json(const RunSummary& summary, const std::string& output_dir
     out << "  \"empty_poll_ratio\": " << summary.empty_poll_ratio << ",\n";
     out << "  \"backend_available\": " << (summary.backend_available ? "true" : "false") << ",\n";
     out << "  \"cpu_metrics_available\": " << (summary.cpu_metrics_available ? "true" : "false") << ",\n";
-    out << "  \"cpu_metrics_status\": \"" << escape_json(summary.cpu_metrics_status) << "\"\n";
+    out << "  \"cpu_metrics_status\": \"" << escape_json(summary.cpu_metrics_status) << "\",\n";
+    out << "  \"per_port\": [\n";
+    for (std::size_t index = 0; index < summary.per_port.size(); ++index) {
+        const PerPortSummary& port = summary.per_port[index];
+        out << "    {\n";
+        out << "      \"port_id\": " << port.port_id << ",\n";
+        out << "      \"rx_packets\": " << port.rx_packets << ",\n";
+        out << "      \"rx_bytes\": " << port.rx_bytes << ",\n";
+        out << "      \"reassembled_blocks\": " << port.reassembled_blocks << ",\n";
+        out << "      \"missing_fragments\": " << port.missing_fragments << ",\n";
+        out << "      \"duplicate_fragments\": " << port.duplicate_fragments << ",\n";
+        out << "      \"invalid_header_count\": " << port.invalid_header_count << ",\n";
+        out << "      \"reassembly_timeout_count\": " << port.reassembly_timeout_count << ",\n";
+        out << "      \"throughput_gbps\": " << port.throughput_gbps << "\n";
+        out << "    }";
+        if (index + 1U < summary.per_port.size()) {
+            out << ',';
+        }
+        out << '\n';
+    }
+    out << "  ]\n";
     out << "}\n";
 }
 

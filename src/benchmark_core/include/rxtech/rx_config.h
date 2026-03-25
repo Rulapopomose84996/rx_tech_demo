@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "rxtech/demo_protocol.h"
+
 namespace rxtech {
 
 struct RxConfig {
@@ -28,8 +30,11 @@ struct RxConfig {
     std::uint32_t dpdk_mbuf_cache_size = 256;
     std::uint32_t dpdk_rx_desc = 256;
     std::uint32_t dpdk_tx_desc = 256;
+    std::uint32_t reassembly_timeout_ms = 1000;
     bool enable_internal_traffic = false;
+    bool use_sender_default_endpoints = false;
     std::vector<int> cpu_cores;
+    std::vector<ReceiverEndpoint> receiver_endpoints;
 };
 
 RxConfig load_default_config();

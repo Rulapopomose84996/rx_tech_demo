@@ -26,6 +26,14 @@ int main() {
         out << "enable_internal_traffic: true\n";
         out << "packet_size_bytes: 1024\n";
         out << "udp_port: 10001\n";
+        out << "use_sender_default_endpoints: true\n";
+        out << "reassembly_timeout_ms: 1500\n";
+        out << "receiver0_bind_address: 172.20.11.100\n";
+        out << "receiver0_udp_port: 5010\n";
+        out << "receiver1_bind_address: 172.20.12.100\n";
+        out << "receiver1_udp_port: 5011\n";
+        out << "receiver2_bind_address: 172.20.13.100\n";
+        out << "receiver2_udp_port: 5012\n";
     }
 
     const rxtech::RxConfig config = rxtech::load_config_file(path);
@@ -36,7 +44,14 @@ int main() {
         config.duration_seconds != 12U || config.max_burst != 32U ||
         !config.enable_internal_traffic || config.packet_size_bytes != 1024U ||
         config.udp_port != 10001U || config.cpu_cores.size() != 3U ||
-        config.cpu_cores[0] != 16) {
+        config.cpu_cores[0] != 16 || !config.use_sender_default_endpoints ||
+        config.reassembly_timeout_ms != 1500U || config.receiver_endpoints.size() != 3U ||
+        config.receiver_endpoints[0].port_id != 0U ||
+        config.receiver_endpoints[0].bind_address != "172.20.11.100" ||
+        config.receiver_endpoints[0].udp_port != 5010U ||
+        config.receiver_endpoints[2].port_id != 2U ||
+        config.receiver_endpoints[2].bind_address != "172.20.13.100" ||
+        config.receiver_endpoints[2].udp_port != 5012U) {
         std::cerr << "config parsing regression in test_rx_config\n";
         return 1;
     }

@@ -95,12 +95,12 @@ BackendPtr make_backend(const std::string& backend_name) {
     throw std::runtime_error("unknown backend: " + backend_name);
 }
 
-ModeProcessorPtr make_mode(const std::string& mode_name) {
+ModeProcessorPtr make_mode(const RxConfig& config, const std::string& mode_name) {
     if (mode_name == "rx_only") {
         return std::make_unique<RxOnlyMode>();
     }
     if (mode_name == "parse") {
-        return std::make_unique<ParseMode>();
+        return std::make_unique<ParseMode>(config.reassembly_timeout_ms);
     }
     if (mode_name == "spsc") {
         return std::make_unique<SpscMode>();
@@ -184,6 +184,16 @@ void print_dry_run(const RxConfig& config, const Scenario& scenario) {
     std::cout << "duration_seconds=" << config.duration_seconds << std::endl;
     std::cout << "max_burst=" << config.max_burst << std::endl;
     std::cout << "packet_size_bytes=" << config.packet_size_bytes << std::endl;
+    std::cout << "reassembly_timeout_ms=" << config.reassembly_timeout_ms << std::endl;
+    std::cout << "receiver_endpoints=" << config.receiver_endpoints.size() << std::endl;
+    for (std::size_t index = 0; index < config.receiver_endpoints.size(); ++index) {
+        const ReceiverEndpoint& endpoint = config.receiver_endpoints[index];
+        std::cout << "receiver[" << index << "]"
+                  << " port_id=" << endpoint.port_id
+                  << " bind_address=" << endpoint.bind_address
+                  << " udp_port=" << endpoint.udp_port
+                  << std::endl;
+    }
     std::cout << "steps=" << scenario.steps.size() << std::endl;
     for (std::size_t index = 0; index < scenario.steps.size(); ++index) {
         const ScenarioStep& step = scenario.steps[index];
@@ -215,7 +225,7 @@ int run_app(const std::string& backend_name, int argc, char** argv) {
         }
 
         context.backend = make_backend(backend_name);
-        context.mode = make_mode(context.config.mode_name);
+        context.mode = make_mode(context.config, context.config.mode_name);
         context.metrics = std::make_unique<MetricsCollector>();
 
         BenchRunner runner;
