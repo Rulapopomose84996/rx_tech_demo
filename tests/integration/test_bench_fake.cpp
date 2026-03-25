@@ -1,6 +1,7 @@
 #include <cassert>
 #include <fstream>
 #include <memory>
+#include <sstream>
 #include <thread>
 
 #include "rxtech/bench_runner.h"
@@ -139,20 +140,25 @@ int main() {
         context.backend = std::make_unique<FakeBackend>();
         context.mode = std::make_unique<rxtech::RxOnlyMode>();
         context.metrics = std::make_unique<rxtech::MetricsCollector>();
+        std::ostringstream status_stream;
 
         std::thread stopper([]() {
-            std::this_thread::sleep_for(std::chrono::milliseconds(150));
+            std::this_thread::sleep_for(std::chrono::milliseconds(10500));
             rxtech::request_bench_stop();
         });
 
         rxtech::BenchRunner runner;
+        runner.set_status_output(&status_stream);
         const rxtech::RunSummary summary = runner.run(context);
         stopper.join();
 
         assert(summary.run_status == "success");
         assert(summary.measure_step_count == 1U);
         assert(summary.rx_packets > 0U);
-        assert(summary.scenario_duration_seconds >= 1U);
+        assert(!summary.steps.empty());
+        assert(summary.steps.back().duration_seconds >= 10U);
+        assert(status_stream.str().find("[status]") != std::string::npos);
+        assert(status_stream.str().find("aggregate") != std::string::npos);
     }
 
     return 0;

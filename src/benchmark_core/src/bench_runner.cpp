@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <csignal>
+#include <iostream>
 #include <stdexcept>
 
 #ifdef __linux__
@@ -267,6 +268,38 @@ void merge_backend_stats(RunSummary& summary, const BackendStats& backend_stats)
     }
 }
 
+void print_status_snapshot(std::ostream& out,
+                           const RunSummary& summary,
+                           const std::chrono::steady_clock::duration& elapsed) {
+    const auto elapsed_seconds = std::max<std::uint64_t>(
+        1ULL,
+        static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(elapsed).count()));
+    const double aggregate_gbps =
+        (static_cast<double>(summary.rx_bytes) * 8.0) / static_cast<double>(elapsed_seconds) / 1'000'000'000.0;
+
+    out << "[status] elapsed=" << elapsed_seconds << "s"
+        << " aggregate"
+        << " rx_packets=" << summary.rx_packets
+        << " rx_bytes=" << summary.rx_bytes
+        << " gbps=" << aggregate_gbps
+        << " empty_poll_ratio=" << summary.empty_poll_ratio
+        << '\n';
+
+    for (const PerPortSummary& port : summary.per_port) {
+        out << "[status] port=" << port.port_id
+            << " rx_packets=" << port.rx_packets
+            << " rx_bytes=" << port.rx_bytes
+            << " gbps=" << port.throughput_gbps
+            << " reassembled_blocks=" << port.reassembled_blocks
+            << " invalid_header=" << port.invalid_header_count
+            << " missing=" << port.missing_fragments
+            << " duplicate=" << port.duplicate_fragments
+            << " timeout=" << port.reassembly_timeout_count
+            << '\n';
+    }
+    out.flush();
+}
+
 }  // namespace
 
 void request_bench_stop() {
@@ -275,6 +308,10 @@ void request_bench_stop() {
 
 void reset_bench_stop() {
     g_stop_requested.store(false);
+}
+
+void BenchRunner::set_status_output(std::ostream* output) {
+    status_output_ = output;
 }
 
 RunSummary BenchRunner::run(BenchContext& context) {
@@ -346,6 +383,7 @@ RunSummary BenchRunner::run(BenchContext& context) {
         const CpuSnapshot cpu_start = capture_cpu_snapshot();
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(step_duration);
         const auto step_start = std::chrono::steady_clock::now();
+        auto next_status_at = step_start + std::chrono::seconds(10);
         std::string step_run_status = "success";
         std::string step_error;
 
@@ -363,6 +401,23 @@ RunSummary BenchRunner::run(BenchContext& context) {
                 context.mode->process(burst, *step_metrics);
             }
             context.backend->release_burst(burst);
+
+            if (manual_stop_step && status_output_ != nullptr) {
+                const auto now = std::chrono::steady_clock::now();
+                if (now >= next_status_at) {
+                    RunSummary status_summary =
+                        step_metrics->finalize(context.backend->name(),
+                                               context.mode->name(),
+                                               context.scenario.scenario_name,
+                                               std::max<std::uint32_t>(
+                                                   1U,
+                                                   static_cast<std::uint32_t>(
+                                                       std::chrono::duration_cast<std::chrono::seconds>(now - step_start).count())));
+                    merge_backend_stats(status_summary, context.backend->stats());
+                    print_status_snapshot(*status_output_, status_summary, now - step_start);
+                    next_status_at = now + std::chrono::seconds(10);
+                }
+            }
         }
 
         const auto step_end = std::chrono::steady_clock::now();
