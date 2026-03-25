@@ -19,12 +19,16 @@ int main() {
         out << "scenario: scenarios/three_face_burst.yaml\n";
         out << "output_dir: results/config_case\n";
         out << "interface_name: receiver1\n";
-        out << "queue_id: 2\n";
+        out << "queue_id: 22\n";
         out << "duration_seconds: 12\n";
         out << "max_burst: 32\n";
         out << "cpu_cores: [16,17,18]\n";
         out << "packet_size_bytes: 1024\n";
         out << "run_until_stopped: true\n";
+        out << "status_interval_seconds: 10\n";
+        out << "feedback_enabled: true\n";
+        out << "feedback_host: 172.20.11.11\n";
+        out << "feedback_port: 9999\n";
         out << "reassembly_timeout_ms: 1500\n";
         out << "xdp_bind_mode: copy\n";
     }
@@ -33,10 +37,12 @@ int main() {
     if (config.backend_name != "af_xdp" || config.mode_name != "parse" ||
         config.scenario_path != "scenarios/three_face_burst.yaml" ||
         config.output_dir != "results/config_case" ||
-        config.interface_name != "receiver1" || config.queue_id != 2U ||
+        config.interface_name != "receiver1" || config.queue_id != 22U ||
         config.duration_seconds != 12U || config.max_burst != 32U ||
         config.packet_size_bytes != 1024U || config.cpu_cores.size() != 3U ||
         config.cpu_cores[0] != 16 || !config.run_until_stopped ||
+        config.status_interval_seconds != 10U || !config.feedback_enabled ||
+        config.feedback_host != "172.20.11.11" || config.feedback_port != 9999U ||
         config.reassembly_timeout_ms != 1500U || config.xdp_bind_mode != "copy") {
         std::cerr << "config parsing regression in test_rx_config\n";
         return 1;

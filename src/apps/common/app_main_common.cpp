@@ -212,6 +212,9 @@ int run_app(const std::string& backend_name, int argc, char** argv) {
         context.metrics = std::make_unique<MetricsCollector>();
 
         BenchRunner runner;
+        if (context.config.run_until_stopped) {
+            runner.set_status_output(&std::cout);
+        }
         const RunSummary summary = runner.run(context);
         std::cout << "status=" << summary.run_status
                   << " backend=" << summary.backend

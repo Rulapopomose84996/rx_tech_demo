@@ -79,6 +79,14 @@ void assign_config_value(RxConfig& config, const std::string& key, const std::st
         config.duration_seconds = static_cast<std::uint32_t>(std::stoul(normalized_value));
     } else if (normalized_key == "packet_size_bytes") {
         config.packet_size_bytes = static_cast<std::uint32_t>(std::stoul(normalized_value));
+    } else if (normalized_key == "status_interval_seconds") {
+        config.status_interval_seconds = static_cast<std::uint32_t>(std::stoul(normalized_value));
+    } else if (normalized_key == "feedback_port") {
+        config.feedback_port = static_cast<std::uint32_t>(std::stoul(normalized_value));
+    } else if (normalized_key == "feedback_host") {
+        config.feedback_host = normalized_value;
+    } else if (normalized_key == "feedback_enabled") {
+        config.feedback_enabled = parse_bool(normalized_value);
     } else if (normalized_key == "reassembly_timeout_ms") {
         config.reassembly_timeout_ms = static_cast<std::uint32_t>(std::stoul(normalized_value));
     } else if (normalized_key == "cpu_cores") {
@@ -181,49 +189,29 @@ void merge_config(RxConfig& base, const RxConfig& overrides) {
     if (!overrides.xdp_bind_mode.empty()) {
         base.xdp_bind_mode = overrides.xdp_bind_mode;
     }
+    if (!overrides.feedback_host.empty()) {
+        base.feedback_host = overrides.feedback_host;
+    }
     if (!overrides.config_path.empty()) {
         base.config_path = overrides.config_path;
     }
 
-    if (overrides.queue_id != defaults.queue_id) {
-        base.queue_id = overrides.queue_id;
-    }
-    if (overrides.max_burst != defaults.max_burst) {
-        base.max_burst = overrides.max_burst;
-    }
-    if (overrides.duration_seconds != 0U) {
-        base.duration_seconds = overrides.duration_seconds;
-    }
-    if (overrides.packet_size_bytes != defaults.packet_size_bytes) {
-        base.packet_size_bytes = overrides.packet_size_bytes;
-    }
-    if (overrides.reassembly_timeout_ms != defaults.reassembly_timeout_ms) {
-        base.reassembly_timeout_ms = overrides.reassembly_timeout_ms;
-    }
-    if (overrides.dpdk_port_id != defaults.dpdk_port_id) {
-        base.dpdk_port_id = overrides.dpdk_port_id;
-    }
-    if (overrides.dpdk_socket_mem_mb != defaults.dpdk_socket_mem_mb) {
-        base.dpdk_socket_mem_mb = overrides.dpdk_socket_mem_mb;
-    }
-    if (overrides.dpdk_mempool_size != defaults.dpdk_mempool_size) {
-        base.dpdk_mempool_size = overrides.dpdk_mempool_size;
-    }
-    if (overrides.dpdk_mbuf_cache_size != defaults.dpdk_mbuf_cache_size) {
-        base.dpdk_mbuf_cache_size = overrides.dpdk_mbuf_cache_size;
-    }
-    if (overrides.dpdk_rx_desc != defaults.dpdk_rx_desc) {
-        base.dpdk_rx_desc = overrides.dpdk_rx_desc;
-    }
-    if (overrides.dpdk_tx_desc != defaults.dpdk_tx_desc) {
-        base.dpdk_tx_desc = overrides.dpdk_tx_desc;
-    }
-    if (overrides.run_until_stopped != defaults.run_until_stopped) {
-        base.run_until_stopped = overrides.run_until_stopped;
-    }
-    if (!overrides.cpu_cores.empty()) {
-        base.cpu_cores = overrides.cpu_cores;
-    }
+    if (overrides.queue_id != defaults.queue_id) base.queue_id = overrides.queue_id;
+    if (overrides.max_burst != defaults.max_burst) base.max_burst = overrides.max_burst;
+    if (overrides.duration_seconds != 0U) base.duration_seconds = overrides.duration_seconds;
+    if (overrides.packet_size_bytes != defaults.packet_size_bytes) base.packet_size_bytes = overrides.packet_size_bytes;
+    if (overrides.status_interval_seconds != defaults.status_interval_seconds) base.status_interval_seconds = overrides.status_interval_seconds;
+    if (overrides.feedback_port != defaults.feedback_port) base.feedback_port = overrides.feedback_port;
+    if (overrides.feedback_enabled != defaults.feedback_enabled) base.feedback_enabled = overrides.feedback_enabled;
+    if (overrides.reassembly_timeout_ms != defaults.reassembly_timeout_ms) base.reassembly_timeout_ms = overrides.reassembly_timeout_ms;
+    if (overrides.dpdk_port_id != defaults.dpdk_port_id) base.dpdk_port_id = overrides.dpdk_port_id;
+    if (overrides.dpdk_socket_mem_mb != defaults.dpdk_socket_mem_mb) base.dpdk_socket_mem_mb = overrides.dpdk_socket_mem_mb;
+    if (overrides.dpdk_mempool_size != defaults.dpdk_mempool_size) base.dpdk_mempool_size = overrides.dpdk_mempool_size;
+    if (overrides.dpdk_mbuf_cache_size != defaults.dpdk_mbuf_cache_size) base.dpdk_mbuf_cache_size = overrides.dpdk_mbuf_cache_size;
+    if (overrides.dpdk_rx_desc != defaults.dpdk_rx_desc) base.dpdk_rx_desc = overrides.dpdk_rx_desc;
+    if (overrides.dpdk_tx_desc != defaults.dpdk_tx_desc) base.dpdk_tx_desc = overrides.dpdk_tx_desc;
+    if (overrides.run_until_stopped != defaults.run_until_stopped) base.run_until_stopped = overrides.run_until_stopped;
+    if (!overrides.cpu_cores.empty()) base.cpu_cores = overrides.cpu_cores;
 }
 
 }  // namespace rxtech

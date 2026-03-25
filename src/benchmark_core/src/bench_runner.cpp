@@ -5,10 +5,14 @@
 #include <chrono>
 #include <csignal>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 
 #ifdef __linux__
+#include <arpa/inet.h>
 #include <sys/resource.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #endif
 
 #include "rxtech/report_writer.h"
@@ -268,6 +272,51 @@ void merge_backend_stats(RunSummary& summary, const BackendStats& backend_stats)
     }
 }
 
+double calculate_drop_rate(const RunSummary& summary) {
+    const double total = static_cast<double>(summary.rx_packets + summary.dropped_packets);
+    if (total <= 0.0) {
+        return 0.0;
+    }
+    return static_cast<double>(summary.dropped_packets) / total;
+}
+
+void send_feedback_snapshot(const RxConfig& config, const RunSummary& summary) {
+#ifdef __linux__
+    if (!config.feedback_enabled || config.feedback_host.empty() || config.feedback_port == 0U) {
+        return;
+    }
+
+    const int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (fd < 0) {
+        return;
+    }
+
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(static_cast<std::uint16_t>(config.feedback_port));
+    if (inet_pton(AF_INET, config.feedback_host.c_str(), &addr.sin_addr) != 1) {
+        close(fd);
+        return;
+    }
+
+    std::ostringstream payload;
+    payload << "{\"type\":\"receiver_feedback\""
+            << ",\"rx_packets\":" << summary.rx_packets
+            << ",\"dropped_packets\":" << summary.dropped_packets
+            << ",\"loss_rate\":" << calculate_drop_rate(summary)
+            << ",\"queue_id\":" << summary.queue_id
+            << ",\"gbps\":" << summary.actual_rx_gbps
+            << "}";
+
+    const std::string message = payload.str();
+    (void)sendto(fd, message.data(), message.size(), 0, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr));
+    close(fd);
+#else
+    (void)config;
+    (void)summary;
+#endif
+}
+
 void print_status_snapshot(std::ostream& out,
                            const RunSummary& summary,
                            const std::chrono::steady_clock::duration& elapsed) {
@@ -276,12 +325,14 @@ void print_status_snapshot(std::ostream& out,
         static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(elapsed).count()));
     const double aggregate_gbps =
         (static_cast<double>(summary.rx_bytes) * 8.0) / static_cast<double>(elapsed_seconds) / 1'000'000'000.0;
+    const double drop_rate = calculate_drop_rate(summary);
 
     out << "[status] elapsed=" << elapsed_seconds << "s"
         << " aggregate"
         << " rx_packets=" << summary.rx_packets
         << " rx_bytes=" << summary.rx_bytes
         << " gbps=" << aggregate_gbps
+        << " drop_rate=" << drop_rate
         << " empty_poll_ratio=" << summary.empty_poll_ratio
         << '\n';
 
@@ -383,7 +434,8 @@ RunSummary BenchRunner::run(BenchContext& context) {
         const CpuSnapshot cpu_start = capture_cpu_snapshot();
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(step_duration);
         const auto step_start = std::chrono::steady_clock::now();
-        auto next_status_at = step_start + std::chrono::seconds(10);
+        const auto status_interval = std::chrono::seconds(std::max<std::uint32_t>(1U, effective_config.status_interval_seconds));
+        auto next_status_at = step_start + status_interval;
         std::string step_run_status = "success";
         std::string step_error;
 
@@ -415,7 +467,8 @@ RunSummary BenchRunner::run(BenchContext& context) {
                                                        std::chrono::duration_cast<std::chrono::seconds>(now - step_start).count())));
                     merge_backend_stats(status_summary, context.backend->stats());
                     print_status_snapshot(*status_output_, status_summary, now - step_start);
-                    next_status_at = now + std::chrono::seconds(10);
+                    send_feedback_snapshot(effective_config, status_summary);
+                    next_status_at = now + status_interval;
                 }
             }
         }
@@ -506,6 +559,11 @@ RunSummary BenchRunner::run(BenchContext& context) {
 
     const BackendStats backend_stats = context.backend->stats();
     merge_backend_stats(summary, backend_stats);
+
+    if (effective_config.run_until_stopped && status_output_ != nullptr) {
+        print_status_snapshot(*status_output_, summary, std::chrono::seconds(std::max<std::uint32_t>(1U, measure_duration_seconds)));
+    }
+    send_feedback_snapshot(effective_config, summary);
 
     write_results(summary, effective_config);
     context.backend->shutdown();
