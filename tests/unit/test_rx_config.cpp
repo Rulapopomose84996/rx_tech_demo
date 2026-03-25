@@ -26,8 +26,10 @@ int main() {
         out << "packet_size_bytes: 1024\n";
         out << "run_until_stopped: true\n";
         out << "status_interval_seconds: 10\n";
+        out << "feedback_interval_seconds: 1\n";
         out << "feedback_enabled: true\n";
         out << "feedback_host: 172.20.11.11\n";
+        out << "feedback_bind_host: 172.20.11.100\n";
         out << "feedback_port: 9999\n";
         out << "reassembly_timeout_ms: 1500\n";
         out << "xdp_bind_mode: copy\n";
@@ -41,8 +43,8 @@ int main() {
         config.duration_seconds != 12U || config.max_burst != 32U ||
         config.packet_size_bytes != 1024U || config.cpu_cores.size() != 3U ||
         config.cpu_cores[0] != 16 || !config.run_until_stopped ||
-        config.status_interval_seconds != 10U || !config.feedback_enabled ||
-        config.feedback_host != "172.20.11.11" || config.feedback_port != 9999U ||
+        config.status_interval_seconds != 10U || config.feedback_interval_seconds != 1U || !config.feedback_enabled ||
+        config.feedback_host != "172.20.11.11" || config.feedback_bind_host != "172.20.11.100" || config.feedback_port != 9999U ||
         config.reassembly_timeout_ms != 1500U || config.xdp_bind_mode != "copy") {
         std::cerr << "config parsing regression in test_rx_config\n";
         return 1;

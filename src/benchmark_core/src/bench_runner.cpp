@@ -280,7 +280,7 @@ double calculate_drop_rate(const RunSummary& summary) {
     return static_cast<double>(summary.dropped_packets) / total;
 }
 
-void send_feedback_snapshot(const RxConfig& config, const RunSummary& summary) {
+void send_feedback_snapshot(const RxConfig& config, const RunSummary& summary, std::ostream* status_output) {
 #ifdef __linux__
     if (!config.feedback_enabled || config.feedback_host.empty() || config.feedback_port == 0U) {
         return;
@@ -288,32 +288,62 @@ void send_feedback_snapshot(const RxConfig& config, const RunSummary& summary) {
 
     const int fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (fd < 0) {
+        if (status_output != nullptr) {
+            *status_output << "[feedback] socket_error errno=" << errno << "\n";
+            status_output->flush();
+        }
         return;
+    }
+
+    if (!config.feedback_bind_host.empty()) {
+        sockaddr_in bind_addr{};
+        bind_addr.sin_family = AF_INET;
+        bind_addr.sin_port = 0;
+        if (inet_pton(AF_INET, config.feedback_bind_host.c_str(), &bind_addr.sin_addr) == 1) {
+            if (bind(fd, reinterpret_cast<const sockaddr*>(&bind_addr), sizeof(bind_addr)) != 0 && status_output != nullptr) {
+                *status_output << "[feedback] bind_error errno=" << errno << " source=" << config.feedback_bind_host << "\n";
+                status_output->flush();
+            }
+        }
     }
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(static_cast<std::uint16_t>(config.feedback_port));
     if (inet_pton(AF_INET, config.feedback_host.c_str(), &addr.sin_addr) != 1) {
+        if (status_output != nullptr) {
+            *status_output << "[feedback] invalid_target=" << config.feedback_host << ":" << config.feedback_port << "\n";
+            status_output->flush();
+        }
         close(fd);
         return;
     }
 
+    const double loss_rate = calculate_drop_rate(summary);
+    const double rx_mib = static_cast<double>(summary.rx_bytes) / (1024.0 * 1024.0);
+
     std::ostringstream payload;
     payload << "{\"type\":\"receiver_feedback\""
             << ",\"rx_packets\":" << summary.rx_packets
+            << ",\"rx_bytes\":" << summary.rx_bytes
+            << ",\"rx_mib\":" << rx_mib
             << ",\"dropped_packets\":" << summary.dropped_packets
-            << ",\"loss_rate\":" << calculate_drop_rate(summary)
+            << ",\"loss_rate\":" << loss_rate
             << ",\"queue_id\":" << summary.queue_id
             << ",\"gbps\":" << summary.actual_rx_gbps
             << "}";
 
     const std::string message = payload.str();
-    (void)sendto(fd, message.data(), message.size(), 0, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr));
+    const ssize_t sent = sendto(fd, message.data(), message.size(), 0, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr));
+    if (sent < 0 && status_output != nullptr) {
+        *status_output << "[feedback] send_error errno=" << errno << " target=" << config.feedback_host << ":" << config.feedback_port << " source=" << config.feedback_bind_host << "\n";
+        status_output->flush();
+    }
     close(fd);
 #else
     (void)config;
     (void)summary;
+    (void)status_output;
 #endif
 }
 
@@ -435,7 +465,9 @@ RunSummary BenchRunner::run(BenchContext& context) {
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(step_duration);
         const auto step_start = std::chrono::steady_clock::now();
         const auto status_interval = std::chrono::seconds(std::max<std::uint32_t>(1U, effective_config.status_interval_seconds));
+        const auto feedback_interval = std::chrono::seconds(std::max<std::uint32_t>(1U, effective_config.feedback_interval_seconds));
         auto next_status_at = step_start + status_interval;
+        auto next_feedback_at = step_start + feedback_interval;
         std::string step_run_status = "success";
         std::string step_error;
 
@@ -454,9 +486,11 @@ RunSummary BenchRunner::run(BenchContext& context) {
             }
             context.backend->release_burst(burst);
 
-            if (manual_stop_step && status_output_ != nullptr) {
+            if (manual_stop_step) {
                 const auto now = std::chrono::steady_clock::now();
-                if (now >= next_status_at) {
+                const bool due_status = (status_output_ != nullptr) && now >= next_status_at;
+                const bool due_feedback = effective_config.feedback_enabled && now >= next_feedback_at;
+                if (due_status || due_feedback) {
                     RunSummary status_summary =
                         step_metrics->finalize(context.backend->name(),
                                                context.mode->name(),
@@ -466,9 +500,14 @@ RunSummary BenchRunner::run(BenchContext& context) {
                                                    static_cast<std::uint32_t>(
                                                        std::chrono::duration_cast<std::chrono::seconds>(now - step_start).count())));
                     merge_backend_stats(status_summary, context.backend->stats());
-                    print_status_snapshot(*status_output_, status_summary, now - step_start);
-                    send_feedback_snapshot(effective_config, status_summary);
-                    next_status_at = now + status_interval;
+                    if (due_status) {
+                        print_status_snapshot(*status_output_, status_summary, now - step_start);
+                        next_status_at = now + status_interval;
+                    }
+                    if (due_feedback) {
+                        send_feedback_snapshot(effective_config, status_summary, status_output_);
+                        next_feedback_at = now + feedback_interval;
+                    }
                 }
             }
         }
@@ -563,7 +602,7 @@ RunSummary BenchRunner::run(BenchContext& context) {
     if (effective_config.run_until_stopped && status_output_ != nullptr) {
         print_status_snapshot(*status_output_, summary, std::chrono::seconds(std::max<std::uint32_t>(1U, measure_duration_seconds)));
     }
-    send_feedback_snapshot(effective_config, summary);
+    send_feedback_snapshot(effective_config, summary, status_output_);
 
     write_results(summary, effective_config);
     context.backend->shutdown();

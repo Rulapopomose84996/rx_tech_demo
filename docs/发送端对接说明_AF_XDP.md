@@ -54,8 +54,11 @@ sudo ./build/src/apps/rxbench_xdp --config ./configs/af_xdp_receiver0.conf --unt
 - `run_until_stopped: true`
 - `status_interval_seconds: 10`
 - `feedback_enabled: true`
+- `feedback_enabled: true`
 - `feedback_host: 172.20.11.11`
+- `feedback_bind_host: 172.20.11.100`
 - `feedback_port: 9999`
+- `feedback_interval_seconds: 1`
 
 说明：
 
@@ -172,11 +175,12 @@ sudo ./build/src/apps/rxbench_xdp --config ./configs/af_xdp_receiver0.conf --unt
 
 ## 8. 当前反馈报文
 
-接收端当前还会周期性向发送端发送一条 UDP JSON 反馈报文。
+接收端当前还会独立于状态输出，按 `1s` 周期向发送端发送一条 UDP JSON 反馈报文。
 
 默认反馈目标：
 
-- `172.20.11.11:9999`
+- 目标：`172.20.11.11:9999`
+- 源地址：`172.20.11.100`
 
 报文格式：
 
@@ -184,6 +188,8 @@ sudo ./build/src/apps/rxbench_xdp --config ./configs/af_xdp_receiver0.conf --unt
 {
   "type": "receiver_feedback",
   "rx_packets": 2784828,
+  "rx_bytes": 4008295992,
+  "rx_mib": 3822.61,
   "dropped_packets": 0,
   "loss_rate": 0.0,
   "queue_id": 22,
@@ -197,6 +203,10 @@ sudo ./build/src/apps/rxbench_xdp --config ./configs/af_xdp_receiver0.conf --unt
   - 固定为 `receiver_feedback`
 - `rx_packets`
   - receiver 当前累计接收包数
+- `rx_bytes`
+  - receiver 当前累计接收字节数
+- `rx_mib`
+  - receiver 当前累计接收数据量（MiB）
 - `dropped_packets`
   - receiver 当前累计丢弃包数
 - `loss_rate`

@@ -81,10 +81,14 @@ void assign_config_value(RxConfig& config, const std::string& key, const std::st
         config.packet_size_bytes = static_cast<std::uint32_t>(std::stoul(normalized_value));
     } else if (normalized_key == "status_interval_seconds") {
         config.status_interval_seconds = static_cast<std::uint32_t>(std::stoul(normalized_value));
+    } else if (normalized_key == "feedback_interval_seconds") {
+        config.feedback_interval_seconds = static_cast<std::uint32_t>(std::stoul(normalized_value));
     } else if (normalized_key == "feedback_port") {
         config.feedback_port = static_cast<std::uint32_t>(std::stoul(normalized_value));
     } else if (normalized_key == "feedback_host") {
         config.feedback_host = normalized_value;
+    } else if (normalized_key == "feedback_bind_host") {
+        config.feedback_bind_host = normalized_value;
     } else if (normalized_key == "feedback_enabled") {
         config.feedback_enabled = parse_bool(normalized_value);
     } else if (normalized_key == "reassembly_timeout_ms") {
@@ -168,39 +172,23 @@ RxConfig load_config_file(const std::string& path) {
 void merge_config(RxConfig& base, const RxConfig& overrides) {
     const RxConfig defaults = load_default_config();
 
-    if (!overrides.backend_name.empty()) {
-        base.backend_name = overrides.backend_name;
-    }
-    if (!overrides.mode_name.empty()) {
-        base.mode_name = overrides.mode_name;
-    }
-    if (!overrides.scenario_path.empty()) {
-        base.scenario_path = overrides.scenario_path;
-    }
-    if (!overrides.output_dir.empty()) {
-        base.output_dir = overrides.output_dir;
-    }
-    if (!overrides.interface_name.empty()) {
-        base.interface_name = overrides.interface_name;
-    }
-    if (!overrides.dpdk_pci_addr.empty()) {
-        base.dpdk_pci_addr = overrides.dpdk_pci_addr;
-    }
-    if (!overrides.xdp_bind_mode.empty()) {
-        base.xdp_bind_mode = overrides.xdp_bind_mode;
-    }
-    if (!overrides.feedback_host.empty()) {
-        base.feedback_host = overrides.feedback_host;
-    }
-    if (!overrides.config_path.empty()) {
-        base.config_path = overrides.config_path;
-    }
+    if (!overrides.backend_name.empty()) base.backend_name = overrides.backend_name;
+    if (!overrides.mode_name.empty()) base.mode_name = overrides.mode_name;
+    if (!overrides.scenario_path.empty()) base.scenario_path = overrides.scenario_path;
+    if (!overrides.output_dir.empty()) base.output_dir = overrides.output_dir;
+    if (!overrides.interface_name.empty()) base.interface_name = overrides.interface_name;
+    if (!overrides.dpdk_pci_addr.empty()) base.dpdk_pci_addr = overrides.dpdk_pci_addr;
+    if (!overrides.xdp_bind_mode.empty()) base.xdp_bind_mode = overrides.xdp_bind_mode;
+    if (!overrides.feedback_host.empty()) base.feedback_host = overrides.feedback_host;
+    if (!overrides.feedback_bind_host.empty()) base.feedback_bind_host = overrides.feedback_bind_host;
+    if (!overrides.config_path.empty()) base.config_path = overrides.config_path;
 
     if (overrides.queue_id != defaults.queue_id) base.queue_id = overrides.queue_id;
     if (overrides.max_burst != defaults.max_burst) base.max_burst = overrides.max_burst;
     if (overrides.duration_seconds != 0U) base.duration_seconds = overrides.duration_seconds;
     if (overrides.packet_size_bytes != defaults.packet_size_bytes) base.packet_size_bytes = overrides.packet_size_bytes;
     if (overrides.status_interval_seconds != defaults.status_interval_seconds) base.status_interval_seconds = overrides.status_interval_seconds;
+    if (overrides.feedback_interval_seconds != defaults.feedback_interval_seconds) base.feedback_interval_seconds = overrides.feedback_interval_seconds;
     if (overrides.feedback_port != defaults.feedback_port) base.feedback_port = overrides.feedback_port;
     if (overrides.feedback_enabled != defaults.feedback_enabled) base.feedback_enabled = overrides.feedback_enabled;
     if (overrides.reassembly_timeout_ms != defaults.reassembly_timeout_ms) base.reassembly_timeout_ms = overrides.reassembly_timeout_ms;

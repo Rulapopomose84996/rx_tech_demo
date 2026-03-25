@@ -177,6 +177,11 @@ void print_dry_run(const RxConfig& config, const Scenario& scenario) {
     std::cout << "xdp_bind_mode=" << config.xdp_bind_mode << std::endl;
     std::cout << "reassembly_timeout_ms=" << config.reassembly_timeout_ms << std::endl;
     std::cout << "run_until_stopped=" << (config.run_until_stopped ? "true" : "false") << std::endl;
+    std::cout << "status_interval_seconds=" << config.status_interval_seconds << std::endl;
+    std::cout << "feedback_enabled=" << (config.feedback_enabled ? "true" : "false") << std::endl;
+    std::cout << "feedback_host=" << config.feedback_host << std::endl;
+    std::cout << "feedback_bind_host=" << config.feedback_bind_host << std::endl;
+    std::cout << "feedback_port=" << config.feedback_port << std::endl;
     std::cout << "steps=" << scenario.steps.size() << std::endl;
     for (std::size_t index = 0; index < scenario.steps.size(); ++index) {
         const ScenarioStep& step = scenario.steps[index];

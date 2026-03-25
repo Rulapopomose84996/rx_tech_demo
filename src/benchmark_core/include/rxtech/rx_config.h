@@ -16,11 +16,13 @@ struct RxConfig {
     std::string dpdk_pci_addr;
     std::string xdp_bind_mode = "auto";
     std::string feedback_host;
+    std::string feedback_bind_host;
     std::uint32_t queue_id = 0;
     std::uint32_t max_burst = 64;
     std::uint32_t duration_seconds = 0;
     std::uint32_t packet_size_bytes = 0;
     std::uint32_t status_interval_seconds = 10;
+    std::uint32_t feedback_interval_seconds = 1;
     std::uint32_t feedback_port = 0;
     std::uint32_t dpdk_port_id = 0;
     std::uint32_t dpdk_socket_mem_mb = 1024;
