@@ -1,5 +1,4 @@
 option(BUILD_TESTS "Build tests" ON)
-option(BUILD_SOCKET_BACKEND "Build socket backend" ON)
 option(BUILD_AF_XDP_BACKEND "Build AF_XDP backend" ON)
 option(BUILD_DPDK_BACKEND "Build DPDK backend" ON)
 

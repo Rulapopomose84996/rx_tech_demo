@@ -3,8 +3,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <string>
-#include <vector>
 
 namespace rxtech {
 
@@ -27,18 +25,5 @@ struct DemoHeader {
     std::uint16_t frag_payload_bytes = 0;
 };
 
-struct ReceiverEndpoint {
-    std::uint32_t port_id = 0;
-    std::string bind_address = "127.0.0.1";
-    std::uint16_t udp_port = 9999;
-};
-
-inline std::vector<ReceiverEndpoint> make_sender_default_receiver_endpoints() {
-    return {
-        ReceiverEndpoint{0U, "172.20.11.100", 5010U},
-        ReceiverEndpoint{1U, "172.20.12.100", 5011U},
-        ReceiverEndpoint{2U, "172.20.13.100", 5012U},
-    };
-}
 
 }  // namespace rxtech

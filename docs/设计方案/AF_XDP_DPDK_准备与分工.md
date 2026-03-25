@@ -74,7 +74,8 @@ export LD_LIBRARY_PATH="$PREFIX/lib:${LD_LIBRARY_PATH:-}"
 
 ### 3.1 实验口基线
 
-- `AF_XDP` 测试口：`receiver3`
+- `AF_XDP` 历史专用实验口：`receiver3`
+- `AF_XDP` 当前真实流量验证口：`receiver0`
 - `DPDK` 解绑测试口：`receiver3`
 - 对应 `BDF`：`0001:05:00.3`
 - 网卡：Intel X710
@@ -151,7 +152,8 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 
 当前不再属于缺失配置，而属于后续验证重点的事项如下：
 
-- 真实受控流量尚未稳定进入 `receiver3 queue 0`
+- `receiver3` 当前为 `NO-CARRIER/DOWN`，不适合作为当前在线 AF_XDP 验证口
+- 当前应优先围绕 `receiver0` 的真实 sender0 流量验证 AF_XDP 路径
 - `AF_XDP` 当前仅确认 `copy` 路径，不再继续以 `zerocopy` 为当前平台目标
 - `dpdk-hugepages.py` 仍未提供，但不阻断当前正式压测窗口
 - 使用 `libxdp` 相关脚本时，需保持共享缓存前缀环境变量一致

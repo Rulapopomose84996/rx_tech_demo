@@ -14,10 +14,6 @@
 #include "rxtech/scenario.h"
 #include "rxtech/spsc_mode.h"
 
-#if defined(RXTECH_HAS_SOCKET_BACKEND)
-#include "rxtech/socket_backend.h"
-#endif
-
 #if defined(RXTECH_HAS_AF_XDP_BACKEND)
 #include "rxtech/xdp_backend.h"
 #endif
@@ -68,14 +64,6 @@ private:
 };
 
 BackendPtr make_backend(const std::string& backend_name) {
-    if (backend_name == "socket") {
-#if defined(RXTECH_HAS_SOCKET_BACKEND)
-        return std::make_unique<SocketBackend>();
-#else
-        return std::make_unique<UnavailableBackend>("socket", "socket backend is disabled at build time");
-#endif
-    }
-
     if (backend_name == "af_xdp") {
 #if defined(RXTECH_HAS_AF_XDP_BACKEND)
         return std::make_unique<XdpBackend>();
@@ -117,7 +105,6 @@ RxConfig make_empty_overrides() {
     overrides.config_path.clear();
     overrides.output_dir.clear();
     overrides.interface_name.clear();
-    overrides.bind_address.clear();
     overrides.dpdk_pci_addr.clear();
     overrides.xdp_bind_mode.clear();
     overrides.cpu_cores.clear();
@@ -187,17 +174,9 @@ void print_dry_run(const RxConfig& config, const Scenario& scenario) {
     std::cout << "duration_seconds=" << config.duration_seconds << std::endl;
     std::cout << "max_burst=" << config.max_burst << std::endl;
     std::cout << "packet_size_bytes=" << config.packet_size_bytes << std::endl;
+    std::cout << "xdp_bind_mode=" << config.xdp_bind_mode << std::endl;
     std::cout << "reassembly_timeout_ms=" << config.reassembly_timeout_ms << std::endl;
     std::cout << "run_until_stopped=" << (config.run_until_stopped ? "true" : "false") << std::endl;
-    std::cout << "receiver_endpoints=" << config.receiver_endpoints.size() << std::endl;
-    for (std::size_t index = 0; index < config.receiver_endpoints.size(); ++index) {
-        const ReceiverEndpoint& endpoint = config.receiver_endpoints[index];
-        std::cout << "receiver[" << index << "]"
-                  << " port_id=" << endpoint.port_id
-                  << " bind_address=" << endpoint.bind_address
-                  << " udp_port=" << endpoint.udp_port
-                  << std::endl;
-    }
     std::cout << "steps=" << scenario.steps.size() << std::endl;
     for (std::size_t index = 0; index < scenario.steps.size(); ++index) {
         const ScenarioStep& step = scenario.steps[index];

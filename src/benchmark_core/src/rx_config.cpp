@@ -1,6 +1,5 @@
 #include "rxtech/rx_config.h"
 
-#include <algorithm>
 #include <cctype>
 #include <fstream>
 #include <sstream>
@@ -58,53 +57,9 @@ std::vector<int> parse_int_list(const std::string& value) {
     return result;
 }
 
-void ensure_receiver_endpoint(std::vector<ReceiverEndpoint>& endpoints, std::size_t index) {
-    while (endpoints.size() <= index) {
-        ReceiverEndpoint endpoint;
-        endpoint.port_id = static_cast<std::uint32_t>(endpoints.size());
-        endpoints.push_back(endpoint);
-    }
-}
-
-bool assign_receiver_endpoint_value(RxConfig& config,
-                                    const std::string& key,
-                                    const std::string& value) {
-    const std::array<std::string, 3> bind_prefixes = {
-        "receiver0_bind_address",
-        "receiver1_bind_address",
-        "receiver2_bind_address",
-    };
-    const std::array<std::string, 3> port_prefixes = {
-        "receiver0_udp_port",
-        "receiver1_udp_port",
-        "receiver2_udp_port",
-    };
-
-    for (std::size_t index = 0; index < bind_prefixes.size(); ++index) {
-        if (key == bind_prefixes[index]) {
-            ensure_receiver_endpoint(config.receiver_endpoints, index);
-            config.receiver_endpoints[index].port_id = static_cast<std::uint32_t>(index);
-            config.receiver_endpoints[index].bind_address = value;
-            return true;
-        }
-        if (key == port_prefixes[index]) {
-            ensure_receiver_endpoint(config.receiver_endpoints, index);
-            config.receiver_endpoints[index].port_id = static_cast<std::uint32_t>(index);
-            config.receiver_endpoints[index].udp_port = static_cast<std::uint16_t>(std::stoul(value));
-            return true;
-        }
-    }
-
-    return false;
-}
-
 void assign_config_value(RxConfig& config, const std::string& key, const std::string& value) {
     const std::string normalized_key = trim(key);
     const std::string normalized_value = strip_quotes(trim(value));
-
-    if (assign_receiver_endpoint_value(config, normalized_key, normalized_value)) {
-        return;
-    }
 
     if (normalized_key == "backend" || normalized_key == "backend_name") {
         config.backend_name = normalized_value;
@@ -116,31 +71,18 @@ void assign_config_value(RxConfig& config, const std::string& key, const std::st
         config.output_dir = normalized_value;
     } else if (normalized_key == "interface" || normalized_key == "interface_name") {
         config.interface_name = normalized_value;
-    } else if (normalized_key == "bind_address") {
-        config.bind_address = normalized_value;
     } else if (normalized_key == "queue_id") {
         config.queue_id = static_cast<std::uint32_t>(std::stoul(normalized_value));
     } else if (normalized_key == "max_burst") {
         config.max_burst = static_cast<std::uint32_t>(std::stoul(normalized_value));
     } else if (normalized_key == "duration_seconds") {
         config.duration_seconds = static_cast<std::uint32_t>(std::stoul(normalized_value));
-    } else if (normalized_key == "udp_port") {
-        config.udp_port = static_cast<std::uint16_t>(std::stoul(normalized_value));
     } else if (normalized_key == "packet_size_bytes") {
         config.packet_size_bytes = static_cast<std::uint32_t>(std::stoul(normalized_value));
-    } else if (normalized_key == "socket_poll_timeout_ms") {
-        config.socket_poll_timeout_ms = static_cast<std::uint32_t>(std::stoul(normalized_value));
     } else if (normalized_key == "reassembly_timeout_ms") {
         config.reassembly_timeout_ms = static_cast<std::uint32_t>(std::stoul(normalized_value));
     } else if (normalized_key == "cpu_cores") {
         config.cpu_cores = parse_int_list(normalized_value);
-    } else if (normalized_key == "enable_internal_traffic") {
-        config.enable_internal_traffic = parse_bool(normalized_value);
-    } else if (normalized_key == "use_sender_default_endpoints") {
-        config.use_sender_default_endpoints = parse_bool(normalized_value);
-        if (config.use_sender_default_endpoints) {
-            config.receiver_endpoints = make_sender_default_receiver_endpoints();
-        }
     } else if (normalized_key == "run_until_stopped") {
         config.run_until_stopped = parse_bool(normalized_value);
     } else if (normalized_key == "xdp_bind_mode") {
@@ -167,7 +109,6 @@ void assign_config_value(RxConfig& config, const std::string& key, const std::st
 RxConfig load_default_config() {
     RxConfig config;
     config.cpu_cores = {0};
-    config.receiver_endpoints = {{0U, config.bind_address, config.udp_port}};
     return config;
 }
 
@@ -234,9 +175,6 @@ void merge_config(RxConfig& base, const RxConfig& overrides) {
     if (!overrides.interface_name.empty()) {
         base.interface_name = overrides.interface_name;
     }
-    if (!overrides.bind_address.empty()) {
-        base.bind_address = overrides.bind_address;
-    }
     if (!overrides.dpdk_pci_addr.empty()) {
         base.dpdk_pci_addr = overrides.dpdk_pci_addr;
     }
@@ -256,14 +194,8 @@ void merge_config(RxConfig& base, const RxConfig& overrides) {
     if (overrides.duration_seconds != 0U) {
         base.duration_seconds = overrides.duration_seconds;
     }
-    if (overrides.udp_port != defaults.udp_port) {
-        base.udp_port = overrides.udp_port;
-    }
     if (overrides.packet_size_bytes != defaults.packet_size_bytes) {
         base.packet_size_bytes = overrides.packet_size_bytes;
-    }
-    if (overrides.socket_poll_timeout_ms != defaults.socket_poll_timeout_ms) {
-        base.socket_poll_timeout_ms = overrides.socket_poll_timeout_ms;
     }
     if (overrides.reassembly_timeout_ms != defaults.reassembly_timeout_ms) {
         base.reassembly_timeout_ms = overrides.reassembly_timeout_ms;
@@ -286,20 +218,11 @@ void merge_config(RxConfig& base, const RxConfig& overrides) {
     if (overrides.dpdk_tx_desc != defaults.dpdk_tx_desc) {
         base.dpdk_tx_desc = overrides.dpdk_tx_desc;
     }
-    if (overrides.enable_internal_traffic != defaults.enable_internal_traffic) {
-        base.enable_internal_traffic = overrides.enable_internal_traffic;
-    }
-    if (overrides.use_sender_default_endpoints != defaults.use_sender_default_endpoints) {
-        base.use_sender_default_endpoints = overrides.use_sender_default_endpoints;
-    }
     if (overrides.run_until_stopped != defaults.run_until_stopped) {
         base.run_until_stopped = overrides.run_until_stopped;
     }
     if (!overrides.cpu_cores.empty()) {
         base.cpu_cores = overrides.cpu_cores;
-    }
-    if (!overrides.receiver_endpoints.empty()) {
-        base.receiver_endpoints = overrides.receiver_endpoints;
     }
 }
 

@@ -4,26 +4,21 @@
 #include <string>
 #include <vector>
 
-#include "rxtech/demo_protocol.h"
-
 namespace rxtech {
 
 struct RxConfig {
-    std::string backend_name = "socket";
+    std::string backend_name = "af_xdp";
     std::string mode_name = "rx_only";
     std::string scenario_path;
     std::string config_path;
     std::string output_dir = "results";
-    std::string interface_name = "receiver3";
-    std::string bind_address = "127.0.0.1";
+    std::string interface_name = "receiver0";
     std::string dpdk_pci_addr;
     std::string xdp_bind_mode = "auto";
     std::uint32_t queue_id = 0;
     std::uint32_t max_burst = 64;
     std::uint32_t duration_seconds = 0;
-    std::uint16_t udp_port = 9999;
     std::uint32_t packet_size_bytes = 0;
-    std::uint32_t socket_poll_timeout_ms = 50;
     std::uint32_t dpdk_port_id = 0;
     std::uint32_t dpdk_socket_mem_mb = 1024;
     std::uint32_t dpdk_mempool_size = 4096;
@@ -31,11 +26,8 @@ struct RxConfig {
     std::uint32_t dpdk_rx_desc = 256;
     std::uint32_t dpdk_tx_desc = 256;
     std::uint32_t reassembly_timeout_ms = 1000;
-    bool enable_internal_traffic = false;
-    bool use_sender_default_endpoints = false;
     bool run_until_stopped = false;
     std::vector<int> cpu_cores;
-    std::vector<ReceiverEndpoint> receiver_endpoints;
 };
 
 RxConfig load_default_config();
