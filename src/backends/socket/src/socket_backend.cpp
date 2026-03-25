@@ -265,6 +265,9 @@ bool SocketBackend::recv_burst(RxBurst& burst, std::uint32_t max_burst) {
 
     const int poll_rc = poll(poll_fds.data(), static_cast<nfds_t>(poll_fds.size()), static_cast<int>(impl_->poll_timeout_ms));
     if (poll_rc < 0) {
+        if (errno == EINTR) {
+            return true;
+        }
         ++stats_.rx_errors;
         return false;
     }
@@ -287,6 +290,9 @@ bool SocketBackend::recv_burst(RxBurst& burst, std::uint32_t max_burst) {
             const ssize_t received =
                 recv(channel.recv_fd, reinterpret_cast<char*>(buffer.data()), buffer.size(), MSG_DONTWAIT);
             if (received < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
                     break;
                 }
