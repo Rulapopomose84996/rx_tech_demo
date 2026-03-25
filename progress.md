@@ -33,3 +33,19 @@
   - `receiver3` 当前 `DOWN`
   - `libxdp` 缺失
   - `.worktrees/` 尚未 ignore
+- 已完成 AF_XDP 主线关键验证：
+  - `receiver0` 的 sender0 实流量 RSS 落在 `queue 22`
+  - `rxbench_xdp rx_only` 在 `queue 22` 上已成功收到真实流量
+  - `parse` 模式已对齐真实 `TPDX` 包头，`invalid_header_count=0`
+  - `reassembled_blocks > 0`
+- 已完成 AF_XDP-only 主线重构和相关提交。
+- 当前进入运行时修复阶段：
+  - 前台 10s 状态输出要真正接到终端
+  - receiver 需要周期性向 sender 反馈接收量和丢包率
+  - 修复不能影响接收线程主路径
+- 已完成运行时修复验证：
+  - `rxbench_xdp --until-stopped` 前台会按 `10s` 输出 `[status]` 状态行
+  - 反馈链路已从状态输出周期解耦，按 `1s` 周期发送 UDP JSON
+  - 反馈报文已补齐 `rx_bytes` 与 `rx_mib`
+  - 反馈发送已支持 `feedback_bind_host` 绑定本地源地址
+  - 通过本地 loopback 监听已验证可收到反馈 JSON

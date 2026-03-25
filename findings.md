@@ -37,3 +37,23 @@
   - `receiver3` 驱动为 `i40e 2.25.9`
 - `scripts/check_af_xdp_env.sh` 与 `scripts/build_af_xdp_bind_probe.sh` 在服务器上无执行位，但可通过 `bash ./scripts/...` 继续使用。
 - 服务器仓库当前没有 `.worktrees/` / `worktrees/` 目录，且 `.worktrees/` 尚未被 `.gitignore` 忽略。
+- `receiver0` 当前真实 sender0 流量 RSS 落在 `queue 22`，不是 `queue 0`。
+- `rxbench_xdp` 在 `receiver0 + queue 22 + mode=parse` 上已验证：
+  - `parsed_packets > 0`
+  - `invalid_header_count = 0`
+  - `reassembled_blocks > 0`
+- 当前运行时问题根因已定位：
+  - 周期状态输出逻辑存在，但 CLI 未将输出流接到 `stdout`
+  - receiver 反馈报文仅在状态快照时发送，默认 10s 一次，时效性不足
+  - 反馈 JSON 字段不完整，缺少 sender 直接需要的接收数据量字段
+  - `sendto()` 返回值未检查，且未绑定源地址/接口，导致反馈链路无可观测性
+- 当前服务器主工作区运行时修复已落地：
+  - 前台 CLI 已调用 `runner.set_status_output(&std::cout)`
+  - 反馈 JSON 当前字段至少包含 `rx_packets / rx_bytes / rx_mib / dropped_packets / loss_rate / queue_id / gbps`
+  - 反馈目标和源地址已通过配置项控制：
+    - `feedback_host`
+    - `feedback_bind_host`
+    - `feedback_port`
+    - `feedback_interval_seconds`
+- 已通过 loopback 验证收到的反馈报文示例：
+  - `{"type":"receiver_feedback","rx_packets":273681,"rx_bytes":393917962,"rx_mib":375.669,"dropped_packets":0,"loss_rate":0,"queue_id":22,"gbps":3.15134}`
