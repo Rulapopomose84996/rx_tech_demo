@@ -75,6 +75,20 @@ void assign_config_value(RxConfig& config, const std::string& key, const std::st
         config.queue_id = static_cast<std::uint32_t>(std::stoul(normalized_value));
     } else if (normalized_key == "max_burst") {
         config.max_burst = static_cast<std::uint32_t>(std::stoul(normalized_value));
+    } else if (normalized_key == "xdp_rx_ring_size") {
+        config.xdp_rx_ring_size = static_cast<std::uint32_t>(std::stoul(normalized_value));
+    } else if (normalized_key == "xdp_tx_ring_size") {
+        config.xdp_tx_ring_size = static_cast<std::uint32_t>(std::stoul(normalized_value));
+    } else if (normalized_key == "xdp_fill_ring_size") {
+        config.xdp_fill_ring_size = static_cast<std::uint32_t>(std::stoul(normalized_value));
+    } else if (normalized_key == "xdp_completion_ring_size") {
+        config.xdp_completion_ring_size = static_cast<std::uint32_t>(std::stoul(normalized_value));
+    } else if (normalized_key == "xdp_frame_size") {
+        config.xdp_frame_size = static_cast<std::uint32_t>(std::stoul(normalized_value));
+    } else if (normalized_key == "xdp_frame_count") {
+        config.xdp_frame_count = static_cast<std::uint32_t>(std::stoul(normalized_value));
+    } else if (normalized_key == "xdp_poll_timeout_ms") {
+        config.xdp_poll_timeout_ms = static_cast<std::uint32_t>(std::stoul(normalized_value));
     } else if (normalized_key == "duration_seconds") {
         config.duration_seconds = static_cast<std::uint32_t>(std::stoul(normalized_value));
     } else if (normalized_key == "packet_size_bytes") {
@@ -185,6 +199,17 @@ void merge_config(RxConfig& base, const RxConfig& overrides) {
 
     if (overrides.queue_id != defaults.queue_id) base.queue_id = overrides.queue_id;
     if (overrides.max_burst != defaults.max_burst) base.max_burst = overrides.max_burst;
+    if (overrides.xdp_rx_ring_size != defaults.xdp_rx_ring_size) base.xdp_rx_ring_size = overrides.xdp_rx_ring_size;
+    if (overrides.xdp_tx_ring_size != defaults.xdp_tx_ring_size) base.xdp_tx_ring_size = overrides.xdp_tx_ring_size;
+    if (overrides.xdp_fill_ring_size != defaults.xdp_fill_ring_size) base.xdp_fill_ring_size = overrides.xdp_fill_ring_size;
+    if (overrides.xdp_completion_ring_size != defaults.xdp_completion_ring_size) {
+        base.xdp_completion_ring_size = overrides.xdp_completion_ring_size;
+    }
+    if (overrides.xdp_frame_size != defaults.xdp_frame_size) base.xdp_frame_size = overrides.xdp_frame_size;
+    if (overrides.xdp_frame_count != defaults.xdp_frame_count) base.xdp_frame_count = overrides.xdp_frame_count;
+    if (overrides.xdp_poll_timeout_ms != defaults.xdp_poll_timeout_ms) {
+        base.xdp_poll_timeout_ms = overrides.xdp_poll_timeout_ms;
+    }
     if (overrides.duration_seconds != 0U) base.duration_seconds = overrides.duration_seconds;
     if (overrides.packet_size_bytes != defaults.packet_size_bytes) base.packet_size_bytes = overrides.packet_size_bytes;
     if (overrides.status_interval_seconds != defaults.status_interval_seconds) base.status_interval_seconds = overrides.status_interval_seconds;

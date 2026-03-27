@@ -33,6 +33,13 @@ int main() {
         out << "feedback_port: 9999\n";
         out << "reassembly_timeout_ms: 1500\n";
         out << "xdp_bind_mode: copy\n";
+        out << "xdp_rx_ring_size: 512\n";
+        out << "xdp_tx_ring_size: 128\n";
+        out << "xdp_fill_ring_size: 1024\n";
+        out << "xdp_completion_ring_size: 512\n";
+        out << "xdp_frame_size: 4096\n";
+        out << "xdp_frame_count: 8192\n";
+        out << "xdp_poll_timeout_ms: 0\n";
     }
 
     const rxtech::RxConfig config = rxtech::load_config_file(path);
@@ -45,7 +52,11 @@ int main() {
         config.cpu_cores[0] != 16 || !config.run_until_stopped ||
         config.status_interval_seconds != 10U || config.feedback_interval_seconds != 1U || !config.feedback_enabled ||
         config.feedback_host != "172.20.11.11" || config.feedback_bind_host != "172.20.11.100" || config.feedback_port != 9999U ||
-        config.reassembly_timeout_ms != 1500U || config.xdp_bind_mode != "copy") {
+        config.reassembly_timeout_ms != 1500U || config.xdp_bind_mode != "copy" ||
+        config.xdp_rx_ring_size != 512U || config.xdp_tx_ring_size != 128U ||
+        config.xdp_fill_ring_size != 1024U || config.xdp_completion_ring_size != 512U ||
+        config.xdp_frame_size != 4096U || config.xdp_frame_count != 8192U ||
+        config.xdp_poll_timeout_ms != 0U) {
         std::cerr << "config parsing regression in test_rx_config\n";
         return 1;
     }

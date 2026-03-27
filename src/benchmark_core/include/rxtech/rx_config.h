@@ -19,6 +19,13 @@ struct RxConfig {
     std::string feedback_bind_host;
     std::uint32_t queue_id = 0;
     std::uint32_t max_burst = 64;
+    std::uint32_t xdp_rx_ring_size = 1024;
+    std::uint32_t xdp_tx_ring_size = 256;
+    std::uint32_t xdp_fill_ring_size = 2048;
+    std::uint32_t xdp_completion_ring_size = 2048;
+    std::uint32_t xdp_frame_size = 2048;
+    std::uint32_t xdp_frame_count = 4096;
+    std::uint32_t xdp_poll_timeout_ms = 0;
     std::uint32_t duration_seconds = 0;
     std::uint32_t packet_size_bytes = 0;
     std::uint32_t status_interval_seconds = 10;
