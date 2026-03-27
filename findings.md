@@ -57,3 +57,48 @@
     - `feedback_interval_seconds`
 - 已通过 loopback 验证收到的反馈报文示例：
   - `{"type":"receiver_feedback","rx_packets":273681,"rx_bytes":393917962,"rx_mib":375.669,"dropped_packets":0,"loss_rate":0,"queue_id":22,"gbps":3.15134}`
+
+## 2026-03-26 AF_XDP Optimization Baseline
+
+- 当前 AF_XDP 主实现集中在 `src/backends/af_xdp/src/xdp_backend.cpp`，仍是单 socket / 单 UMEM / 单 queue 模型。
+- `recv_burst()` 每次调用都会先执行 `poll(..., 100)`，即使 ring 内已有包也先走系统调用路径；这更偏“保守省 CPU”而不是“低延迟高吞吐”。
+- `release_burst()` 在归还 frame 时要求一次性 reserve 整个 `burst.packets.size()`，失败时用 busy loop + `recycle_completion(count)` 重试，存在主线程自旋风险。
+- `configure_umem()` 只在初始化时向 fill ring 预填 `kFillRingSize=256` 个 frame，但 UMEM 总 frame 数是 `4096`；当前实际可用 receive 深度明显低于已分配 UMEM 容量。
+- `recv_burst()` 在每个 descriptor 上都调用 `steady_clock_now_ns()`，属于每包时间戳开销；如果上层只需要 burst 级时间语义，这里有可裁剪空间。
+- 当前 ring 参数全部写死为 `256`，没有按 NIC 队列压力、场景包长或用户配置调优的入口，优先级高于做更多统计字段。
+- 现阶段 AF_XDP 后端没有独立的单元测试覆盖 ring 回填策略、poll 策略或 budget 边界；后续逐步优化时需要补最小可回归测试。
+- 用户确认本轮目标约束：
+  - 主要目标是单核心下逼近 `5.5 Gbps`，并降低丢包。
+  - 允许最多使用 `1~2` 个 CPU 核，但优先观察“1 个核心能做多少”。
+  - 需要比较两种工作形态：`纯接收` 与 `接收+解析`，以判断后续是否需要把解析拆出主线程。
+
+## 2026-03-26 AF_XDP Optimization Phase 1
+
+- 已新增 AF_XDP 调优配置项：
+  - `xdp_rx_ring_size`
+  - `xdp_tx_ring_size`
+  - `xdp_fill_ring_size`
+  - `xdp_completion_ring_size`
+  - `xdp_frame_size`
+  - `xdp_frame_count`
+  - `xdp_poll_timeout_ms`
+- `XdpBackend` 已从固定常量改为按 `RxConfig` 计算实际 ring/frame 参数，并做最小边界保护与 2 的幂对齐。
+- `recv_burst()` 已改为 `peek RX ring -> 空时按配置决定是否 poll -> per-burst timestamp`，去掉原先“每次先 `poll(100ms)`、每包单独取时间戳”的热路径开销。
+- `release_burst()` 已去掉“整批 reserve fill ring 失败后 busy loop”的策略，改为把 frame 地址先放入 `pending_fill_addrs`，再按当前可用槽位尽力回填，避免主线程在 fill ring 上自旋。
+- 当前实现仍是单线程接收+处理模型；这轮优化只是在不拆线程的前提下，先把接收后端固定成本降下来。
+- 服务器验证结果：
+  - `ssh kds` 可用
+  - `/home/devuser/WorkSpace/rx_tech_demo` 构建成功
+  - `build/tests/unit` 下 `test_rx_config`、`test_merge_config` 通过
+  - `./build/src/apps/rxbench_xdp --config ./configs/af_xdp_receiver0.conf --dry-run` 通过
+- 服务器构建仍会报 AF_XDP/libbpf 旧接口弃用警告，但本轮未引入新的编译错误；后续若切 `libxdp` 再统一处理。
+- `configs/af_xdp_receiver0.conf` 已固化吞吐向参数：
+  - `xdp_rx_ring_size=1024`
+  - `xdp_fill_ring_size=2048`
+  - `xdp_completion_ring_size=2048`
+  - `xdp_frame_count=4096`
+  - `xdp_poll_timeout_ms=0`
+- 服务器 `--dry-run` 已确认新配置文件可用。
+- `cpu_cores` 当前只进入 `RxConfig`，AF_XDP backend/runner 并未实际做线程绑核；要做单核对照，必须在启动命令外层用 `taskset` 或同等手段。
+- 服务器当前没有现成的高吞吐本地 sender 工程；仓库内只有 `tools/raw_eth_sender.py`，它适合作为 ingress 路径 smoke，不适合作为 `5.5 Gbps` 单核性能结论依据。
+- 服务器上可见的额外本地发流口是 `enP1s24f0`（`ngbe`，NUMA 1，本地 CPU `16-31`），理论上适合做“同 NUMA 的本机发流”候选，但当前会话无无密码 `sudo`，无法完成需要 root 的实跑验证。

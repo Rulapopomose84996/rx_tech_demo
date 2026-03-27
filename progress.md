@@ -49,3 +49,47 @@
   - 反馈报文已补齐 `rx_bytes` 与 `rx_mib`
   - 反馈发送已支持 `feedback_bind_host` 绑定本地源地址
   - 通过本地 loopback 监听已验证可收到反馈 JSON
+
+## 2026-03-26 Session
+
+- 按用户要求进入 AF_XDP 优化阶段，先读取并遵循 `using-superpowers`、`planning-with-files`、`brainstorming`。
+- 恢复现有规划文件上下文，确认上个阶段已完成运行时修复，当前任务转为“列出潜在优化方向并按优先级逐步优化”。
+- 检查最近 AF_XDP 相关提交与源码落点，确认当前主实现集中在 `src/backends/af_xdp/src/xdp_backend.cpp`。
+- 已记录一轮关键基线发现：
+  - 当前接收路径是单 socket / 单 UMEM / 单 queue
+  - `poll(100ms)` 位于每次 `recv_burst()` 前置路径
+  - fill/completion recycle 策略存在 reserve 整批失败后的 busy loop 风险
+  - 初始化只预填 256 个 frame，未吃满 4096 个 UMEM frame
+  - 每包时间戳存在额外开销
+- 已与用户确认本轮优化边界：
+  - 优先目标是单核心下冲击 `5.5 Gbps` 并降低丢包
+  - 需要保留“纯接收”和“接收+解析”两条对比路径
+  - 本轮也服务于后续架构判断：是否需要把解析从接收主线程拆出去
+- 已写出本轮实现计划：`docs/superpowers/plans/2026-03-26-af-xdp-throughput-phase1.md`
+- 已按 TDD 先扩展 `test_rx_config.cpp` 和 `test_merge_config.cpp`，新增 AF_XDP 调优参数断言。
+- 本地 Windows 构建仍被既有 `bench_runner.cpp` 编译问题阻断，因此没有把它作为本轮 TDD 红灯依据。
+- 已在 WSL 上验证：
+  - 新增测试先因 `RxConfig` 缺少字段而失败
+  - 实现后重新构建通过
+  - `ctest --output-on-failure -R 'test_rx_config|test_merge_config'` 通过
+- 根据用户追加要求，已切换到 `server-test-via-kds` 工作流：
+  - 读取了技能文档、项目映射和仓库 `docs/BUILD.md`
+  - 通过 `ssh kds` 确认服务器工作区 `/home/devuser/WorkSpace/rx_tech_demo` 可用
+  - 将本轮代码与测试补丁同步到服务器工作区
+- 已完成 P0 第一批实现：
+  - `RxConfig` 增加 XDP ring/frame/poll 调优参数
+  - `XdpBackend` 改为配置化 ring/frame 大小
+  - `recv_burst()` 改为 peek-first，并使用 per-burst timestamp
+  - `release_burst()` 改为 pending queue + 尽力回填，去掉整批 busy loop
+- 服务器验证已通过：
+  - `./scripts/build_server_shared_cache.sh`
+  - `cd build/tests/unit && ctest --output-on-failure -R 'test_rx_config|test_merge_config'`
+  - `./build/src/apps/rxbench_xdp --config ./configs/af_xdp_receiver0.conf --dry-run`
+- 已按用户要求把吞吐向参数固化到 `configs/af_xdp_receiver0.conf`，并同步到服务器验证 `--dry-run` 可用。
+- 已检查“单核”约束是否真正生效，结论是：
+  - AF_XDP 路径当前没有实际使用 `cpu_cores` 做绑核
+  - 后续单核对照必须用外层 `taskset`
+- 已检查服务器本机发流条件，结论是：
+  - 本机会话没有无密码 `sudo`
+  - 仓库内仅有 Python `raw_eth_sender.py`，适合连通性/ingress smoke，不适合作为 5.5 Gbps 性能结论
+  - 因此本轮未伪造“有效单核性能测试已完成”的结论，只收敛到可执行配置和命令口径
