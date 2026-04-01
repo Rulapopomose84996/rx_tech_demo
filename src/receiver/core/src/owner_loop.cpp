@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdint>
 #include <iomanip>
+#include <iostream>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
@@ -239,8 +240,9 @@ RunSummary OwnerLoop::run(ReceiveContext& context,
             if (!validation.ok) {
                 context.metrics->on_drop();
                 context.metrics->on_invalid_header(packet.port_id);
-                if (status_output_ != nullptr && invalid_dumped < 5U) {
-                    emit_invalid_packet_diagnostic(*status_output_, packet, parsed, validation);
+                if (invalid_dumped < 5U) {
+                    std::ostream& diagnostic_stream = status_output_ != nullptr ? *status_output_ : std::cerr;
+                    emit_invalid_packet_diagnostic(diagnostic_stream, packet, parsed, validation);
                     ++invalid_dumped;
                 }
                 continue;
