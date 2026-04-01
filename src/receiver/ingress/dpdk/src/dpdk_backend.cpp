@@ -23,6 +23,51 @@ BackendInitResult make_dpdk_result(bool available, const std::string& reason) {
     return result;
 }
 
+#if defined(__linux__) && defined(RXTECH_HAS_DPDK_RUNTIME)
+bool resolve_port_id(const RxConfig& config, std::uint16_t& port_id) {
+    bool found = false;
+    std::uint16_t first_port = 0;
+    std::uint16_t count = 0;
+
+    RTE_ETH_FOREACH_DEV(port_id) {
+        if (!found) {
+            first_port = port_id;
+            found = true;
+        }
+        ++count;
+
+        if (!config.dpdk_pci_addr.empty()) {
+            rte_eth_dev_info info{};
+            if (rte_eth_dev_info_get(port_id, &info) == 0 && info.device != nullptr && info.device->name != nullptr) {
+                if (config.dpdk_pci_addr == info.device->name) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    if (!config.dpdk_pci_addr.empty()) {
+        if (count == 1U && found) {
+            port_id = first_port;
+            return true;
+        }
+        return false;
+    }
+
+    if (rte_eth_dev_is_valid_port(static_cast<std::uint16_t>(config.dpdk_port_id))) {
+        port_id = static_cast<std::uint16_t>(config.dpdk_port_id);
+        return true;
+    }
+
+    if (count == 1U && found) {
+        port_id = first_port;
+        return true;
+    }
+
+    return false;
+}
+#endif
+
 }  // namespace
 
 struct DpdkIngress::Impl {
@@ -96,16 +141,9 @@ BackendInitResult DpdkIngress::init(const RxConfig& config) {
     }
 
     std::uint16_t port_id = static_cast<std::uint16_t>(config.dpdk_port_id);
-    if (!config.dpdk_pci_addr.empty()) {
-        std::uint16_t resolved_port = 0;
-        if (rte_eth_dev_get_port_by_name(config.dpdk_pci_addr.c_str(), &resolved_port) == 0) {
-            port_id = resolved_port;
-        }
-    }
-
-    if (!rte_eth_dev_is_valid_port(port_id)) {
+    if (!resolve_port_id(config, port_id) || !rte_eth_dev_is_valid_port(port_id)) {
         ++stats_.rx_errors;
-        return make_dpdk_result(true, "invalid DPDK port: " + std::to_string(port_id));
+        return make_dpdk_result(true, "failed to resolve DPDK port for device: " + config.dpdk_pci_addr);
     }
 
     impl_->port_id = port_id;
