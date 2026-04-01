@@ -79,7 +79,7 @@ BackendInitResult DpdkIngress::init(const RxConfig& config) {
     eal_args.emplace_back("4");
     eal_args.emplace_back("--in-memory");
     if (!config.dpdk_pci_addr.empty()) {
-        eal_args.emplace_back("-a");
+        eal_args.emplace_back("-w");
         eal_args.emplace_back(config.dpdk_pci_addr);
     }
 
