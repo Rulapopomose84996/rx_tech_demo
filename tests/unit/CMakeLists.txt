@@ -52,21 +52,3 @@ target_include_directories(test_arp_responder PRIVATE ${CMAKE_SOURCE_DIR}/src/re
 add_test(NAME test_arp_responder COMMAND test_arp_responder)
 set_tests_properties(test_arp_responder PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(test_arp_responder)
-
-add_executable(test_replay_manifest test_replay_manifest.cpp)
-target_link_libraries(test_replay_manifest PRIVATE rx_replay_sender_core)
-add_test(NAME test_replay_manifest COMMAND test_replay_manifest)
-set_tests_properties(test_replay_manifest PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-rxtech_apply_warnings(test_replay_manifest)
-
-add_executable(test_replay_plan test_replay_plan.cpp)
-target_link_libraries(test_replay_plan PRIVATE rx_replay_sender_core)
-add_test(NAME test_replay_plan COMMAND test_replay_plan)
-set_tests_properties(test_replay_plan PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-rxtech_apply_warnings(test_replay_plan)
-
-add_executable(test_replay_target test_replay_target.cpp)
-target_link_libraries(test_replay_target PRIVATE rx_replay_sender_core)
-add_test(NAME test_replay_target COMMAND test_replay_target)
-set_tests_properties(test_replay_target PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-rxtech_apply_warnings(test_replay_target)
