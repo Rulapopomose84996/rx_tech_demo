@@ -64,6 +64,8 @@ SamplePacketView SamplePacketParser::parse(const PacketDesc& packet) const noexc
     }
 
     const std::uint32_t payload_offset = resolve_payload_offset(packet);
+    parsed.header_offset = payload_offset;
+    parsed.frame_length = packet.len;
     if (packet.len < payload_offset + 16U) {
         parsed.error_reason = "packet too short";
         return parsed;

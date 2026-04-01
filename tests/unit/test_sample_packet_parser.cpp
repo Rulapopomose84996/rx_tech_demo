@@ -37,6 +37,8 @@ int main() {
     assert(parsed.valid);
     assert(parsed.kind == rxtech::SamplePacketKind::data_packet);
     assert(parsed.magic == 0x55AAFF03U);
+    assert(parsed.header_offset == 14U + 20U + 8U);
+    assert(parsed.frame_length == frame.size());
     assert(parsed.cpi == 1U);
     assert(parsed.channel == 0U);
     assert(parsed.prt == 34U);

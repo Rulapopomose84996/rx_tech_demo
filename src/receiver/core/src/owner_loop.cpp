@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <iomanip>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
@@ -154,6 +155,47 @@ void write_capture_index_header(std::ostream& index_stream) {
     index_stream << "sequence,offset,length,ts_ns,port_id,queue_id,face_id,cpi,channel,prt,packet_index,packet_kind,validation\n";
 }
 
+std::uint32_t read_u32_le_at(const std::uint8_t* data, std::size_t size, std::size_t offset) {
+    if (data == nullptr || offset + 4U > size) {
+        return 0U;
+    }
+    return static_cast<std::uint32_t>(data[offset + 0U]) |
+           (static_cast<std::uint32_t>(data[offset + 1U]) << 8U) |
+           (static_cast<std::uint32_t>(data[offset + 2U]) << 16U) |
+           (static_cast<std::uint32_t>(data[offset + 3U]) << 24U);
+}
+
+std::string hex_preview(const std::uint8_t* data, std::size_t size, std::size_t bytes_to_show) {
+    std::ostringstream out;
+    out << std::hex << std::setfill('0');
+    const std::size_t count = std::min(size, bytes_to_show);
+    for (std::size_t index = 0; index < count; ++index) {
+        if (index != 0U) {
+            out << ' ';
+        }
+        out << std::setw(2) << static_cast<unsigned int>(data[index]);
+    }
+    return out.str();
+}
+
+void emit_invalid_packet_diagnostic(std::ostream& out,
+                                    const PacketDesc& packet,
+                                    const SamplePacketView& parsed,
+                                    const SamplePacketValidation& validation) {
+    out << "[invalid-sample]"
+        << " len=" << packet.len
+        << " queue=" << packet.queue_id
+        << " header_offset=" << parsed.header_offset
+        << " magic@0=0x" << std::hex << std::setw(8) << std::setfill('0') << read_u32_le_at(packet.data, packet.len, 0U)
+        << " magic@offset=0x" << std::hex << std::setw(8) << std::setfill('0')
+        << read_u32_le_at(packet.data, packet.len, parsed.header_offset)
+        << std::dec
+        << " reason=" << validation.reason
+        << "\n";
+    out << "[invalid-sample] preview=" << hex_preview(packet.data, packet.len, 64U) << "\n";
+    out.flush();
+}
+
 }  // namespace
 
 void OwnerLoop::set_status_output(std::ostream* output) {
@@ -178,6 +220,7 @@ RunSummary OwnerLoop::run(ReceiveContext& context,
     auto next_feedback_at = start_time + feedback_interval;
     std::string run_status = "success";
     std::string run_error;
+    std::uint32_t invalid_dumped = 0;
 
     while (!should_stop()) {
         RxBurst burst;
@@ -196,6 +239,10 @@ RunSummary OwnerLoop::run(ReceiveContext& context,
             if (!validation.ok) {
                 context.metrics->on_drop();
                 context.metrics->on_invalid_header(packet.port_id);
+                if (status_output_ != nullptr && invalid_dumped < 5U) {
+                    emit_invalid_packet_diagnostic(*status_output_, packet, parsed, validation);
+                    ++invalid_dumped;
+                }
                 continue;
             }
 
