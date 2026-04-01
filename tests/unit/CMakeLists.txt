@@ -48,6 +48,7 @@ rxtech_apply_warnings(test_sample_packet_parser)
 
 add_executable(test_arp_responder test_arp_responder.cpp)
 target_link_libraries(test_arp_responder PRIVATE rx_receiver_dpdk_ingress)
+target_include_directories(test_arp_responder PRIVATE ${CMAKE_SOURCE_DIR}/src/receiver/ingress/dpdk)
 add_test(NAME test_arp_responder COMMAND test_arp_responder)
 set_tests_properties(test_arp_responder PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(test_arp_responder)
