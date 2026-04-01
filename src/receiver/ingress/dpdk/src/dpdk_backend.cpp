@@ -239,7 +239,7 @@ BackendInitResult DpdkIngress::init(const RxConfig& config) {
     if (!config.receiver_ipv4.empty()) {
         in_addr addr{};
         if (inet_pton(AF_INET, config.receiver_ipv4.c_str(), &addr) == 1) {
-            impl_->local_ip_be = addr.s_addr;
+            impl_->local_ip_be = ntohl(addr.s_addr);
         }
     }
     stats_.queue_id = 0;
