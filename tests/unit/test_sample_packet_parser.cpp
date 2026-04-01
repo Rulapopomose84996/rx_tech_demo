@@ -39,6 +39,8 @@ int main() {
     assert(parsed.magic == 0x55AAFF03U);
     assert(parsed.header_offset == 14U + 20U + 8U);
     assert(parsed.frame_length == frame.size());
+    assert(parsed.ip_fragment_offset == 0U);
+    assert(!parsed.more_ip_fragments);
     assert(parsed.cpi == 1U);
     assert(parsed.channel == 0U);
     assert(parsed.prt == 34U);

@@ -24,6 +24,8 @@ struct SamplePacketView {
     std::uint32_t tail = 0;
     std::uint32_t header_offset = 0;
     std::uint32_t frame_length = 0;
+    std::uint16_t ip_fragment_offset = 0;
+    bool more_ip_fragments = false;
     const std::uint8_t* payload_ptr = nullptr;
     std::uint32_t payload_len = 0;
     std::string error_reason;

@@ -42,6 +42,13 @@ std::uint32_t resolve_payload_offset(const PacketDesc& packet) {
     return 0U;
 }
 
+std::uint16_t ipv4_fragment_field(const PacketDesc& packet) {
+    if (packet.len < 22U) {
+        return 0U;
+    }
+    return read_u16_be(packet.data + 20U);
+}
+
 }  // namespace
 
 const char* sample_packet_kind_name(SamplePacketKind kind) noexcept {
@@ -66,6 +73,9 @@ SamplePacketView SamplePacketParser::parse(const PacketDesc& packet) const noexc
     const std::uint32_t payload_offset = resolve_payload_offset(packet);
     parsed.header_offset = payload_offset;
     parsed.frame_length = packet.len;
+    const std::uint16_t fragment_field = ipv4_fragment_field(packet);
+    parsed.ip_fragment_offset = static_cast<std::uint16_t>((fragment_field & 0x1FFFU) * 8U);
+    parsed.more_ip_fragments = (fragment_field & 0x2000U) != 0U;
     if (packet.len < payload_offset + 16U) {
         parsed.error_reason = "packet too short";
         return parsed;
