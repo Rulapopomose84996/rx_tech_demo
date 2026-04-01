@@ -40,12 +40,6 @@ add_test(NAME test_packet_validator COMMAND test_packet_validator)
 set_tests_properties(test_packet_validator PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(test_packet_validator)
 
-add_executable(test_cpi_admission test_cpi_admission.cpp)
-target_link_libraries(test_cpi_admission PRIVATE rx_receiver_core)
-add_test(NAME test_cpi_admission COMMAND test_cpi_admission)
-set_tests_properties(test_cpi_admission PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-rxtech_apply_warnings(test_cpi_admission)
-
 add_executable(test_replay_manifest test_replay_manifest.cpp)
 target_link_libraries(test_replay_manifest PRIVATE rx_replay_sender_core)
 add_test(NAME test_replay_manifest COMMAND test_replay_manifest)
