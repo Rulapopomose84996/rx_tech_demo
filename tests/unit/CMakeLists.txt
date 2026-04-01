@@ -40,6 +40,12 @@ add_test(NAME test_packet_validator COMMAND test_packet_validator)
 set_tests_properties(test_packet_validator PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(test_packet_validator)
 
+add_executable(test_sample_packet_parser test_sample_packet_parser.cpp)
+target_link_libraries(test_sample_packet_parser PRIVATE rx_receiver_core)
+add_test(NAME test_sample_packet_parser COMMAND test_sample_packet_parser)
+set_tests_properties(test_sample_packet_parser PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+rxtech_apply_warnings(test_sample_packet_parser)
+
 add_executable(test_replay_manifest test_replay_manifest.cpp)
 target_link_libraries(test_replay_manifest PRIVATE rx_replay_sender_core)
 add_test(NAME test_replay_manifest COMMAND test_replay_manifest)
