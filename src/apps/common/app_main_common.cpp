@@ -6,13 +6,10 @@
 #include <stdexcept>
 
 #include "cli_args.h"
-#include "rxtech/bench_runner.h"
 #include "rxtech/metrics.h"
-#include "rxtech/parse_mode.h"
+#include "rxtech/receive_context.h"
+#include "rxtech/receive_runner.h"
 #include "rxtech/rx_config.h"
-#include "rxtech/rx_only_mode.h"
-#include "rxtech/scenario.h"
-#include "rxtech/spsc_mode.h"
 
 #if defined(RXTECH_HAS_AF_XDP_BACKEND)
 #include "rxtech/xdp_backend.h"
@@ -83,25 +80,9 @@ BackendPtr make_backend(const std::string& backend_name) {
     throw std::runtime_error("unknown backend: " + backend_name);
 }
 
-ModeProcessorPtr make_mode(const RxConfig& config, const std::string& mode_name) {
-    if (mode_name == "rx_only") {
-        return std::make_unique<RxOnlyMode>();
-    }
-    if (mode_name == "parse") {
-        return std::make_unique<ParseMode>(config.reassembly_timeout_ms);
-    }
-    if (mode_name == "spsc") {
-        return std::make_unique<SpscMode>();
-    }
-
-    throw std::runtime_error("unknown mode: " + mode_name);
-}
-
 RxConfig make_empty_overrides() {
     RxConfig overrides;
     overrides.backend_name.clear();
-    overrides.mode_name.clear();
-    overrides.scenario_path.clear();
     overrides.config_path.clear();
     overrides.output_dir.clear();
     overrides.interface_name.clear();
@@ -113,12 +94,6 @@ RxConfig make_empty_overrides() {
 
 RxConfig cli_args_to_overrides(const CliArgs& args) {
     RxConfig overrides = make_empty_overrides();
-    if (!args.mode.empty()) {
-        overrides.mode_name = args.mode;
-    }
-    if (!args.scenario_path.empty()) {
-        overrides.scenario_path = args.scenario_path;
-    }
     if (!args.output_dir.empty()) {
         overrides.output_dir = args.output_dir;
     }
@@ -161,13 +136,10 @@ RxConfig build_effective_config(const std::string& backend_name, const CliArgs& 
     return effective;
 }
 
-void print_dry_run(const RxConfig& config, const Scenario& scenario) {
+void print_dry_run(const RxConfig& config) {
     std::cout << "[dry-run]" << std::endl;
     std::cout << "backend=" << config.backend_name << std::endl;
-    std::cout << "mode=" << config.mode_name << std::endl;
     std::cout << "config_path=" << config.config_path << std::endl;
-    std::cout << "scenario=" << scenario.scenario_name << std::endl;
-    std::cout << "scenario_path=" << config.scenario_path << std::endl;
     std::cout << "output_dir=" << config.output_dir << std::endl;
     std::cout << "interface=" << config.interface_name << std::endl;
     std::cout << "queue_id=" << config.queue_id << std::endl;
@@ -182,19 +154,6 @@ void print_dry_run(const RxConfig& config, const Scenario& scenario) {
     std::cout << "feedback_host=" << config.feedback_host << std::endl;
     std::cout << "feedback_bind_host=" << config.feedback_bind_host << std::endl;
     std::cout << "feedback_port=" << config.feedback_port << std::endl;
-    std::cout << "steps=" << scenario.steps.size() << std::endl;
-    for (std::size_t index = 0; index < scenario.steps.size(); ++index) {
-        const ScenarioStep& step = scenario.steps[index];
-        std::cout << "step[" << index << "]"
-                  << " name=" << step.name
-                  << " phase=" << step.phase
-                  << " duration_seconds=" << step.duration_seconds
-                  << " packet_size_bytes=" << step.packet_size_bytes
-                  << " face_count=" << step.face_count
-                  << " target_rate_gbps=" << step.target_rate_gbps
-                  << " burst_window_ms=" << step.burst_window_ms
-                  << std::endl;
-    }
 }
 
 }  // namespace
@@ -203,30 +162,27 @@ int run_app(const std::string& backend_name, int argc, char** argv) {
     try {
         const CliArgs args = parse_cli_args(argc, argv);
 
-        BenchContext context;
+        ReceiveContext context;
         context.config = build_effective_config(backend_name, args);
-        context.scenario = load_scenario(context.config.scenario_path);
 
         if (args.dry_run) {
-            print_dry_run(context.config, context.scenario);
+            print_dry_run(context.config);
             return 0;
         }
 
         context.backend = make_backend(backend_name);
-        context.mode = make_mode(context.config, context.config.mode_name);
         context.metrics = std::make_unique<MetricsCollector>();
 
-        BenchRunner runner;
+        ReceiveRunner runner;
         if (context.config.run_until_stopped) {
             runner.set_status_output(&std::cout);
         }
         const RunSummary summary = runner.run(context);
         std::cout << "status=" << summary.run_status
                   << " backend=" << summary.backend
-                  << " mode=" << summary.mode
-                  << " scenario=" << summary.scenario
                   << " queue_id=" << summary.queue_id
                   << " rx_packets=" << summary.rx_packets
+                  << " captured_packets=" << summary.captured_packets
                   << std::endl;
         if (summary.run_status != "success") {
             std::cerr << "run failed: " << summary.error_message << std::endl;

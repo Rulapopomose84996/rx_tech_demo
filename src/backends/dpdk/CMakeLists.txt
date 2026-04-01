@@ -9,7 +9,7 @@ target_include_directories(rxtech_dpdk_backend
 
 target_link_libraries(rxtech_dpdk_backend
     PUBLIC
-        rxtech_benchmark_core
+        rxtech_receiver_core
 )
 
 if(UNIX AND NOT APPLE)

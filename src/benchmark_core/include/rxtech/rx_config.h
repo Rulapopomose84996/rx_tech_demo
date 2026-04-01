@@ -8,8 +8,6 @@ namespace rxtech {
 
 struct RxConfig {
     std::string backend_name = "af_xdp";
-    std::string mode_name = "rx_only";
-    std::string scenario_path;
     std::string config_path;
     std::string output_dir = "results";
     std::string interface_name = "receiver0";

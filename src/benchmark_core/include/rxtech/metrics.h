@@ -69,8 +69,14 @@ struct RunSummary {
     std::string error_message;
     std::string backend_status = "available";
     std::string backend_reason;
+    std::string capture_packets_path;
+    std::string capture_index_path;
     std::uint64_t rx_packets = 0;
     std::uint64_t rx_bytes = 0;
+    std::uint64_t captured_packets = 0;
+    std::uint64_t captured_bytes = 0;
+    std::uint64_t recorded_packets = 0;
+    std::uint64_t recorded_bytes = 0;
     std::uint64_t parsed_packets = 0;
     std::uint64_t dropped_packets = 0;
     std::uint64_t backend_errors = 0;

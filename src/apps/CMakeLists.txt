@@ -10,10 +10,7 @@ target_include_directories(rxtech_app_common
 
 target_link_libraries(rxtech_app_common
     PUBLIC
-        rxtech_benchmark_core
-        rxtech_rx_only_mode
-        rxtech_parse_mode
-        rxtech_spsc_mode
+        rxtech_receiver_core
 )
 if(TARGET rxtech_xdp_backend)
     target_link_libraries(rxtech_app_common PUBLIC rxtech_xdp_backend)

@@ -63,10 +63,6 @@ void assign_config_value(RxConfig& config, const std::string& key, const std::st
 
     if (normalized_key == "backend" || normalized_key == "backend_name") {
         config.backend_name = normalized_value;
-    } else if (normalized_key == "mode" || normalized_key == "mode_name") {
-        config.mode_name = normalized_value;
-    } else if (normalized_key == "scenario" || normalized_key == "scenario_path") {
-        config.scenario_path = normalized_value;
     } else if (normalized_key == "output" || normalized_key == "output_dir") {
         config.output_dir = normalized_value;
     } else if (normalized_key == "interface" || normalized_key == "interface_name") {
@@ -187,8 +183,6 @@ void merge_config(RxConfig& base, const RxConfig& overrides) {
     const RxConfig defaults = load_default_config();
 
     if (!overrides.backend_name.empty()) base.backend_name = overrides.backend_name;
-    if (!overrides.mode_name.empty()) base.mode_name = overrides.mode_name;
-    if (!overrides.scenario_path.empty()) base.scenario_path = overrides.scenario_path;
     if (!overrides.output_dir.empty()) base.output_dir = overrides.output_dir;
     if (!overrides.interface_name.empty()) base.interface_name = overrides.interface_name;
     if (!overrides.dpdk_pci_addr.empty()) base.dpdk_pci_addr = overrides.dpdk_pci_addr;

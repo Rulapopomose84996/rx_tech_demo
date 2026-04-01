@@ -1,11 +1,10 @@
 add_executable(rxtech_integration_fake_tests
-    test_bench_fake.cpp
+    test_receive_runner_fake.cpp
 )
 
 target_link_libraries(rxtech_integration_fake_tests
     PRIVATE
-        rxtech_benchmark_core
-        rxtech_rx_only_mode
+        rxtech_receiver_core
 )
 
 if(UNIX AND NOT APPLE)

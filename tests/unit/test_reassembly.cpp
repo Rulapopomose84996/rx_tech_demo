@@ -21,8 +21,20 @@ void append_u32_be(std::vector<std::uint8_t>& out, std::uint32_t value) {
     out.push_back(static_cast<std::uint8_t>(value & 0xFFU));
 }
 
-void append_u64_be(std::vector<std::uint8_t>& out, std::uint64_t value) {
-    for (int shift = 56; shift >= 0; shift -= 8) {
+void append_u16_le(std::vector<std::uint8_t>& out, std::uint16_t value) {
+    out.push_back(static_cast<std::uint8_t>(value & 0xFFU));
+    out.push_back(static_cast<std::uint8_t>((value >> 8U) & 0xFFU));
+}
+
+void append_u32_le(std::vector<std::uint8_t>& out, std::uint32_t value) {
+    out.push_back(static_cast<std::uint8_t>(value & 0xFFU));
+    out.push_back(static_cast<std::uint8_t>((value >> 8U) & 0xFFU));
+    out.push_back(static_cast<std::uint8_t>((value >> 16U) & 0xFFU));
+    out.push_back(static_cast<std::uint8_t>((value >> 24U) & 0xFFU));
+}
+
+void append_u64_le(std::vector<std::uint8_t>& out, std::uint64_t value) {
+    for (int shift = 0; shift <= 56; shift += 8) {
         out.push_back(static_cast<std::uint8_t>((value >> shift) & 0xFFU));
     }
 }
@@ -35,27 +47,27 @@ std::vector<std::uint8_t> make_fragment(std::uint64_t block_id,
     std::vector<std::uint8_t> bytes;
     bytes.reserve(rxtech::kDemoHeaderWireBytes + payload.size());
     append_u32_be(bytes, rxtech::kDemoMagic);
-    append_u16_be(bytes, rxtech::kDemoVersion);
-    append_u16_be(bytes, flags);
-    append_u32_be(bytes, 7U);
-    append_u64_be(bytes, block_id);
-    append_u32_be(bytes, 0U);
+    append_u16_le(bytes, rxtech::kDemoVersion);
+    append_u16_le(bytes, flags);
+    append_u32_le(bytes, 7U);
+    append_u64_le(bytes, block_id);
+    append_u32_le(bytes, 0U);
     for (std::uint16_t index = 0; index < frag_count; ++index) {
         if (index == frag_idx) {
             bytes[20] = 0;  // no-op placeholder to keep layout obvious for test readers
         }
     }
-    append_u16_be(bytes, frag_idx);
-    append_u16_be(bytes, frag_count);
-    append_u16_be(bytes, static_cast<std::uint16_t>(payload.size()));
-    append_u16_be(bytes, 0U);
+    append_u16_le(bytes, frag_idx);
+    append_u16_le(bytes, frag_count);
+    append_u16_le(bytes, static_cast<std::uint16_t>(payload.size()));
+    append_u16_le(bytes, 0U);
     bytes.insert(bytes.end(), payload.begin(), payload.end());
 
     const std::uint32_t block_bytes = static_cast<std::uint32_t>(payload.size()) * frag_count;
-    bytes[20] = static_cast<std::uint8_t>((block_bytes >> 24U) & 0xFFU);
-    bytes[21] = static_cast<std::uint8_t>((block_bytes >> 16U) & 0xFFU);
-    bytes[22] = static_cast<std::uint8_t>((block_bytes >> 8U) & 0xFFU);
-    bytes[23] = static_cast<std::uint8_t>(block_bytes & 0xFFU);
+    bytes[20] = static_cast<std::uint8_t>(block_bytes & 0xFFU);
+    bytes[21] = static_cast<std::uint8_t>((block_bytes >> 8U) & 0xFFU);
+    bytes[22] = static_cast<std::uint8_t>((block_bytes >> 16U) & 0xFFU);
+    bytes[23] = static_cast<std::uint8_t>((block_bytes >> 24U) & 0xFFU);
     return bytes;
 }
 

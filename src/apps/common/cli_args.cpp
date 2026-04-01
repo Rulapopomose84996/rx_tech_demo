@@ -27,10 +27,6 @@ CliArgs parse_cli_args(int argc, char** argv) {
             const std::string value = argv[++index];
             if (current == "--config") {
                 args.config_path = value;
-            } else if (current == "--mode") {
-                args.mode = value;
-            } else if (current == "--scenario") {
-                args.scenario_path = value;
             } else if (current == "--output") {
                 args.output_dir = value;
             } else if (current == "--iface") {
@@ -51,21 +47,15 @@ CliArgs parse_cli_args(int argc, char** argv) {
 
         switch (positional_index) {
             case 0:
-                args.mode = current;
-                break;
-            case 1:
-                args.scenario_path = current;
-                break;
-            case 2:
                 args.output_dir = current;
                 break;
-            case 3:
+            case 1:
                 args.interface_name = current;
                 break;
-            case 4:
+            case 2:
                 args.queue_id = current;
                 break;
-            case 5:
+            case 3:
                 args.duration_seconds = current;
                 break;
             default:

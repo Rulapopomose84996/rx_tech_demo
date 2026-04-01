@@ -6,7 +6,6 @@ int main() {
     rxtech::RxConfig base = rxtech::load_default_config();
     rxtech::RxConfig overrides = rxtech::load_default_config();
     overrides.backend_name.clear();
-    overrides.mode_name = "parse";
     overrides.output_dir = "results/merged";
     overrides.queue_id = 3U;
     overrides.max_burst = 32U;
@@ -18,7 +17,6 @@ int main() {
     overrides.xdp_poll_timeout_ms = 3U;
 
     rxtech::merge_config(base, overrides);
-    assert(base.mode_name == "parse");
     assert(base.output_dir == "results/merged");
     assert(base.queue_id == 3U);
     assert(base.max_burst == 32U);

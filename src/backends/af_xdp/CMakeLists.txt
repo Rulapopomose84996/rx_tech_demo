@@ -18,7 +18,7 @@ if(UNIX AND NOT APPLE)
 
         target_link_libraries(rxtech_xdp_backend
             PUBLIC
-                rxtech_benchmark_core
+                rxtech_receiver_core
             PRIVATE
                 ${LIBBPF_LIBRARIES}
         )
@@ -43,7 +43,7 @@ else()
 
     target_link_libraries(rxtech_xdp_backend
         PUBLIC
-            rxtech_benchmark_core
+            rxtech_receiver_core
     )
 
     rxtech_apply_warnings(rxtech_xdp_backend)

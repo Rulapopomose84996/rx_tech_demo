@@ -6,8 +6,6 @@ namespace rxtech {
 
 struct CliArgs {
     std::string config_path;
-    std::string mode;
-    std::string scenario_path;
     std::string output_dir;
     std::string interface_name;
     std::string queue_id;

@@ -11,12 +11,10 @@ int main() {
         return 1;
     }
 
-    const char* path = "results/test_rx_config_generated.conf";
+    const char* path = "test_rx_config_generated.conf";
     {
         std::ofstream out(path, std::ios::trunc);
         out << "backend: af_xdp\n";
-        out << "mode: parse\n";
-        out << "scenario: scenarios/three_face_burst.yaml\n";
         out << "output_dir: results/config_case\n";
         out << "interface_name: receiver1\n";
         out << "queue_id: 22\n";
@@ -43,9 +41,7 @@ int main() {
     }
 
     const rxtech::RxConfig config = rxtech::load_config_file(path);
-    if (config.backend_name != "af_xdp" || config.mode_name != "parse" ||
-        config.scenario_path != "scenarios/three_face_burst.yaml" ||
-        config.output_dir != "results/config_case" ||
+    if (config.backend_name != "af_xdp" || config.output_dir != "results/config_case" ||
         config.interface_name != "receiver1" || config.queue_id != 22U ||
         config.duration_seconds != 12U || config.max_burst != 32U ||
         config.packet_size_bytes != 1024U || config.cpu_cores.size() != 3U ||

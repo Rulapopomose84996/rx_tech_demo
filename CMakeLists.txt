@@ -13,7 +13,6 @@ include(cmake/warnings.cmake)
 include(cmake/dependencies.cmake)
 
 add_subdirectory(src/benchmark_core)
-add_subdirectory(src/modes)
 add_subdirectory(src/backends)
 add_subdirectory(src/apps)
 
