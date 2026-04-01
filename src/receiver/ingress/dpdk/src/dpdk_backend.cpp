@@ -25,21 +25,26 @@ BackendInitResult make_dpdk_result(bool available, const std::string& reason) {
 
 #if defined(__linux__) && defined(RXTECH_HAS_DPDK_RUNTIME)
 bool resolve_port_id(const RxConfig& config, std::uint16_t& port_id) {
-    bool found = false;
-    std::uint16_t first_port = 0;
-    std::uint16_t count = 0;
-
-    RTE_ETH_FOREACH_DEV(port_id) {
-        if (!found) {
-            first_port = port_id;
-            found = true;
+    std::vector<std::uint16_t> available_ports;
+    for (std::uint16_t candidate = 0; candidate < RTE_MAX_ETHPORTS; ++candidate) {
+        if (!rte_eth_dev_is_valid_port(candidate)) {
+            continue;
         }
-        ++count;
+        available_ports.push_back(candidate);
 
         if (!config.dpdk_pci_addr.empty()) {
             rte_eth_dev_info info{};
-            if (rte_eth_dev_info_get(port_id, &info) == 0 && info.device != nullptr && info.device->name != nullptr) {
+            if (rte_eth_dev_info_get(candidate, &info) == 0 && info.device != nullptr && info.device->name != nullptr) {
                 if (config.dpdk_pci_addr == info.device->name) {
+                    port_id = candidate;
+                    return true;
+                }
+            }
+
+            char port_name[RTE_ETH_NAME_MAX_LEN] = {};
+            if (rte_eth_dev_get_name_by_port(candidate, port_name) == 0) {
+                if (config.dpdk_pci_addr == port_name) {
+                    port_id = candidate;
                     return true;
                 }
             }
@@ -47,8 +52,8 @@ bool resolve_port_id(const RxConfig& config, std::uint16_t& port_id) {
     }
 
     if (!config.dpdk_pci_addr.empty()) {
-        if (count == 1U && found) {
-            port_id = first_port;
+        if (available_ports.size() == 1U) {
+            port_id = available_ports.front();
             return true;
         }
         return false;
@@ -59,8 +64,8 @@ bool resolve_port_id(const RxConfig& config, std::uint16_t& port_id) {
         return true;
     }
 
-    if (count == 1U && found) {
-        port_id = first_port;
+    if (available_ports.size() == 1U) {
+        port_id = available_ports.front();
         return true;
     }
 
