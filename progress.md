@@ -1,95 +1,20 @@
 # Progress
 
-## 2026-03-25 Session
+## 2026-04-01 Session
 
-- 读取并采用 `$using-superpowers`、`$planning-with-files`、`writing-plans` 技能约束。
-- 审阅 `docs/发送端默认实现说明.md` 与 `docs/接收端适配说明.md`，抽取发送端基线、三口映射和接收端适配边界。
-- 检查仓库结构、README、parser/mode/backend/config/metrics/tests，确认当前代码仍为通用骨架，尚未落地三口 `DemoHeader` 重组与统计。
-- 创建本次会话的规划文件：`task_plan.md`、`findings.md`、`progress.md`。
-- 输出正式实施计划到 `docs/superpowers/plans/2026-03-25-sender-receiver-link-adaptation.md`，覆盖文件边界、任务拆分、验证命令与 Done 标准。
-- 完成 Task 1：
-  - 新增 `demo_protocol.h`
-  - 将 `parser` 从占位实现升级为 `DemoHeader` 解析
-  - 扩展 `RxConfig`，支持 `reassembly_timeout_ms`、`use_sender_default_endpoints` 与三口 `receiver_endpoints`
-- 完成 Task 2：
-  - 新增 `BlockReassembler`
-  - 新增 `test_reassembly`
-  - `ParseMode` 已接入重组器
-- 完成 Task 3 的核心代码：
-  - `MetricsCollector` 新增 per-port / reassembly 指标
-  - `socket_backend` 支持多口接收与合法内部流量
-  - 新增 `test_socket_three_port`
-  - `summary.json` 与 `per_port_summary.csv` 已输出 per-port 数据
-- 完成 Task 4 的部分内容：
-  - dry-run 已打印三口 endpoint 与重组超时
-  - 新增 `configs/rx_sender_link.conf`
-  - 新增 `scenarios/sender_link_smoke.yaml`
-  - 新增 `scripts/run_sender_link_smoke.sh`
-- 本地 WSL 验证已通过单元测试、集成测试和 `rxbench_socket --dry-run`。
-- 用户确认放弃 socket 接收主线，转向 AF_XDP 设计，并要求直接在服务器工作区上进行探索、设计和实现。
-- 已读取 `服务器环境基线 (V2.1).md`、`$using-superpowers`、`$planning-with-files`、`$using-git-worktrees`。
-- 已完成第一轮服务器侧 AF_XDP 前置检查，确认：
-  - X710 / `i40e` / 多队列存在
-  - `receiver3` 当前 `DOWN`
-  - `libxdp` 缺失
-  - `.worktrees/` 尚未 ignore
-- 已完成 AF_XDP 主线关键验证：
-  - `receiver0` 的 sender0 实流量 RSS 落在 `queue 22`
-  - `rxbench_xdp rx_only` 在 `queue 22` 上已成功收到真实流量
-  - `parse` 模式已对齐真实 `TPDX` 包头，`invalid_header_count=0`
-  - `reassembled_blocks > 0`
-- 已完成 AF_XDP-only 主线重构和相关提交。
-- 当前进入运行时修复阶段：
-  - 前台 10s 状态输出要真正接到终端
-  - receiver 需要周期性向 sender 反馈接收量和丢包率
-  - 修复不能影响接收线程主路径
-- 已完成运行时修复验证：
-  - `rxbench_xdp --until-stopped` 前台会按 `10s` 输出 `[status]` 状态行
-  - 反馈链路已从状态输出周期解耦，按 `1s` 周期发送 UDP JSON
-  - 反馈报文已补齐 `rx_bytes` 与 `rx_mib`
-  - 反馈发送已支持 `feedback_bind_host` 绑定本地源地址
-  - 通过本地 loopback 监听已验证可收到反馈 JSON
-
-## 2026-03-26 Session
-
-- 按用户要求进入 AF_XDP 优化阶段，先读取并遵循 `using-superpowers`、`planning-with-files`、`brainstorming`。
-- 恢复现有规划文件上下文，确认上个阶段已完成运行时修复，当前任务转为“列出潜在优化方向并按优先级逐步优化”。
-- 检查最近 AF_XDP 相关提交与源码落点，确认当前主实现集中在 `src/backends/af_xdp/src/xdp_backend.cpp`。
-- 已记录一轮关键基线发现：
-  - 当前接收路径是单 socket / 单 UMEM / 单 queue
-  - `poll(100ms)` 位于每次 `recv_burst()` 前置路径
-  - fill/completion recycle 策略存在 reserve 整批失败后的 busy loop 风险
-  - 初始化只预填 256 个 frame，未吃满 4096 个 UMEM frame
-  - 每包时间戳存在额外开销
-- 已与用户确认本轮优化边界：
-  - 优先目标是单核心下冲击 `5.5 Gbps` 并降低丢包
-  - 需要保留“纯接收”和“接收+解析”两条对比路径
-  - 本轮也服务于后续架构判断：是否需要把解析从接收主线程拆出去
-- 已写出本轮实现计划：`docs/superpowers/plans/2026-03-26-af-xdp-throughput-phase1.md`
-- 已按 TDD 先扩展 `test_rx_config.cpp` 和 `test_merge_config.cpp`，新增 AF_XDP 调优参数断言。
-- 本地 Windows 构建仍被既有 `bench_runner.cpp` 编译问题阻断，因此没有把它作为本轮 TDD 红灯依据。
-- 已在 WSL 上验证：
-  - 新增测试先因 `RxConfig` 缺少字段而失败
-  - 实现后重新构建通过
-  - `ctest --output-on-failure -R 'test_rx_config|test_merge_config'` 通过
-- 根据用户追加要求，已切换到 `server-test-via-kds` 工作流：
-  - 读取了技能文档、项目映射和仓库 `docs/BUILD.md`
-  - 通过 `ssh kds` 确认服务器工作区 `/home/devuser/WorkSpace/rx_tech_demo` 可用
-  - 将本轮代码与测试补丁同步到服务器工作区
-- 已完成 P0 第一批实现：
-  - `RxConfig` 增加 XDP ring/frame/poll 调优参数
-  - `XdpBackend` 改为配置化 ring/frame 大小
-  - `recv_burst()` 改为 peek-first，并使用 per-burst timestamp
-  - `release_burst()` 改为 pending queue + 尽力回填，去掉整批 busy loop
-- 服务器验证已通过：
-  - `./scripts/build_server_shared_cache.sh`
-  - `cd build/tests/unit && ctest --output-on-failure -R 'test_rx_config|test_merge_config'`
-  - `./build/src/apps/rxbench_xdp --config ./configs/af_xdp_receiver0.conf --dry-run`
-- 已按用户要求把吞吐向参数固化到 `configs/af_xdp_receiver0.conf`，并同步到服务器验证 `--dry-run` 可用。
-- 已检查“单核”约束是否真正生效，结论是：
-  - AF_XDP 路径当前没有实际使用 `cpu_cores` 做绑核
-  - 后续单核对照必须用外层 `taskset`
-- 已检查服务器本机发流条件，结论是：
-  - 本机会话没有无密码 `sudo`
-  - 仓库内仅有 Python `raw_eth_sender.py`，适合连通性/ingress smoke，不适合作为 5.5 Gbps 性能结论
-  - 因此本轮未伪造“有效单核性能测试已完成”的结论，只收敛到可执行配置和命令口径
+- 读取并遵循 `$using-superpowers`、`$planning-with-files`、`$test-driven-development`。
+- 读取当前规划文件、样本 manifest、样本目录结构以及现有 receiver 源码树。
+- 根据用户最新要求，把任务目标切换为：
+  - 仓库内新增最小 replay sender
+  - sender 读取 `data/cpi_0002_complete/cpi_0002_replay_manifest.json`
+  - receiver 只保留 DPDK ingress + parser + validator + 轻量统计
+  - 当前成功标志是“成功按协议解析”
+- 重写 `task_plan.md`、`findings.md`、`progress.md`，把旧 AF_XDP 运行时优化计划降级为历史信息。
+- 读取 `cpi_0002_control_table.bin` 和 `cpi_0002_data_payloads.bin` 的头部字节，确认当前样本协议是专题文档中的 `0x55AAFF00 / 0x55AAFF03` 小端 16 字节头，而不是旧的 `TPDX` 解析模型。
+- 已按 TDD 先新增 `test_replay_manifest.cpp`、`test_replay_plan.cpp`、`test_replay_target.cpp`。
+- 已实现 `src/sender/replay/rxtech/replay_manifest.h` 与 `src/sender/replay/src/replay_manifest.cpp`，当前可以从 `cpi_0002_replay_manifest.json` 解析重放清单。
+- 已实现 `src/sender/replay/rxtech/replay_sender.h` 与 `src/sender/replay/src/replay_sender.cpp`，当前可以把 manifest 条目切片成实际 datagram 计划，并解析 `host:port` 目标。
+- sender 侧 3 条基础单测已在当前工作区本地通过：
+  - `test_replay_manifest`
+  - `test_replay_plan`
+  - `test_replay_target`

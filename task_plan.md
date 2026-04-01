@@ -1,34 +1,38 @@
-# AF_XDP Receiver Runtime Plan
+# DPDK Replay Receiver Plan
 
 ## Goal
 
-在 AF_XDP 主线已跑通的基础上，修复接收端运行时可观测性和发送端反馈链路，要求前台手动模式下稳定输出 10 秒状态快照，并向 sender 周期反馈接收量与丢包率，且不影响接收线程主路径。
+在仓库内直接构建一条最短闭环：
+
+- 从 `data/cpi_0002_complete/cpi_0002_replay_manifest.json` 读取样本
+- 按 manifest 顺序重放控制表包和数据包
+- 使用 `receiver0` 的 DPDK 接收链路收包
+- 只做轻量协议解析和统计
+- 以“成功识别控制表包和数据包”为当前阶段成功标志
 
 ## Current Phase
 
-- [completed] Phase 1: 确认 AF_XDP 主线和 queue 22 的真实接收链路
-- [completed] Phase 2: 修复前台状态输出与 sender 反馈通道
-- [pending] Phase 3: 梳理 AF_XDP 当前实现的高优先级优化方向并给出设计
-- [in_progress] Phase 4: 按优先级逐步优化 AF_XDP 主路径
-- [pending] Phase 5: 更新 sender 对接文档并统一运行口径
-- [pending] Phase 6: 提交并同步本地/服务器工作区，收敛到干净状态
+- [in_progress] Phase 1: 把计划切换到 replay sender + DPDK 轻量解析闭环
+- [completed] Phase 2: 为 replay manifest 解析与发送路径补失败测试
+- [in_progress] Phase 3: 实现最小 replay sender
+- [pending] Phase 4: 收缩 receiver 主线到 DPDK ingress + parser + validator + 轻量统计
+- [pending] Phase 5: 本地代码验证并推送远端
+- [pending] Phase 6: 服务器拉取、构建、测试、闭环验证
 
 ## Key Decisions
 
-- 直接在服务器主工作区修复运行时问题，不再进入 worktree。
-- 运行时状态输出和反馈通道的修复不能影响 AF_XDP 接收线程主路径。
-- sender 需要的最小反馈字段至少包含：接收数据量、接收报文数、丢包率、接收速率。
-- sender 对接文档 `docs/发送端对接说明_AF_XDP.md` 必须同步更新。
-- AF_XDP 下一阶段先聚焦接收主路径效率与稳定性，再处理可观测性扩展。
-- 优化设计需要以当前 `src/backends/af_xdp/src/xdp_backend.cpp` 的单 socket、单 UMEM、同步 poll/recycle 模型为基线。
-- P0 第一批优化先不拆线程，优先做 ring 参数配置化、peek-first 接收、per-burst 时间戳和非阻塞 fill 回填。
+- 当前目标不是完整接收端生命周期管理，而是尽快形成“可发、可收、可解析”的接收代码。
+- sender 直接内置在本仓库，不依赖其他仓库或历史脚本。
+- sender 输入以 `cpi_0002_replay_manifest.json` 为准，不自行推导包序。
+- receiver 成功标志暂不要求完整的 CPI admission/finalize/output。
+- receiver 当前保留 `DPDK ingress + PacketParser + PacketValidator + 轻量统计` 即可。
+- `AF_XDP` 相关主线演进暂时停止，只作为 `legacy` 保留。
+- 项目以 Linux 服务器为唯一正式运行平台；不再新增任何 Windows 平台分支代码。
 
 ## Errors Encountered
 
 | Error | Attempt | Resolution |
 |-------|---------|------------|
-| `rg.exe` 在当前环境启动失败（拒绝访问） | 1 | 改用 `Get-ChildItem` / `Get-Content` 等 PowerShell 方式继续检查代码 |
-| Windows 下直接构建命中现有 `bench_runner.cpp` 兼容性错误 | 1 | 按项目约束切换到 WSL 构建与测试，不在 Windows 原生编译路径上继续排查 |
-| 服务器 `.worktrees/` 尚未被 `.gitignore` 忽略 | 1 | 进入服务器仓库后先修正 `.gitignore`，提交后再创建 worktree |
-| 服务器 AF_XDP 自检脚本执行权限缺失 | 1 | 改用 `bash ./scripts/...` 方式执行，避免被文件权限阻断 |
-| 反馈链路在真实 sender 环境下超时 | 1 | 定位为接收端周期输出未接到 stdout、反馈发送周期过长、反馈字段不完整且发送结果无观测 |
+| 任务目标多次从 AF_XDP/完整接收端切换到 DPDK replay 闭环 | 1 | 重新写计划文件，明确当前唯一目标是 replay sender + DPDK 轻量解析 |
+| 多次出现 `.git/index.lock` 阻塞提交 | 1 | 每次 Git 操作前先检查并清理残留锁文件 |
+| 服务器 `ctest` 经常在构建完成前抢跑 | 1 | 改为顺序执行：先构建，确认完成后单独再跑 `ctest` |

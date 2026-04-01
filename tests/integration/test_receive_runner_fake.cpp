@@ -5,7 +5,6 @@
 #include <thread>
 #include <vector>
 
-#include "rxtech/demo_protocol.h"
 #include "rxtech/metrics.h"
 #include "rxtech/receive_context.h"
 #include "rxtech/receive_runner.h"
@@ -15,16 +14,36 @@
 
 namespace {
 
-std::vector<std::uint8_t> make_valid_demo_packet() {
+std::vector<std::uint8_t> make_control_table_packet(std::uint16_t cpi) {
     std::vector<std::uint8_t> bytes = {
-        0x54, 0x50, 0x44, 0x58, 0x01, 0x00, 0x00, 0x00,
-        0x01, 0x00, 0x00, 0x00,
-        0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x01, 0x00, 0x00,
-        0x00, 0x00, 0x02, 0x00,
-        0x80, 0x00, 0x00, 0x00
+        0x00, 0xFF, 0xAA, 0x55,
+        static_cast<std::uint8_t>(cpi & 0xFFU), static_cast<std::uint8_t>((cpi >> 8U) & 0xFFU),
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
     };
-    bytes.resize(rxtech::kDemoHeaderWireBytes + 128U, 0xABU);
+    bytes.resize(2048U, 0x00U);
+    return bytes;
+}
+
+std::vector<std::uint8_t> make_data_packet(std::uint16_t cpi,
+                                           std::uint16_t channel,
+                                           std::uint16_t prt,
+                                           std::uint16_t packet_index,
+                                           bool final_packet) {
+    std::vector<std::uint8_t> bytes = {
+        0x03, 0xFF, 0xAA, 0x55,
+        static_cast<std::uint8_t>(cpi & 0xFFU), static_cast<std::uint8_t>((cpi >> 8U) & 0xFFU),
+        static_cast<std::uint8_t>(channel & 0xFFU), static_cast<std::uint8_t>((channel >> 8U) & 0xFFU),
+        static_cast<std::uint8_t>(prt & 0xFFU), static_cast<std::uint8_t>((prt >> 8U) & 0xFFU),
+        static_cast<std::uint8_t>(packet_index & 0xFFU), static_cast<std::uint8_t>((packet_index >> 8U) & 0xFFU),
+        final_packet ? 0x30U : 0x00U, 0xFFU, 0xAAU, 0x55U
+    };
+    bytes.resize(2048U, 0xABU);
+    if (!final_packet) {
+        bytes[12] = 0x00U;
+        bytes[13] = 0x00U;
+        bytes[14] = 0x00U;
+        bytes[15] = 0x00U;
+    }
     return bytes;
 }
 
@@ -43,25 +62,14 @@ public:
     bool recv_burst(rxtech::RxBurst& burst, std::uint32_t) override {
         burst.packets.clear();
         ++calls_;
+        packet_storage_.push_back(make_control_table_packet(2U));
+        packet_storage_.push_back(make_data_packet(2U, 0U, 1U, 0U, false));
+        packet_storage_.push_back(make_data_packet(2U, 0U, 1U, 1U, true));
 
-        for (std::uint16_t frag_idx = 0; frag_idx < 2; ++frag_idx) {
-            std::vector<std::uint8_t> packet_bytes = payload_;
-            const std::uint64_t block_id = static_cast<std::uint64_t>(calls_);
-            packet_bytes[12] = static_cast<std::uint8_t>(block_id & 0xFFU);
-            packet_bytes[13] = static_cast<std::uint8_t>((block_id >> 8U) & 0xFFU);
-            packet_bytes[14] = static_cast<std::uint8_t>((block_id >> 16U) & 0xFFU);
-            packet_bytes[15] = static_cast<std::uint8_t>((block_id >> 24U) & 0xFFU);
-            packet_bytes[16] = static_cast<std::uint8_t>((block_id >> 32U) & 0xFFU);
-            packet_bytes[17] = static_cast<std::uint8_t>((block_id >> 40U) & 0xFFU);
-            packet_bytes[18] = static_cast<std::uint8_t>((block_id >> 48U) & 0xFFU);
-            packet_bytes[19] = static_cast<std::uint8_t>((block_id >> 56U) & 0xFFU);
-            packet_bytes[24] = static_cast<std::uint8_t>(frag_idx & 0xFFU);
-            packet_bytes[25] = static_cast<std::uint8_t>((frag_idx >> 8U) & 0xFFU);
-            packet_storage_.push_back(packet_bytes);
-
+        for (const auto& payload : packet_storage_) {
             rxtech::PacketDesc packet;
-            packet.data = packet_storage_.back().data();
-            packet.len = static_cast<std::uint32_t>(packet_storage_.back().size());
+            packet.data = const_cast<std::uint8_t*>(payload.data());
+            packet.len = static_cast<std::uint32_t>(payload.size());
             packet.ts_ns = rxtech::steady_clock_now_ns();
             packet.queue_id = 3;
             burst.packets.push_back(packet);
@@ -90,7 +98,6 @@ public:
 private:
     std::size_t calls_ = 0;
     rxtech::BackendStats stats_{};
-    std::vector<std::uint8_t> payload_ = make_valid_demo_packet();
     std::vector<std::vector<std::uint8_t>> packet_storage_;
 };
 
@@ -147,7 +154,8 @@ int main() {
         assert(summary.rx_bytes > 0U);
         assert(summary.captured_packets == summary.rx_packets);
         assert(summary.recorded_packets == summary.rx_packets);
-        assert(summary.complete_cpi_count > 0U);
+        assert(summary.control_table_packets > 0U);
+        assert(summary.data_packets > 0U);
         assert(file_exists("results/test_receive_runner_fake/capture_packets.bin"));
         assert(file_exists("results/test_receive_runner_fake/capture_index.csv"));
 

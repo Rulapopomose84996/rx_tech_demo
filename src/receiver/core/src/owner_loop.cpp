@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
-#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
@@ -14,13 +13,8 @@
 #include <unistd.h>
 #endif
 
-#include "rxtech/cpi_admission.h"
-#include "rxtech/cpi_finalizer.h"
-#include "rxtech/owner_state.h"
-#include "rxtech/packet_parser.h"
-#include "rxtech/packet_validator.h"
-#include "rxtech/progress_tracker.h"
-#include "rxtech/slot_writer.h"
+#include "rxtech/sample_packet_parser.h"
+#include "rxtech/sample_packet_validator.h"
 
 namespace rxtech {
 
@@ -32,12 +26,12 @@ struct CapturedPacket {
     std::uint32_t port_id = 0;
     std::uint32_t queue_id = 0;
     std::uint32_t face_id = 0;
-    std::uint64_t cpi_id = 0;
-    std::uint16_t frag_idx = 0;
-    std::uint16_t frag_count = 0;
-    std::string admission;
-    std::string write_result;
-    std::string final_decision;
+    std::uint16_t cpi = 0;
+    std::uint16_t channel = 0;
+    std::uint16_t prt = 0;
+    std::uint16_t packet_index = 0;
+    std::string packet_kind;
+    std::string validation;
 };
 
 void merge_backend_stats(RunSummary& summary, const BackendStats& backend_stats) {
@@ -81,8 +75,9 @@ void print_status_snapshot(std::ostream& out,
     out << "[status] elapsed=" << elapsed_seconds << "s"
         << " rx_packets=" << summary.rx_packets
         << " rx_bytes=" << summary.rx_bytes
-        << " captured_packets=" << summary.captured_packets
-        << " recorded_packets=" << summary.recorded_packets
+        << " parsed_packets=" << summary.parsed_packets
+        << " control_table_packets=" << summary.control_table_packets
+        << " data_packets=" << summary.data_packets
         << " gbps=" << aggregate_gbps
         << " drop_rate=" << calculate_drop_rate(summary)
         << " empty_poll_ratio=" << summary.empty_poll_ratio
@@ -133,8 +128,9 @@ void send_feedback_snapshot(const RxConfig& config, const RunSummary& summary, s
     payload << "{\"type\":\"receiver_feedback\""
             << ",\"rx_packets\":" << summary.rx_packets
             << ",\"rx_bytes\":" << summary.rx_bytes
-            << ",\"captured_packets\":" << summary.captured_packets
-            << ",\"recorded_packets\":" << summary.recorded_packets
+            << ",\"parsed_packets\":" << summary.parsed_packets
+            << ",\"control_table_packets\":" << summary.control_table_packets
+            << ",\"data_packets\":" << summary.data_packets
             << ",\"loss_rate\":" << calculate_drop_rate(summary)
             << ",\"queue_id\":" << summary.queue_id
             << ",\"gbps\":" << summary.actual_rx_gbps
@@ -155,43 +151,7 @@ void send_feedback_snapshot(const RxConfig& config, const RunSummary& summary, s
 }
 
 void write_capture_index_header(std::ostream& index_stream) {
-    index_stream << "sequence,offset,length,ts_ns,port_id,queue_id,face_id,cpi_id,frag_idx,frag_count,admission,write_result,final_decision\n";
-}
-
-CpiContext make_context(const ParsedPacketMeta& parsed, const PacketDesc& packet) {
-    CpiContext context;
-    context.cpi_id = parsed.block_id;
-    context.port_id = packet.port_id;
-    context.stream_id = parsed.stream_id;
-    context.expected_frag_count = parsed.frag_count;
-    context.expected_block_bytes = parsed.block_bytes;
-    context.first_packet_ts_ns = packet.ts_ns;
-    context.last_packet_ts_ns = packet.ts_ns;
-    context.slot_received.assign(parsed.frag_count, false);
-    context.slot_payloads.resize(parsed.frag_count);
-    return context;
-}
-
-void apply_finalize_metrics(IMetricsCollector& metrics,
-                            const CpiContext& context,
-                            const FinalizeResult& result) {
-    switch (result.decision) {
-        case CpiDecision::complete_ok:
-            metrics.on_complete_cpi();
-            metrics.on_reassembled_block(context.port_id, context.expected_block_bytes);
-            break;
-        case CpiDecision::incomplete_but_committable:
-            metrics.on_incomplete_cpi();
-            metrics.on_missing_fragments(context.port_id, result.missing_fragments);
-            break;
-        case CpiDecision::abnormal_cutoff_commit:
-            metrics.on_abnormal_cutoff_cpi();
-            metrics.on_missing_fragments(context.port_id, result.missing_fragments);
-            break;
-        case CpiDecision::discard_invalid:
-            metrics.on_discarded_cpi();
-            break;
-    }
+    index_stream << "sequence,offset,length,ts_ns,port_id,queue_id,face_id,cpi,channel,prt,packet_index,packet_kind,validation\n";
 }
 
 }  // namespace
@@ -207,15 +167,8 @@ RunSummary OwnerLoop::run(ReceiveContext& context,
         throw std::runtime_error("capture artifacts are incomplete");
     }
 
-    PacketParser parser;
-    PacketValidator validator;
-    CpiAdmission admission;
-    SlotWriter slot_writer;
-    ProgressTracker progress_tracker;
-    CpiFinalizer finalizer;
-    OwnerState owner_state;
-    std::vector<CapturedPacket> captured_packets;
-
+    SamplePacketParser parser;
+    SamplePacketValidator validator;
     write_capture_index_header(*artifacts.index_stream);
 
     const auto start_time = std::chrono::steady_clock::now();
@@ -238,15 +191,23 @@ RunSummary OwnerLoop::run(ReceiveContext& context,
         std::uint64_t burst_bytes = 0;
         for (const PacketDesc& packet : burst.packets) {
             burst_bytes += packet.len;
-            const ParsedPacketMeta parsed = parser.parse(packet);
-            if (parsed.valid) {
-                context.metrics->on_parsed_packet();
-            }
-            const PacketValidation validation = validator.validate(parsed);
+            const SamplePacketView parsed = parser.parse(packet);
+            const SamplePacketValidation validation = validator.validate(parsed);
             if (!validation.ok) {
                 context.metrics->on_drop();
                 context.metrics->on_invalid_header(packet.port_id);
                 continue;
+            }
+
+            context.metrics->on_parsed_packet();
+            context.metrics->on_port_packet(packet.port_id, packet.len);
+            if (packet.ts_ns != 0U) {
+                context.metrics->on_packet_latency_ns(packet.ts_ns);
+            }
+            if (parsed.kind == SamplePacketKind::control_table) {
+                context.metrics->on_control_table_packet();
+            } else if (parsed.kind == SamplePacketKind::data_packet) {
+                context.metrics->on_data_packet();
             }
 
             CapturedPacket captured;
@@ -255,85 +216,12 @@ RunSummary OwnerLoop::run(ReceiveContext& context,
             captured.port_id = packet.port_id;
             captured.queue_id = packet.queue_id;
             captured.face_id = packet.face_id;
-            captured.cpi_id = parsed.block_id;
-            captured.frag_idx = parsed.frag_idx;
-            captured.frag_count = parsed.frag_count;
-
-            const AdmissionResult admission_result = admission.decide(parsed, owner_state);
-            captured.admission = admission_kind_name(admission_result.kind);
-            if (admission_result.kind == AdmissionKind::invalid_packet ||
-                admission_result.kind == AdmissionKind::late_to_closed_cpi ||
-                admission_result.kind == AdmissionKind::stale_cpi) {
-                context.metrics->on_drop();
-                captured.write_result = "not_written";
-                captured.final_decision = "none";
-                captured_packets.push_back(captured);
-                artifacts.packet_stream->write(reinterpret_cast<const char*>(captured.payload.data()),
-                                               static_cast<std::streamsize>(captured.payload.size()));
-                *artifacts.index_stream << artifacts.recorded_packets
-                                        << ',' << artifacts.file_offset
-                                        << ',' << captured.payload.size()
-                                        << ',' << captured.ts_ns
-                                        << ',' << captured.port_id
-                                        << ',' << captured.queue_id
-                                        << ',' << captured.face_id
-                                        << ',' << captured.cpi_id
-                                        << ',' << captured.frag_idx
-                                        << ',' << captured.frag_count
-                                        << ',' << captured.admission
-                                        << ',' << captured.write_result
-                                        << ',' << captured.final_decision
-                                        << '\n';
-                artifacts.file_offset += captured.payload.size();
-                artifacts.recorded_bytes += captured.payload.size();
-                ++artifacts.recorded_packets;
-                artifacts.captured_bytes += captured.payload.size();
-                ++artifacts.captured_packets;
-                continue;
-            }
-
-            if (admission_result.kind == AdmissionKind::start_new_cpi) {
-                owner_state.active_context = make_context(parsed, packet);
-            } else if (admission_result.kind == AdmissionKind::switch_active_cpi) {
-                if (owner_state.active_context.has_value()) {
-                    FinalizeResult finalized =
-                        finalizer.finalize(*owner_state.active_context, FinalizeTrigger::switch_active);
-                    apply_finalize_metrics(*context.metrics, *owner_state.active_context, finalized);
-                    owner_state.recent_closed.push(owner_state.active_context->cpi_id);
-                }
-                owner_state.active_context = make_context(parsed, packet);
-            }
-
-            if (!owner_state.active_context.has_value()) {
-                context.metrics->on_drop();
-                continue;
-            }
-
-            SlotWriteResult write_result = slot_writer.write(*owner_state.active_context, parsed, packet);
-            if (write_result.duplicate) {
-                context.metrics->on_duplicate_fragment(packet.port_id);
-                captured.write_result = "duplicate";
-            } else {
-                captured.write_result = "first_write";
-            }
-
-            ProgressUpdate progress = progress_tracker.on_write(*owner_state.active_context, write_result);
-            if (progress.full_ready) {
-                FinalizeResult finalized =
-                    finalizer.finalize(*owner_state.active_context, FinalizeTrigger::full_ready);
-                apply_finalize_metrics(*context.metrics, *owner_state.active_context, finalized);
-                captured.final_decision = cpi_decision_name(finalized.decision);
-                owner_state.recent_closed.push(owner_state.active_context->cpi_id);
-                owner_state.active_context.reset();
-            } else {
-                captured.final_decision = "none";
-            }
-
-            if (packet.ts_ns != 0U) {
-                context.metrics->on_packet_latency_ns(packet.ts_ns);
-            }
-            context.metrics->on_port_packet(packet.port_id, packet.len);
-            captured_packets.push_back(captured);
+            captured.cpi = parsed.cpi;
+            captured.channel = parsed.channel;
+            captured.prt = parsed.prt;
+            captured.packet_index = parsed.packet_index;
+            captured.packet_kind = sample_packet_kind_name(parsed.kind);
+            captured.validation = "ok";
 
             artifacts.packet_stream->write(reinterpret_cast<const char*>(captured.payload.data()),
                                            static_cast<std::streamsize>(captured.payload.size()));
@@ -344,12 +232,12 @@ RunSummary OwnerLoop::run(ReceiveContext& context,
                                     << ',' << captured.port_id
                                     << ',' << captured.queue_id
                                     << ',' << captured.face_id
-                                    << ',' << captured.cpi_id
-                                    << ',' << captured.frag_idx
-                                    << ',' << captured.frag_count
-                                    << ',' << captured.admission
-                                    << ',' << captured.write_result
-                                    << ',' << captured.final_decision
+                                    << ',' << captured.cpi
+                                    << ',' << captured.channel
+                                    << ',' << captured.prt
+                                    << ',' << captured.packet_index
+                                    << ',' << captured.packet_kind
+                                    << ',' << captured.validation
                                     << '\n';
 
             artifacts.file_offset += captured.payload.size();
@@ -369,8 +257,8 @@ RunSummary OwnerLoop::run(ReceiveContext& context,
                                                  (context.config.feedback_enabled && now >= next_feedback_at))) {
             RunSummary status_summary =
                 context.metrics->finalize(context.backend->name(),
-                                          "owner_loop",
-                                          "direct_receive",
+                                          "light_parse",
+                                          "sample_replay",
                                           std::max<std::uint32_t>(
                                               1U,
                                               static_cast<std::uint32_t>(
@@ -391,14 +279,6 @@ RunSummary OwnerLoop::run(ReceiveContext& context,
         }
     }
 
-    if (owner_state.active_context.has_value()) {
-        FinalizeResult finalized =
-            finalizer.finalize(*owner_state.active_context, FinalizeTrigger::stop_requested);
-        apply_finalize_metrics(*context.metrics, *owner_state.active_context, finalized);
-        owner_state.recent_closed.push(owner_state.active_context->cpi_id);
-        owner_state.active_context.reset();
-    }
-
     artifacts.packet_stream->flush();
     artifacts.index_stream->flush();
 
@@ -407,7 +287,7 @@ RunSummary OwnerLoop::run(ReceiveContext& context,
         1U,
         static_cast<std::uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time).count()));
 
-    RunSummary summary = context.metrics->finalize(context.backend->name(), "owner_loop", "direct_receive", elapsed_seconds);
+    RunSummary summary = context.metrics->finalize(context.backend->name(), "light_parse", "sample_replay", elapsed_seconds);
     summary.run_status = run_status;
     summary.error_message = run_error;
     summary.backend_available = true;
