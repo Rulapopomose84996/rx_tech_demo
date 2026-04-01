@@ -182,7 +182,12 @@ int run_app(const std::string& backend_name, int argc, char** argv) {
                   << " backend=" << summary.backend
                   << " queue_id=" << summary.queue_id
                   << " rx_packets=" << summary.rx_packets
+                  << " parsed_packets=" << summary.parsed_packets
+                  << " control_table_packets=" << summary.control_table_packets
+                  << " data_packets=" << summary.data_packets
+                  << " dropped_packets=" << summary.dropped_packets
                   << " captured_packets=" << summary.captured_packets
+                  << " capture_index=" << summary.capture_index_path
                   << std::endl;
         if (summary.run_status != "success") {
             std::cerr << "run failed: " << summary.error_message << std::endl;
