@@ -5,6 +5,7 @@
 #include <thread>
 #include <vector>
 
+#include "rxtech/demo_protocol.h"
 #include "rxtech/metrics.h"
 #include "rxtech/receive_context.h"
 #include "rxtech/receive_runner.h"
@@ -13,6 +14,19 @@
 #include "rxtech/time_utils.h"
 
 namespace {
+
+std::vector<std::uint8_t> make_valid_demo_packet() {
+    std::vector<std::uint8_t> bytes = {
+        0x54, 0x50, 0x44, 0x58, 0x01, 0x00, 0x00, 0x00,
+        0x01, 0x00, 0x00, 0x00,
+        0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x80, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x01, 0x00,
+        0x80, 0x00, 0x00, 0x00
+    };
+    bytes.resize(rxtech::kDemoHeaderWireBytes + 128U, 0xABU);
+    return bytes;
+}
 
 class FakeBackend final : public rxtech::IRxBackend {
 public:
@@ -57,7 +71,7 @@ public:
 private:
     std::size_t calls_ = 0;
     rxtech::BackendStats stats_{};
-    std::vector<std::uint8_t> payload_{128U, 0xABU};
+    std::vector<std::uint8_t> payload_ = make_valid_demo_packet();
 };
 
 class UnavailableBackend final : public rxtech::IRxBackend {

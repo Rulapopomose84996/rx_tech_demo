@@ -1,5 +1,7 @@
 #include "rxtech/parser.h"
 
+#include "rxtech/packet_parser.h"
+
 namespace rxtech {
 
 namespace {
@@ -114,6 +116,10 @@ ParsedPacketMeta parse_packet(const PacketDesc& packet) {
 
     meta.valid = true;
     return meta;
+}
+
+ParsedPacketMeta PacketParser::parse(const PacketDesc& packet) const {
+    return parse_packet(packet);
 }
 
 }  // namespace rxtech

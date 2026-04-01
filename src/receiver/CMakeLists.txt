@@ -1,5 +1,7 @@
 add_library(rx_receiver_core
+    core/src/owner_loop.cpp
     protocol/src/parser.cpp
+    protocol/src/packet_validator.cpp
     storage/src/reassembly.cpp
     sidecar/src/metrics.cpp
     runtime/src/rx_config.cpp
@@ -8,6 +10,7 @@ add_library(rx_receiver_core
 
 target_include_directories(rx_receiver_core
     PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/core
         ${CMAKE_CURRENT_SOURCE_DIR}/protocol
         ${CMAKE_CURRENT_SOURCE_DIR}/storage
         ${CMAKE_CURRENT_SOURCE_DIR}/sidecar

@@ -25,7 +25,7 @@ BackendInitResult make_dpdk_result(bool available, const std::string& reason) {
 
 }  // namespace
 
-struct DpdkBackend::Impl {
+struct DpdkIngress::Impl {
 #if defined(__linux__) && defined(RXTECH_HAS_DPDK_RUNTIME)
     rte_mempool* mempool = nullptr;
     std::uint16_t port_id = 0;
@@ -42,18 +42,18 @@ struct DpdkBackend::Impl {
 #endif
 };
 
-DpdkBackend::DpdkBackend() : impl_(new Impl()) {
+DpdkIngress::DpdkIngress() : impl_(new Impl()) {
 }
 
-DpdkBackend::~DpdkBackend() {
+DpdkIngress::~DpdkIngress() {
     shutdown();
 }
 
-std::string DpdkBackend::name() const {
+std::string DpdkIngress::name() const {
     return "dpdk";
 }
 
-BackendInitResult DpdkBackend::init(const RxConfig& config) {
+BackendInitResult DpdkIngress::init(const RxConfig& config) {
     stats_ = {};
 #if defined(__linux__) && defined(RXTECH_HAS_DPDK_RUNTIME)
     if (impl_ == nullptr) {
@@ -159,7 +159,7 @@ BackendInitResult DpdkBackend::init(const RxConfig& config) {
 #endif
 }
 
-bool DpdkBackend::recv_burst(RxBurst& burst, std::uint32_t max_burst) {
+bool DpdkIngress::recv_burst(RxBurst& burst, std::uint32_t max_burst) {
     burst.packets.clear();
 #if defined(__linux__) && defined(RXTECH_HAS_DPDK_RUNTIME)
     if (impl_ == nullptr || !impl_->started) {
@@ -195,7 +195,7 @@ bool DpdkBackend::recv_burst(RxBurst& burst, std::uint32_t max_burst) {
 #endif
 }
 
-void DpdkBackend::release_burst(RxBurst& burst) {
+void DpdkIngress::release_burst(RxBurst& burst) {
 #if defined(__linux__) && defined(RXTECH_HAS_DPDK_RUNTIME)
     for (const PacketDesc& packet : burst.packets) {
         auto* mbuf = reinterpret_cast<rte_mbuf*>(packet.cookie);
@@ -207,11 +207,11 @@ void DpdkBackend::release_burst(RxBurst& burst) {
     burst.packets.clear();
 }
 
-BackendStats DpdkBackend::stats() const {
+BackendStats DpdkIngress::stats() const {
     return stats_;
 }
 
-void DpdkBackend::shutdown() {
+void DpdkIngress::shutdown() {
 #if defined(__linux__) && defined(RXTECH_HAS_DPDK_RUNTIME)
     if (impl_ != nullptr) {
         impl_->cleanup();

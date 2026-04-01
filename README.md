@@ -32,16 +32,6 @@ src/
 - `src/receiver/protocol` / `storage` / `sidecar` 负责协议、存储和从属观测
 - `src/legacy/af_xdp` 仅保留兼容和参考价值，不再是主线
 
-## 本地构建
-
-Windows PowerShell，执行目录：`D:\WorkSpace\Company\Tower\rx_tech_demo`
-
-```powershell
-Set-Location "D:\WorkSpace\Company\Tower\rx_tech_demo"
-cmake --build build
-ctest --test-dir build -C Debug --output-on-failure
-```
-
 ## 服务器构建
 
 Linux server，执行目录：`/home/devuser/WorkSpace/rx_tech_demo`

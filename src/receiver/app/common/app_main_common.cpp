@@ -71,7 +71,7 @@ BackendPtr make_backend(const std::string& backend_name) {
 
     if (backend_name == "dpdk") {
 #if defined(RXTECH_HAS_DPDK_BACKEND)
-        return std::make_unique<DpdkBackend>();
+        return std::make_unique<DpdkIngress>();
 #else
         return std::make_unique<UnavailableBackend>("dpdk", "DPDK backend is disabled at build time");
 #endif

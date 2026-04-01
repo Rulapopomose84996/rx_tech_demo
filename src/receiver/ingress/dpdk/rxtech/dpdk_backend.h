@@ -6,10 +6,10 @@
 
 namespace rxtech {
 
-class DpdkBackend final : public IRxBackend {
+class DpdkIngress final : public IRxBackend {
 public:
-    DpdkBackend();
-    ~DpdkBackend() override;
+    DpdkIngress();
+    ~DpdkIngress() override;
 
     std::string name() const override;
     BackendInitResult init(const RxConfig& config) override;
@@ -23,5 +23,7 @@ private:
     std::unique_ptr<Impl> impl_;
     BackendStats stats_;
 };
+
+using DpdkBackend = DpdkIngress;
 
 }  // namespace rxtech
