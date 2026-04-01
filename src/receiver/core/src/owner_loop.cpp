@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
@@ -13,8 +14,13 @@
 #include <unistd.h>
 #endif
 
+#include "rxtech/cpi_admission.h"
+#include "rxtech/cpi_finalizer.h"
+#include "rxtech/owner_state.h"
 #include "rxtech/packet_parser.h"
 #include "rxtech/packet_validator.h"
+#include "rxtech/progress_tracker.h"
+#include "rxtech/slot_writer.h"
 
 namespace rxtech {
 
@@ -26,6 +32,12 @@ struct CapturedPacket {
     std::uint32_t port_id = 0;
     std::uint32_t queue_id = 0;
     std::uint32_t face_id = 0;
+    std::uint64_t cpi_id = 0;
+    std::uint16_t frag_idx = 0;
+    std::uint16_t frag_count = 0;
+    std::string admission;
+    std::string write_result;
+    std::string final_decision;
 };
 
 void merge_backend_stats(RunSummary& summary, const BackendStats& backend_stats) {
@@ -143,7 +155,43 @@ void send_feedback_snapshot(const RxConfig& config, const RunSummary& summary, s
 }
 
 void write_capture_index_header(std::ostream& index_stream) {
-    index_stream << "sequence,offset,length,ts_ns,port_id,queue_id,face_id\n";
+    index_stream << "sequence,offset,length,ts_ns,port_id,queue_id,face_id,cpi_id,frag_idx,frag_count,admission,write_result,final_decision\n";
+}
+
+CpiContext make_context(const ParsedPacketMeta& parsed, const PacketDesc& packet) {
+    CpiContext context;
+    context.cpi_id = parsed.block_id;
+    context.port_id = packet.port_id;
+    context.stream_id = parsed.stream_id;
+    context.expected_frag_count = parsed.frag_count;
+    context.expected_block_bytes = parsed.block_bytes;
+    context.first_packet_ts_ns = packet.ts_ns;
+    context.last_packet_ts_ns = packet.ts_ns;
+    context.slot_received.assign(parsed.frag_count, false);
+    context.slot_payloads.resize(parsed.frag_count);
+    return context;
+}
+
+void apply_finalize_metrics(IMetricsCollector& metrics,
+                            const CpiContext& context,
+                            const FinalizeResult& result) {
+    switch (result.decision) {
+        case CpiDecision::complete_ok:
+            metrics.on_complete_cpi();
+            metrics.on_reassembled_block(context.port_id, context.expected_block_bytes);
+            break;
+        case CpiDecision::incomplete_but_committable:
+            metrics.on_incomplete_cpi();
+            metrics.on_missing_fragments(context.port_id, result.missing_fragments);
+            break;
+        case CpiDecision::abnormal_cutoff_commit:
+            metrics.on_abnormal_cutoff_cpi();
+            metrics.on_missing_fragments(context.port_id, result.missing_fragments);
+            break;
+        case CpiDecision::discard_invalid:
+            metrics.on_discarded_cpi();
+            break;
+    }
 }
 
 }  // namespace
@@ -161,6 +209,11 @@ RunSummary OwnerLoop::run(ReceiveContext& context,
 
     PacketParser parser;
     PacketValidator validator;
+    CpiAdmission admission;
+    SlotWriter slot_writer;
+    ProgressTracker progress_tracker;
+    CpiFinalizer finalizer;
+    OwnerState owner_state;
     std::vector<CapturedPacket> captured_packets;
 
     write_capture_index_header(*artifacts.index_stream);
@@ -186,16 +239,15 @@ RunSummary OwnerLoop::run(ReceiveContext& context,
         for (const PacketDesc& packet : burst.packets) {
             burst_bytes += packet.len;
             const ParsedPacketMeta parsed = parser.parse(packet);
+            if (parsed.valid) {
+                context.metrics->on_parsed_packet();
+            }
             const PacketValidation validation = validator.validate(parsed);
             if (!validation.ok) {
                 context.metrics->on_drop();
+                context.metrics->on_invalid_header(packet.port_id);
                 continue;
             }
-
-            if (packet.ts_ns != 0U) {
-                context.metrics->on_packet_latency_ns(packet.ts_ns);
-            }
-            context.metrics->on_port_packet(packet.port_id, packet.len);
 
             CapturedPacket captured;
             captured.payload.assign(packet.data, packet.data + packet.len);
@@ -203,6 +255,84 @@ RunSummary OwnerLoop::run(ReceiveContext& context,
             captured.port_id = packet.port_id;
             captured.queue_id = packet.queue_id;
             captured.face_id = packet.face_id;
+            captured.cpi_id = parsed.block_id;
+            captured.frag_idx = parsed.frag_idx;
+            captured.frag_count = parsed.frag_count;
+
+            const AdmissionResult admission_result = admission.decide(parsed, owner_state);
+            captured.admission = admission_kind_name(admission_result.kind);
+            if (admission_result.kind == AdmissionKind::invalid_packet ||
+                admission_result.kind == AdmissionKind::late_to_closed_cpi ||
+                admission_result.kind == AdmissionKind::stale_cpi) {
+                context.metrics->on_drop();
+                captured.write_result = "not_written";
+                captured.final_decision = "none";
+                captured_packets.push_back(captured);
+                artifacts.packet_stream->write(reinterpret_cast<const char*>(captured.payload.data()),
+                                               static_cast<std::streamsize>(captured.payload.size()));
+                *artifacts.index_stream << artifacts.recorded_packets
+                                        << ',' << artifacts.file_offset
+                                        << ',' << captured.payload.size()
+                                        << ',' << captured.ts_ns
+                                        << ',' << captured.port_id
+                                        << ',' << captured.queue_id
+                                        << ',' << captured.face_id
+                                        << ',' << captured.cpi_id
+                                        << ',' << captured.frag_idx
+                                        << ',' << captured.frag_count
+                                        << ',' << captured.admission
+                                        << ',' << captured.write_result
+                                        << ',' << captured.final_decision
+                                        << '\n';
+                artifacts.file_offset += captured.payload.size();
+                artifacts.recorded_bytes += captured.payload.size();
+                ++artifacts.recorded_packets;
+                artifacts.captured_bytes += captured.payload.size();
+                ++artifacts.captured_packets;
+                continue;
+            }
+
+            if (admission_result.kind == AdmissionKind::start_new_cpi) {
+                owner_state.active_context = make_context(parsed, packet);
+            } else if (admission_result.kind == AdmissionKind::switch_active_cpi) {
+                if (owner_state.active_context.has_value()) {
+                    FinalizeResult finalized =
+                        finalizer.finalize(*owner_state.active_context, FinalizeTrigger::switch_active);
+                    apply_finalize_metrics(*context.metrics, *owner_state.active_context, finalized);
+                    owner_state.recent_closed.push(owner_state.active_context->cpi_id);
+                }
+                owner_state.active_context = make_context(parsed, packet);
+            }
+
+            if (!owner_state.active_context.has_value()) {
+                context.metrics->on_drop();
+                continue;
+            }
+
+            SlotWriteResult write_result = slot_writer.write(*owner_state.active_context, parsed, packet);
+            if (write_result.duplicate) {
+                context.metrics->on_duplicate_fragment(packet.port_id);
+                captured.write_result = "duplicate";
+            } else {
+                captured.write_result = "first_write";
+            }
+
+            ProgressUpdate progress = progress_tracker.on_write(*owner_state.active_context, write_result);
+            if (progress.full_ready) {
+                FinalizeResult finalized =
+                    finalizer.finalize(*owner_state.active_context, FinalizeTrigger::full_ready);
+                apply_finalize_metrics(*context.metrics, *owner_state.active_context, finalized);
+                captured.final_decision = cpi_decision_name(finalized.decision);
+                owner_state.recent_closed.push(owner_state.active_context->cpi_id);
+                owner_state.active_context.reset();
+            } else {
+                captured.final_decision = "none";
+            }
+
+            if (packet.ts_ns != 0U) {
+                context.metrics->on_packet_latency_ns(packet.ts_ns);
+            }
+            context.metrics->on_port_packet(packet.port_id, packet.len);
             captured_packets.push_back(captured);
 
             artifacts.packet_stream->write(reinterpret_cast<const char*>(captured.payload.data()),
@@ -214,6 +344,12 @@ RunSummary OwnerLoop::run(ReceiveContext& context,
                                     << ',' << captured.port_id
                                     << ',' << captured.queue_id
                                     << ',' << captured.face_id
+                                    << ',' << captured.cpi_id
+                                    << ',' << captured.frag_idx
+                                    << ',' << captured.frag_count
+                                    << ',' << captured.admission
+                                    << ',' << captured.write_result
+                                    << ',' << captured.final_decision
                                     << '\n';
 
             artifacts.file_offset += captured.payload.size();
@@ -253,6 +389,14 @@ RunSummary OwnerLoop::run(ReceiveContext& context,
                 next_feedback_at = now + feedback_interval;
             }
         }
+    }
+
+    if (owner_state.active_context.has_value()) {
+        FinalizeResult finalized =
+            finalizer.finalize(*owner_state.active_context, FinalizeTrigger::stop_requested);
+        apply_finalize_metrics(*context.metrics, *owner_state.active_context, finalized);
+        owner_state.recent_closed.push(owner_state.active_context->cpi_id);
+        owner_state.active_context.reset();
     }
 
     artifacts.packet_stream->flush();

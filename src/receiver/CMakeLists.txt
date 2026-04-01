@@ -1,8 +1,12 @@
 add_library(rx_receiver_core
+    admit/src/cpi_admission.cpp
     core/src/owner_loop.cpp
+    finalize/src/cpi_finalizer.cpp
     protocol/src/parser.cpp
     protocol/src/packet_validator.cpp
+    storage/src/progress_tracker.cpp
     storage/src/reassembly.cpp
+    storage/src/slot_writer.cpp
     sidecar/src/metrics.cpp
     runtime/src/rx_config.cpp
     runtime/src/receive_runner.cpp
@@ -10,7 +14,9 @@ add_library(rx_receiver_core
 
 target_include_directories(rx_receiver_core
     PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/admit
         ${CMAKE_CURRENT_SOURCE_DIR}/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/finalize
         ${CMAKE_CURRENT_SOURCE_DIR}/protocol
         ${CMAKE_CURRENT_SOURCE_DIR}/storage
         ${CMAKE_CURRENT_SOURCE_DIR}/sidecar

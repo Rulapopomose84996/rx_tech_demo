@@ -77,6 +77,10 @@ struct RunSummary {
     std::uint64_t captured_bytes = 0;
     std::uint64_t recorded_packets = 0;
     std::uint64_t recorded_bytes = 0;
+    std::uint64_t complete_cpi_count = 0;
+    std::uint64_t incomplete_cpi_count = 0;
+    std::uint64_t abnormal_cutoff_cpi_count = 0;
+    std::uint64_t discarded_cpi_count = 0;
     std::uint64_t parsed_packets = 0;
     std::uint64_t dropped_packets = 0;
     std::uint64_t backend_errors = 0;
@@ -134,6 +138,10 @@ public:
     virtual void on_duplicate_fragment(std::uint32_t port_id) = 0;
     virtual void on_invalid_header(std::uint32_t port_id) = 0;
     virtual void on_reassembly_timeout(std::uint32_t port_id) = 0;
+    virtual void on_complete_cpi() = 0;
+    virtual void on_incomplete_cpi() = 0;
+    virtual void on_abnormal_cutoff_cpi() = 0;
+    virtual void on_discarded_cpi() = 0;
     virtual std::unique_ptr<IMetricsCollector> clone_empty() const = 0;
     virtual bool absorb(const IMetricsCollector& other) = 0;
     virtual RunSummary finalize(const std::string& backend,
@@ -157,6 +165,10 @@ public:
     void on_duplicate_fragment(std::uint32_t port_id) override;
     void on_invalid_header(std::uint32_t port_id) override;
     void on_reassembly_timeout(std::uint32_t port_id) override;
+    void on_complete_cpi() override;
+    void on_incomplete_cpi() override;
+    void on_abnormal_cutoff_cpi() override;
+    void on_discarded_cpi() override;
     std::unique_ptr<IMetricsCollector> clone_empty() const override;
     bool absorb(const IMetricsCollector& other) override;
     RunSummary finalize(const std::string& backend,
@@ -181,6 +193,10 @@ private:
     std::uint64_t dropped_packets_ = 0;
     std::uint64_t backend_errors_ = 0;
     std::uint64_t pool_exhaustion_count_ = 0;
+    std::uint64_t complete_cpi_count_ = 0;
+    std::uint64_t incomplete_cpi_count_ = 0;
+    std::uint64_t abnormal_cutoff_cpi_count_ = 0;
+    std::uint64_t discarded_cpi_count_ = 0;
     std::uint64_t burst_count_ = 0;
     std::uint64_t burst_sum_ = 0;
     std::uint64_t burst_max_ = 0;

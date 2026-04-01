@@ -29,6 +29,22 @@ void MetricsCollector::on_pool_exhaustion() {
     ++pool_exhaustion_count_;
 }
 
+void MetricsCollector::on_complete_cpi() {
+    ++complete_cpi_count_;
+}
+
+void MetricsCollector::on_incomplete_cpi() {
+    ++incomplete_cpi_count_;
+}
+
+void MetricsCollector::on_abnormal_cutoff_cpi() {
+    ++abnormal_cutoff_cpi_count_;
+}
+
+void MetricsCollector::on_discarded_cpi() {
+    ++discarded_cpi_count_;
+}
+
 void MetricsCollector::on_packet_latency_ns(std::uint64_t latency_ns) {
     latencies_ns_.push_back(latency_ns);
 }
@@ -79,6 +95,10 @@ bool MetricsCollector::absorb(const IMetricsCollector& other) {
     dropped_packets_ += other_metrics->dropped_packets_;
     backend_errors_ += other_metrics->backend_errors_;
     pool_exhaustion_count_ += other_metrics->pool_exhaustion_count_;
+    complete_cpi_count_ += other_metrics->complete_cpi_count_;
+    incomplete_cpi_count_ += other_metrics->incomplete_cpi_count_;
+    abnormal_cutoff_cpi_count_ += other_metrics->abnormal_cutoff_cpi_count_;
+    discarded_cpi_count_ += other_metrics->discarded_cpi_count_;
     burst_count_ += other_metrics->burst_count_;
     burst_sum_ += other_metrics->burst_sum_;
     burst_max_ = std::max(burst_max_, other_metrics->burst_max_);
@@ -112,6 +132,10 @@ RunSummary MetricsCollector::finalize(const std::string& backend,
     summary.dropped_packets = dropped_packets_;
     summary.backend_errors = backend_errors_;
     summary.pool_exhaustion_count = pool_exhaustion_count_;
+    summary.complete_cpi_count = complete_cpi_count_;
+    summary.incomplete_cpi_count = incomplete_cpi_count_;
+    summary.abnormal_cutoff_cpi_count = abnormal_cutoff_cpi_count_;
+    summary.discarded_cpi_count = discarded_cpi_count_;
     summary.ring_high_watermark = ring_high_watermark_;
 
     if (duration_seconds > 0U) {
