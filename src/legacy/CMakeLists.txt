@@ -1,0 +1,16 @@
+if(BUILD_AF_XDP_BACKEND)
+    add_subdirectory(af_xdp)
+
+    if(TARGET rx_legacy_af_xdp)
+        target_include_directories(rx_receiver_app_common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/af_xdp/include)
+        target_link_libraries(rx_receiver_app_common PUBLIC rx_legacy_af_xdp)
+        add_executable(rx_receiver_af_xdp_legacy af_xdp_main_legacy.cpp)
+        target_link_libraries(rx_receiver_af_xdp_legacy PRIVATE rx_receiver_app_common rx_legacy_af_xdp)
+        target_compile_definitions(rx_receiver_app_common PUBLIC RXTECH_HAS_AF_XDP_BACKEND=1)
+        rxtech_apply_warnings(rx_receiver_af_xdp_legacy)
+
+        add_executable(rxbench_xdp af_xdp_main_legacy.cpp)
+        target_link_libraries(rxbench_xdp PRIVATE rx_receiver_app_common rx_legacy_af_xdp)
+        rxtech_apply_warnings(rxbench_xdp)
+    endif()
+endif()

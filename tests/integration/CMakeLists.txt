@@ -4,7 +4,7 @@ add_executable(rxtech_integration_fake_tests
 
 target_link_libraries(rxtech_integration_fake_tests
     PRIVATE
-        rxtech_receiver_core
+        rx_receiver_core
 )
 
 if(UNIX AND NOT APPLE)

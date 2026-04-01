@@ -1,80 +1,81 @@
 # rx_tech_demo
 
-高性能服务器接收端技术验证工程，当前唯一主线为 **AF_XDP**。
+`rx_tech_demo` 现在按“纯接收流程”组织源码，当前主线是 **DPDK 接收端**。
 
-## 当前目标
+## 当前定位
 
-- 以 `rxbench_xdp` 作为唯一接收入口
-- 复用通用 `benchmark_core` 完成 `DemoHeader` 解析、重组、指标与结果输出
-- 在服务器上直接围绕真实网口做 AF_XDP 环境验证、PoC 和联调
+- 这是一个接收端软件雏形，不再是多技术栈 benchmark 框架
+- 当前主实现只服务 `DPDK`
+- `AF_XDP` 代码仍保留，但已降级到 `src/legacy/af_xdp`
+- 当前成功标准是：稳定收包、写入内存、旁路录制保存、输出轻量统计
 
-## 当前状态
+## 当前源码结构
 
-- `socket` 接收主线已从构建入口中移除
-- `rxbench_xdp` 已保留为唯一推荐接收入口
-- `DemoHeader` 解析、block 重组、per-port 指标和结果写出仍保留
-- 前台长时间模式已支持 `--until-stopped`，并每 10 秒输出一次状态快照
-- AF_XDP 当前平台结论以 `driver + copy` 为现实目标
+```text
+src/
+  receiver/
+    app/
+    ingress/dpdk/
+    protocol/
+    runtime/
+    sidecar/
+    storage/
+  legacy/
+    af_xdp/
+```
 
-## 服务器工作区
+说明：
 
-- 主仓库：`/home/devuser/WorkSpace/rx_tech_demo`
-- AF_XDP 隔离 worktree：`/home/devuser/WorkSpace/rx_tech_demo/.worktrees/af-xdp-receiver`
+- `src/receiver` 是当前主线
+- `src/receiver/ingress/dpdk` 是唯一主接收实现
+- `src/receiver/runtime` 负责配置与接收运行时
+- `src/receiver/protocol` / `storage` / `sidecar` 负责协议、存储和从属观测
+- `src/legacy/af_xdp` 仅保留兼容和参考价值，不再是主线
 
-后续所有 AF_XDP 改动、验证与联调均在该 worktree 中完成。
+## 本地构建
+
+Windows PowerShell，执行目录：`D:\WorkSpace\Company\Tower\rx_tech_demo`
+
+```powershell
+Set-Location "D:\WorkSpace\Company\Tower\rx_tech_demo"
+cmake --build build
+ctest --test-dir build -C Debug --output-on-failure
+```
 
 ## 服务器构建
 
-Linux server:
+Linux server，执行目录：`/home/devuser/WorkSpace/rx_tech_demo`
 
 ```bash
-cd /home/devuser/WorkSpace/rx_tech_demo/.worktrees/af-xdp-receiver
-PREFIX=/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo/build/native-aarch64/xdp-tools-1.2.9-prefix
-export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-export LD_LIBRARY_PATH="$PREFIX/lib:${LD_LIBRARY_PATH:-}"
+cd /home/devuser/WorkSpace/rx_tech_demo
 bash ./scripts/build_server_shared_cache.sh
 ```
 
 ## 服务器测试
 
-Linux server:
+Linux server，执行目录：`/home/devuser/WorkSpace/rx_tech_demo/build`
 
 ```bash
-cd /home/devuser/WorkSpace/rx_tech_demo/.worktrees/af-xdp-receiver/build/tests/unit
-ctest --output-on-failure
-
-cd /home/devuser/WorkSpace/rx_tech_demo/.worktrees/af-xdp-receiver/build/tests/integration
+cd /home/devuser/WorkSpace/rx_tech_demo/build
 ctest --output-on-failure
 ```
 
-## AF_XDP 自检
+## 运行入口
 
-Linux server:
+当前主入口：
 
-```bash
-cd /home/devuser/WorkSpace/rx_tech_demo/.worktrees/af-xdp-receiver
-PREFIX=/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo/build/native-aarch64/xdp-tools-1.2.9-prefix
-export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-export LD_LIBRARY_PATH="$PREFIX/lib:${LD_LIBRARY_PATH:-}"
-bash ./scripts/check_af_xdp_env.sh receiver0 0
-bash ./scripts/compile_min_xdp.sh
-bash ./scripts/build_af_xdp_bind_probe.sh
-bash ./scripts/build_af_xdp_rx_poc.sh
-```
+- `rx_receiver_dpdk`
+- 兼容保留：`rxbench_dpdk`
 
-## 前台运行
+Legacy 入口：
 
-Linux server:
+- `rx_receiver_af_xdp_legacy`
+- 兼容保留：`rxbench_xdp`
 
-```bash
-cd /home/devuser/WorkSpace/rx_tech_demo/.worktrees/af-xdp-receiver
-PREFIX=/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo/build/native-aarch64/xdp-tools-1.2.9-prefix
-export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-export LD_LIBRARY_PATH="$PREFIX/lib:${LD_LIBRARY_PATH:-}"
-./build/src/apps/rxbench_xdp --config ./configs/af_xdp_receiver0.conf --until-stopped
-```
+## 样本数据
 
-说明：
-- 该命令前台占据当前终端
-- 每 10 秒打印一次状态快照
-- 通过 `Ctrl+C` 手动停止
+本地可用样本：
+
+- `data/cpi_0002_complete`
+
+该样本可用于配置检查、协议数据核对和接收链路验证。

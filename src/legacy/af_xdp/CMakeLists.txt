@@ -5,46 +5,46 @@ if(UNIX AND NOT APPLE)
     endif()
 
     if(LIBBPF_FOUND)
-        add_library(rxtech_xdp_backend
+        add_library(rx_legacy_af_xdp
             src/xdp_backend.cpp
         )
 
-        target_include_directories(rxtech_xdp_backend
+        target_include_directories(rx_legacy_af_xdp
             PUBLIC
                 ${CMAKE_CURRENT_SOURCE_DIR}/include
             PRIVATE
                 ${LIBBPF_INCLUDE_DIRS}
         )
 
-        target_link_libraries(rxtech_xdp_backend
+        target_link_libraries(rx_legacy_af_xdp
             PUBLIC
-                rxtech_receiver_core
+                rx_receiver_core
             PRIVATE
                 ${LIBBPF_LIBRARIES}
         )
 
-        set_target_properties(rxtech_xdp_backend PROPERTIES
+        set_target_properties(rx_legacy_af_xdp PROPERTIES
             CXX_EXTENSIONS ON
         )
-        target_compile_options(rxtech_xdp_backend PRIVATE ${LIBBPF_CFLAGS_OTHER})
-        rxtech_apply_warnings(rxtech_xdp_backend)
+        target_compile_options(rx_legacy_af_xdp PRIVATE ${LIBBPF_CFLAGS_OTHER})
+        rxtech_apply_warnings(rx_legacy_af_xdp)
     else()
         message(WARNING "libbpf not found, AF_XDP backend target is disabled")
     endif()
 else()
-    add_library(rxtech_xdp_backend
+    add_library(rx_legacy_af_xdp
         src/xdp_backend.cpp
     )
 
-    target_include_directories(rxtech_xdp_backend
+    target_include_directories(rx_legacy_af_xdp
         PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}/include
     )
 
-    target_link_libraries(rxtech_xdp_backend
+    target_link_libraries(rx_legacy_af_xdp
         PUBLIC
-            rxtech_receiver_core
+            rx_receiver_core
     )
 
-    rxtech_apply_warnings(rxtech_xdp_backend)
+    rxtech_apply_warnings(rx_legacy_af_xdp)
 endif()
