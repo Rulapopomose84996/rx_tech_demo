@@ -4,6 +4,16 @@
 
 namespace rxtech {
 
+MetricsCollector::PerPortMetrics& MetricsCollector::get_or_create_port_metrics(std::uint32_t port_id) {
+    for (auto& entry : per_port_metrics_) {
+        if (entry.first == port_id) {
+            return entry.second;
+        }
+    }
+    per_port_metrics_.emplace_back(port_id, PerPortMetrics{});
+    return per_port_metrics_.back().second;
+}
+
 void MetricsCollector::on_burst(std::size_t burst_size, std::uint64_t bytes) {
     rx_packets_ += burst_size;
     rx_bytes_ += bytes;
@@ -46,29 +56,29 @@ void MetricsCollector::on_ring_depth(std::size_t depth) {
 }
 
 void MetricsCollector::on_port_packet(std::uint32_t port_id, std::uint64_t bytes) {
-    PerPortMetrics& metrics = per_port_metrics_[port_id];
+    PerPortMetrics& metrics = get_or_create_port_metrics(port_id);
     ++metrics.rx_packets;
     metrics.rx_bytes += bytes;
 }
 
 void MetricsCollector::on_reassembled_block(std::uint32_t port_id, std::uint64_t) {
-    ++per_port_metrics_[port_id].reassembled_blocks;
+    ++get_or_create_port_metrics(port_id).reassembled_blocks;
 }
 
 void MetricsCollector::on_missing_fragments(std::uint32_t port_id, std::uint64_t count) {
-    per_port_metrics_[port_id].missing_fragments += count;
+    get_or_create_port_metrics(port_id).missing_fragments += count;
 }
 
 void MetricsCollector::on_duplicate_fragment(std::uint32_t port_id) {
-    ++per_port_metrics_[port_id].duplicate_fragments;
+    ++get_or_create_port_metrics(port_id).duplicate_fragments;
 }
 
 void MetricsCollector::on_invalid_header(std::uint32_t port_id) {
-    ++per_port_metrics_[port_id].invalid_header_count;
+    ++get_or_create_port_metrics(port_id).invalid_header_count;
 }
 
 void MetricsCollector::on_reassembly_timeout(std::uint32_t port_id) {
-    ++per_port_metrics_[port_id].reassembly_timeout_count;
+    ++get_or_create_port_metrics(port_id).reassembly_timeout_count;
 }
 
 std::unique_ptr<IMetricsCollector> MetricsCollector::clone_empty() const {
@@ -95,8 +105,10 @@ bool MetricsCollector::absorb(const IMetricsCollector& other) {
     ring_high_watermark_ = std::max(ring_high_watermark_, other_metrics->ring_high_watermark_);
     bursts_.insert(bursts_.end(), other_metrics->bursts_.begin(), other_metrics->bursts_.end());
     latencies_ns_.insert(latencies_ns_.end(), other_metrics->latencies_ns_.begin(), other_metrics->latencies_ns_.end());
-    for (const auto& [port_id, per_port] : other_metrics->per_port_metrics_) {
-        PerPortMetrics& current = per_port_metrics_[port_id];
+    for (const auto& entry : other_metrics->per_port_metrics_) {
+        const std::uint32_t port_id = entry.first;
+        const PerPortMetrics& per_port = entry.second;
+        PerPortMetrics& current = get_or_create_port_metrics(port_id);
         current.rx_packets += per_port.rx_packets;
         current.rx_bytes += per_port.rx_bytes;
         current.reassembled_blocks += per_port.reassembled_blocks;
@@ -151,7 +163,9 @@ RunSummary MetricsCollector::finalize(const std::string& backend,
     }
 
     summary.per_port.reserve(per_port_metrics_.size());
-    for (const auto& [port_id, metrics] : per_port_metrics_) {
+    for (const auto& entry : per_port_metrics_) {
+        const std::uint32_t port_id = entry.first;
+        const PerPortMetrics& metrics = entry.second;
         PerPortSummary per_port;
         per_port.port_id = port_id;
         per_port.rx_packets = metrics.rx_packets;

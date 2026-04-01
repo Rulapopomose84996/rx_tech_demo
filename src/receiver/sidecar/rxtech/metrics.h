@@ -1,8 +1,8 @@
 #pragma once
 
 #include <cstdint>
-#include <unordered_map>
 #include <memory>
+#include <utility>
 #include <string>
 #include <vector>
 
@@ -181,6 +181,8 @@ private:
         std::uint64_t reassembly_timeout_count = 0;
     };
 
+    PerPortMetrics& get_or_create_port_metrics(std::uint32_t port_id);
+
     std::uint64_t rx_packets_ = 0;
     std::uint64_t rx_bytes_ = 0;
     std::uint64_t parsed_packets_ = 0;
@@ -195,7 +197,7 @@ private:
     std::uint64_t ring_high_watermark_ = 0;
     std::vector<std::size_t> bursts_;
     std::vector<std::uint64_t> latencies_ns_;
-    std::unordered_map<std::uint32_t, PerPortMetrics> per_port_metrics_;
+    std::vector<std::pair<std::uint32_t, PerPortMetrics>> per_port_metrics_;
 };
 
 }  // namespace rxtech
