@@ -1,13 +1,18 @@
 #include "rxtech/dpdk_backend.h"
 
 #include <algorithm>
+#include <array>
+#include <cstring>
 #include <vector>
 
+#include "rxtech/arp_responder.h"
 #include "rxtech/rx_config.h"
 #include "rxtech/time_utils.h"
 
 #if defined(__linux__) && defined(RXTECH_HAS_DPDK_RUNTIME)
+#include <arpa/inet.h>
 #include <rte_eal.h>
+#include <rte_ether.h>
 #include <rte_ethdev.h>
 #include <rte_mbuf.h>
 #endif
@@ -80,6 +85,8 @@ struct DpdkIngress::Impl {
     rte_mempool* mempool = nullptr;
     std::uint16_t port_id = 0;
     bool started = false;
+    std::array<std::uint8_t, 6> local_mac{};
+    std::uint32_t local_ip_be = 0;
 
     void cleanup() {
         if (started) {
@@ -88,6 +95,41 @@ struct DpdkIngress::Impl {
             started = false;
         }
         mempool = nullptr;
+    }
+
+    bool maybe_reply_arp(rte_mbuf* mbuf) {
+        if (mbuf == nullptr) {
+            return false;
+        }
+
+        const std::uint8_t* frame = rte_pktmbuf_mtod(mbuf, std::uint8_t*);
+        const std::size_t frame_len = rte_pktmbuf_pkt_len(mbuf);
+        ArpRequestInfo request{};
+        if (!parse_arp_request(frame, frame_len, local_ip_be, request)) {
+            return false;
+        }
+
+        const std::vector<std::uint8_t> reply = build_arp_reply(request, local_mac);
+        rte_mbuf* tx = rte_pktmbuf_alloc(mempool);
+        if (tx == nullptr) {
+            return true;
+        }
+
+        std::uint8_t* tx_data = rte_pktmbuf_mtod(tx, std::uint8_t*);
+        if (rte_pktmbuf_tailroom(tx) < reply.size()) {
+            rte_pktmbuf_free(tx);
+            return true;
+        }
+        std::memcpy(tx_data, reply.data(), reply.size());
+        tx->data_len = static_cast<std::uint16_t>(reply.size());
+        tx->pkt_len = static_cast<std::uint32_t>(reply.size());
+
+        rte_mbuf* tx_packets[1] = {tx};
+        const std::uint16_t sent = rte_eth_tx_burst(port_id, 0, tx_packets, 1);
+        if (sent == 0U) {
+            rte_pktmbuf_free(tx);
+        }
+        return true;
     }
 #endif
 };
@@ -191,6 +233,15 @@ BackendInitResult DpdkIngress::init(const RxConfig& config) {
     }
 
     impl_->started = true;
+    rte_ether_addr mac{};
+    rte_eth_macaddr_get(port_id, &mac);
+    std::memcpy(impl_->local_mac.data(), mac.addr_bytes, impl_->local_mac.size());
+    if (!config.receiver_ipv4.empty()) {
+        in_addr addr{};
+        if (inet_pton(AF_INET, config.receiver_ipv4.c_str(), &addr) == 1) {
+            impl_->local_ip_be = addr.s_addr;
+        }
+    }
     stats_.queue_id = 0;
     BackendInitResult result;
     result.ok = true;
@@ -220,6 +271,10 @@ bool DpdkIngress::recv_burst(RxBurst& burst, std::uint32_t max_burst) {
     burst.packets.reserve(received);
     for (std::uint16_t index = 0; index < received; ++index) {
         rte_mbuf* mbuf = mbufs[index];
+        if (impl_->maybe_reply_arp(mbuf)) {
+            rte_pktmbuf_free(mbuf);
+            continue;
+        }
         PacketDesc packet;
         packet.data = rte_pktmbuf_mtod(mbuf, std::uint8_t*);
         packet.len = rte_pktmbuf_pkt_len(mbuf);

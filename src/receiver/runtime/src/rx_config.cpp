@@ -67,6 +67,8 @@ void assign_config_value(RxConfig& config, const std::string& key, const std::st
         config.output_dir = normalized_value;
     } else if (normalized_key == "interface" || normalized_key == "interface_name") {
         config.interface_name = normalized_value;
+    } else if (normalized_key == "receiver_ipv4") {
+        config.receiver_ipv4 = normalized_value;
     } else if (normalized_key == "queue_id") {
         config.queue_id = static_cast<std::uint32_t>(std::stoul(normalized_value));
     } else if (normalized_key == "max_burst") {
@@ -185,6 +187,7 @@ void merge_config(RxConfig& base, const RxConfig& overrides) {
     if (!overrides.backend_name.empty()) base.backend_name = overrides.backend_name;
     if (!overrides.output_dir.empty()) base.output_dir = overrides.output_dir;
     if (!overrides.interface_name.empty()) base.interface_name = overrides.interface_name;
+    if (!overrides.receiver_ipv4.empty()) base.receiver_ipv4 = overrides.receiver_ipv4;
     if (!overrides.dpdk_pci_addr.empty()) base.dpdk_pci_addr = overrides.dpdk_pci_addr;
     if (!overrides.xdp_bind_mode.empty()) base.xdp_bind_mode = overrides.xdp_bind_mode;
     if (!overrides.feedback_host.empty()) base.feedback_host = overrides.feedback_host;

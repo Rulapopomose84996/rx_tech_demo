@@ -23,6 +23,7 @@ target_compile_features(rx_receiver_core PUBLIC cxx_std_17)
 rxtech_apply_warnings(rx_receiver_core)
 
 add_library(rx_receiver_dpdk_ingress
+    ingress/dpdk/src/arp_responder.cpp
     ingress/dpdk/src/dpdk_backend.cpp
 )
 

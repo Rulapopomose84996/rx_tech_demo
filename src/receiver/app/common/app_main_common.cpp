@@ -142,6 +142,7 @@ void print_dry_run(const RxConfig& config) {
     std::cout << "config_path=" << config.config_path << std::endl;
     std::cout << "output_dir=" << config.output_dir << std::endl;
     std::cout << "interface=" << config.interface_name << std::endl;
+    std::cout << "receiver_ipv4=" << config.receiver_ipv4 << std::endl;
     std::cout << "queue_id=" << config.queue_id << std::endl;
     std::cout << "duration_seconds=" << config.duration_seconds << std::endl;
     std::cout << "max_burst=" << config.max_burst << std::endl;

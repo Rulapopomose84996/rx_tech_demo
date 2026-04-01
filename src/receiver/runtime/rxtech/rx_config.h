@@ -11,6 +11,7 @@ struct RxConfig {
     std::string config_path;
     std::string output_dir = "results";
     std::string interface_name = "receiver0";
+    std::string receiver_ipv4;
     std::string dpdk_pci_addr;
     std::string xdp_bind_mode = "auto";
     std::string feedback_host;
