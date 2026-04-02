@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <iomanip>
 #include <iostream>
+#include <map>
+#include <unordered_set>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
@@ -17,6 +19,8 @@
 
 #include "rxtech/sample_packet_parser.h"
 #include "rxtech/sample_packet_validator.h"
+#include "rxtech/protocol_sequence_interpreter.h"
+#include "rxtech/udp_payload_assembler.h"
 
 namespace rxtech {
 
@@ -36,9 +40,25 @@ struct CapturedPacket {
     std::string validation;
 };
 
+struct ProtocolCpiStats {
+    std::uint64_t control_table_packets = 0;
+    std::uint64_t data_packets = 0;
+    std::unordered_set<std::uint16_t> prts;
+    std::unordered_set<std::uint16_t> channels;
+};
+
+struct ProtocolChannelStats {
+    std::uint64_t data_packets = 0;
+    std::uint64_t iq_count = 0;
+    std::uint64_t data_bytes = 0;
+    std::uint64_t zero_padding_bytes = 0;
+};
+
+using ProtocolPrtCoverage = std::map<std::uint16_t, std::unordered_set<std::uint16_t>>;
+
 void merge_backend_stats(RunSummary& summary, const BackendStats& backend_stats) {
-    summary.rx_packets = backend_stats.rx_packets != 0U ? backend_stats.rx_packets : summary.rx_packets;
-    summary.rx_bytes = backend_stats.rx_bytes != 0U ? backend_stats.rx_bytes : summary.rx_bytes;
+    summary.raw_rx_packets = backend_stats.rx_packets;
+    summary.raw_rx_bytes = backend_stats.rx_bytes;
     summary.dropped_packets += backend_stats.backend_drops;
     summary.backend_errors += backend_stats.rx_errors;
     summary.rx_polls = backend_stats.rx_polls;
@@ -76,15 +96,123 @@ void print_status_snapshot(std::ostream& out,
 
     out << "[status] elapsed=" << elapsed_seconds << "s"
         << " rx_packets=" << summary.rx_packets
+        << " raw_rx_packets=" << summary.raw_rx_packets
+        << " filtered_packets=" << summary.filtered_packets
         << " rx_bytes=" << summary.rx_bytes
         << " parsed_packets=" << summary.parsed_packets
         << " control_table_packets=" << summary.control_table_packets
         << " data_packets=" << summary.data_packets
+        << " packet_count=" << summary.packet_count
+        << " cpi_count=" << summary.cpi_count
+        << " prt_count=" << summary.prt_count
+        << " channel_count=" << summary.channel_count
         << " gbps=" << aggregate_gbps
         << " drop_rate=" << calculate_drop_rate(summary)
         << " empty_poll_ratio=" << summary.empty_poll_ratio
         << '\n';
     out.flush();
+}
+
+std::uint32_t parse_ipv4_be(const std::string& ipv4) {
+    std::uint32_t octets[4] = {0U, 0U, 0U, 0U};
+    char dot1 = '\0';
+    char dot2 = '\0';
+    char dot3 = '\0';
+    std::istringstream stream(ipv4);
+    if (!(stream >> octets[0] >> dot1 >> octets[1] >> dot2 >> octets[2] >> dot3 >> octets[3])) {
+        return 0U;
+    }
+    if (dot1 != '.' || dot2 != '.' || dot3 != '.') {
+        return 0U;
+    }
+    for (std::uint32_t octet : octets) {
+        if (octet > 255U) {
+            return 0U;
+        }
+    }
+    return (octets[0] << 24U) | (octets[1] << 16U) | (octets[2] << 8U) | octets[3];
+}
+
+bool matches_packet_filter(const RxConfig& config, const SamplePacketView& parsed) {
+    const bool source_filter_enabled = !config.allowed_source_ipv4.empty();
+    const bool dest_ip_filter_enabled = !config.receiver_ipv4.empty();
+    const bool dest_port_filter_enabled = config.allowed_dest_port != 0U;
+    if (!source_filter_enabled && !dest_ip_filter_enabled && !dest_port_filter_enabled) {
+        return true;
+    }
+    if (!parsed.is_ipv4_udp) {
+        return false;
+    }
+    if (source_filter_enabled && parsed.source_ipv4_be != parse_ipv4_be(config.allowed_source_ipv4)) {
+        return false;
+    }
+    if (dest_ip_filter_enabled && parsed.dest_ipv4_be != parse_ipv4_be(config.receiver_ipv4)) {
+        return false;
+    }
+    if (dest_port_filter_enabled && parsed.dest_port != static_cast<std::uint16_t>(config.allowed_dest_port)) {
+        return false;
+    }
+    return true;
+}
+
+const char* protocol_channel_name(std::uint16_t channel) {
+    switch (channel) {
+        case 0:
+            return "和路";
+        case 1:
+            return "俯仰差";
+        case 2:
+            return "方位差";
+        case 3:
+            return "辅助通道";
+        default:
+            return "未知通道";
+    }
+}
+
+std::string build_human_summary(const RunSummary& summary) {
+    std::ostringstream out;
+    out << "\n========== 接收结束汇总 ==========\n";
+    out << "运行结果： " << (summary.run_status == "success" ? "成功" : "失败") << "\n";
+    out << "后端类型： " << summary.backend << "\n";
+    out << "接收队列： " << summary.queue_id << "\n";
+    out << "原始收包： " << summary.raw_rx_packets << " 包，" << summary.raw_rx_bytes << " 字节\n";
+    out << "过滤丢弃： " << summary.filtered_packets << " 包\n";
+    out << "候选业务包： " << summary.rx_packets << " 包，" << summary.rx_bytes << " 字节\n";
+    out << "解析有效包： " << summary.parsed_packets << " 包\n";
+    out << "控制表包： " << summary.control_table_packets << " 包\n";
+    out << "数据包： " << summary.data_packets << " 包\n";
+    out << "协议丢弃： " << summary.dropped_packets << " 包\n";
+    out << "CPI 数： " << summary.cpi_count << "\n";
+    out << "PRT 数： " << summary.prt_count << "\n";
+    out << "完整 PRT 数： " << summary.complete_prt_count << "\n";
+    out << "通道数： " << summary.channel_count << "\n";
+    out << "最终包尾数量： " << summary.final_tail_packets << "\n";
+    out << "已落盘包数： " << summary.packet_count << "\n";
+    out << "抓包索引： " << summary.capture_index_path << "\n";
+    out << "抓包数据： " << summary.capture_packets_path << "\n";
+    if (!summary.protocol_channels.empty()) {
+        out << "通道分布：\n";
+        for (const auto& channel : summary.protocol_channels) {
+            out << "  - 通道 " << channel.channel << "（" << channel.channel_name << "）："
+                << channel.data_packets << " 个数据包，"
+                << channel.iq_count << " 个 IQ，"
+                << channel.data_bytes << " 字节数据，"
+                << channel.zero_padding_bytes << " 字节补零\n";
+        }
+    }
+    if (!summary.protocol_cpis.empty()) {
+        out << "CPI 分布：\n";
+        for (const auto& cpi : summary.protocol_cpis) {
+            out << "  - CPI " << cpi.cpi
+                << "：控制表 " << cpi.control_table_packets
+                << " 包，数据包 " << cpi.data_packets
+                << " 包，PRT 数 " << cpi.prt_count
+                << "，通道数 " << cpi.channel_count << "\n";
+        }
+    }
+    out << "==================================\n";
+    return out.str();
 }
 
 void send_feedback_snapshot(const RxConfig& config, const RunSummary& summary, std::ostream* status_output) {
@@ -212,6 +340,8 @@ RunSummary OwnerLoop::run(ReceiveContext& context,
 
     SamplePacketParser parser;
     SamplePacketValidator validator;
+    ProtocolSequenceInterpreter sequence_interpreter;
+    UdpPayloadAssembler payload_assembler;
     write_capture_index_header(*artifacts.index_stream);
 
     const auto start_time = std::chrono::steady_clock::now();
@@ -222,6 +352,14 @@ RunSummary OwnerLoop::run(ReceiveContext& context,
     std::string run_status = "success";
     std::string run_error;
     std::uint32_t invalid_dumped = 0;
+    std::unordered_set<std::uint16_t> unique_cpis;
+    std::unordered_set<std::uint16_t> unique_prts;
+    std::unordered_set<std::uint16_t> unique_channels;
+    std::uint64_t filtered_packets = 0;
+    std::map<std::uint16_t, ProtocolChannelStats> channel_stats;
+    std::map<std::uint64_t, ProtocolCpiStats> cpi_stats;
+    std::map<std::pair<std::uint64_t, std::uint16_t>, ProtocolPrtCoverage> prt_coverage;
+    std::uint64_t final_tail_packets = 0;
 
     while (!should_stop()) {
         RxBurst burst;
@@ -233,71 +371,123 @@ RunSummary OwnerLoop::run(ReceiveContext& context,
         }
 
         std::uint64_t burst_bytes = 0;
+        std::size_t accepted_packets = 0U;
         for (const PacketDesc& packet : burst.packets) {
-            burst_bytes += packet.len;
-            const SamplePacketView parsed = parser.parse(packet);
-            const SamplePacketValidation validation = validator.validate(parsed);
-            if (!validation.ok) {
-                context.metrics->on_drop();
-                context.metrics->on_invalid_header(packet.port_id);
-                if (invalid_dumped < 5U) {
-                    std::ostream& diagnostic_stream = status_output_ != nullptr ? *status_output_ : std::cerr;
-                    emit_invalid_packet_diagnostic(diagnostic_stream, packet, parsed, validation);
-                    ++invalid_dumped;
+            const auto udp_frames = payload_assembler.push(packet);
+            for (const auto& udp_frame : udp_frames) {
+                const SamplePacketView parsed = parser.parse(udp_frame);
+                if (!matches_packet_filter(context.config, parsed)) {
+                    ++filtered_packets;
+                    continue;
                 }
-                continue;
+
+                burst_bytes += udp_frame.udp_payload.size();
+                ++accepted_packets;
+                const SamplePacketValidation validation = validator.validate(parsed);
+                if (!validation.ok) {
+                    context.metrics->on_drop();
+                    context.metrics->on_invalid_header(udp_frame.port_id);
+                    if (invalid_dumped < 5U) {
+                        PacketDesc diagnostic_packet;
+                        diagnostic_packet.data = const_cast<std::uint8_t*>(udp_frame.udp_payload.data());
+                        diagnostic_packet.len = static_cast<std::uint32_t>(udp_frame.udp_payload.size());
+                        diagnostic_packet.queue_id = udp_frame.queue_id;
+                        std::ostream& diagnostic_stream = status_output_ != nullptr ? *status_output_ : std::cerr;
+                        emit_invalid_packet_diagnostic(diagnostic_stream, diagnostic_packet, parsed, validation);
+                        ++invalid_dumped;
+                    }
+                    continue;
+                }
+
+                const ProtocolPacketView protocol_packet = sequence_interpreter.interpret(parsed);
+                if (!protocol_packet.valid) {
+                    context.metrics->on_drop();
+                    context.metrics->on_invalid_header(udp_frame.port_id);
+                    if (invalid_dumped < 5U) {
+                        PacketDesc diagnostic_packet;
+                        diagnostic_packet.data = const_cast<std::uint8_t*>(udp_frame.udp_payload.data());
+                        diagnostic_packet.len = static_cast<std::uint32_t>(udp_frame.udp_payload.size());
+                        diagnostic_packet.queue_id = udp_frame.queue_id;
+                        SamplePacketValidation protocol_validation;
+                        protocol_validation.ok = false;
+                        protocol_validation.reason = protocol_packet.error_reason;
+                        std::ostream& diagnostic_stream = status_output_ != nullptr ? *status_output_ : std::cerr;
+                        emit_invalid_packet_diagnostic(diagnostic_stream, diagnostic_packet, parsed, protocol_validation);
+                        ++invalid_dumped;
+                    }
+                    continue;
+                }
+
+                context.metrics->on_parsed_packet();
+                context.metrics->on_port_packet(udp_frame.port_id, udp_frame.udp_payload.size());
+                if (udp_frame.ts_ns != 0U) {
+                    context.metrics->on_packet_latency_ns(udp_frame.ts_ns);
+                }
+                if (protocol_packet.kind == SamplePacketKind::control_table) {
+                    context.metrics->on_control_table_packet();
+                    cpi_stats[protocol_packet.cpi].control_table_packets += 1U;
+                } else if (protocol_packet.kind == SamplePacketKind::data_packet) {
+                    context.metrics->on_data_packet();
+                    ProtocolChannelStats& per_channel = channel_stats[protocol_packet.channel];
+                    per_channel.data_packets += 1U;
+                    per_channel.iq_count += protocol_packet.iq_count;
+                    per_channel.data_bytes += protocol_packet.iq_count * 4U;
+                    per_channel.zero_padding_bytes += protocol_packet.zero_padding_bytes;
+                    ProtocolCpiStats& stats = cpi_stats[protocol_packet.cpi];
+                    stats.data_packets += 1U;
+                    stats.prts.insert(protocol_packet.prt);
+                    stats.channels.insert(protocol_packet.channel);
+                    prt_coverage[{protocol_packet.cpi, protocol_packet.prt}][protocol_packet.channel].insert(protocol_packet.packet_index);
+                    if (parsed.tail == 0x55AAFF30U) {
+                        ++final_tail_packets;
+                    }
+                }
+
+                CapturedPacket captured;
+                captured.payload = udp_frame.udp_payload;
+                captured.ts_ns = udp_frame.ts_ns;
+                captured.port_id = udp_frame.port_id;
+                captured.queue_id = udp_frame.queue_id;
+                captured.face_id = udp_frame.face_id;
+                captured.cpi = protocol_packet.cpi;
+                captured.channel = protocol_packet.channel;
+                captured.prt = protocol_packet.prt;
+                captured.packet_index = protocol_packet.packet_index;
+                captured.packet_kind = sample_packet_kind_name(protocol_packet.kind);
+                captured.validation = "ok";
+                unique_cpis.insert(protocol_packet.cpi);
+                if (protocol_packet.kind == SamplePacketKind::data_packet) {
+                    unique_prts.insert(protocol_packet.prt);
+                    unique_channels.insert(protocol_packet.channel);
+                }
+
+                artifacts.packet_stream->write(reinterpret_cast<const char*>(captured.payload.data()),
+                                               static_cast<std::streamsize>(captured.payload.size()));
+                *artifacts.index_stream << artifacts.recorded_packets
+                                        << ',' << artifacts.file_offset
+                                        << ',' << captured.payload.size()
+                                        << ',' << captured.ts_ns
+                                        << ',' << captured.port_id
+                                        << ',' << captured.queue_id
+                                        << ',' << captured.face_id
+                                        << ',' << captured.cpi
+                                        << ',' << captured.channel
+                                        << ',' << captured.prt
+                                        << ',' << captured.packet_index
+                                        << ',' << captured.packet_kind
+                                        << ',' << captured.validation
+                                        << '\n';
+
+                artifacts.file_offset += captured.payload.size();
+                artifacts.recorded_bytes += captured.payload.size();
+                ++artifacts.recorded_packets;
+                artifacts.captured_bytes += captured.payload.size();
+                ++artifacts.captured_packets;
             }
-
-            context.metrics->on_parsed_packet();
-            context.metrics->on_port_packet(packet.port_id, packet.len);
-            if (packet.ts_ns != 0U) {
-                context.metrics->on_packet_latency_ns(packet.ts_ns);
-            }
-            if (parsed.kind == SamplePacketKind::control_table) {
-                context.metrics->on_control_table_packet();
-            } else if (parsed.kind == SamplePacketKind::data_packet) {
-                context.metrics->on_data_packet();
-            }
-
-            CapturedPacket captured;
-            captured.payload.assign(packet.data, packet.data + packet.len);
-            captured.ts_ns = packet.ts_ns;
-            captured.port_id = packet.port_id;
-            captured.queue_id = packet.queue_id;
-            captured.face_id = packet.face_id;
-            captured.cpi = parsed.cpi;
-            captured.channel = parsed.channel;
-            captured.prt = parsed.prt;
-            captured.packet_index = parsed.packet_index;
-            captured.packet_kind = sample_packet_kind_name(parsed.kind);
-            captured.validation = "ok";
-
-            artifacts.packet_stream->write(reinterpret_cast<const char*>(captured.payload.data()),
-                                           static_cast<std::streamsize>(captured.payload.size()));
-            *artifacts.index_stream << artifacts.recorded_packets
-                                    << ',' << artifacts.file_offset
-                                    << ',' << captured.payload.size()
-                                    << ',' << captured.ts_ns
-                                    << ',' << captured.port_id
-                                    << ',' << captured.queue_id
-                                    << ',' << captured.face_id
-                                    << ',' << captured.cpi
-                                    << ',' << captured.channel
-                                    << ',' << captured.prt
-                                    << ',' << captured.packet_index
-                                    << ',' << captured.packet_kind
-                                    << ',' << captured.validation
-                                    << '\n';
-
-            artifacts.file_offset += captured.payload.size();
-            artifacts.recorded_bytes += captured.payload.size();
-            ++artifacts.recorded_packets;
-            artifacts.captured_bytes += captured.payload.size();
-            ++artifacts.captured_packets;
         }
 
-        if (!burst.packets.empty()) {
-            context.metrics->on_burst(burst.packets.size(), burst_bytes);
+        if (accepted_packets > 0U) {
+            context.metrics->on_burst(accepted_packets, burst_bytes);
         }
         context.backend->release_burst(burst);
 
@@ -316,6 +506,11 @@ RunSummary OwnerLoop::run(ReceiveContext& context,
             status_summary.captured_bytes = artifacts.captured_bytes;
             status_summary.recorded_packets = artifacts.recorded_packets;
             status_summary.recorded_bytes = artifacts.recorded_bytes;
+            status_summary.filtered_packets = filtered_packets;
+            status_summary.packet_count = artifacts.recorded_packets;
+            status_summary.cpi_count = static_cast<std::uint64_t>(unique_cpis.size());
+            status_summary.prt_count = static_cast<std::uint64_t>(unique_prts.size());
+            status_summary.channel_count = static_cast<std::uint64_t>(unique_channels.size());
             merge_backend_stats(status_summary, context.backend->stats());
             if (status_output_ != nullptr && now >= next_status_at) {
                 print_status_snapshot(*status_output_, status_summary, now - start_time);
@@ -345,7 +540,55 @@ RunSummary OwnerLoop::run(ReceiveContext& context,
     summary.captured_bytes = artifacts.captured_bytes;
     summary.recorded_packets = artifacts.recorded_packets;
     summary.recorded_bytes = artifacts.recorded_bytes;
+    summary.filtered_packets = filtered_packets;
+    summary.packet_count = artifacts.recorded_packets;
+    summary.cpi_count = static_cast<std::uint64_t>(unique_cpis.size());
+    summary.prt_count = static_cast<std::uint64_t>(unique_prts.size());
+    summary.channel_count = static_cast<std::uint64_t>(unique_channels.size());
+    summary.final_tail_packets = final_tail_packets;
+    for (const auto& entry : prt_coverage) {
+        bool complete = true;
+        for (std::uint16_t channel = 0; channel < 3U; ++channel) {
+            const auto channel_it = entry.second.find(channel);
+            if (channel_it == entry.second.end()) {
+                complete = false;
+                break;
+            }
+            for (std::uint16_t packet_index = 1U; packet_index <= 9U; ++packet_index) {
+                if (channel_it->second.count(packet_index) == 0U) {
+                    complete = false;
+                    break;
+                }
+            }
+            if (!complete) {
+                break;
+            }
+        }
+        if (complete) {
+            ++summary.complete_prt_count;
+        }
+    }
+    for (const auto& entry : channel_stats) {
+        ProtocolChannelSummary channel_summary;
+        channel_summary.channel = entry.first;
+        channel_summary.channel_name = protocol_channel_name(entry.first);
+        channel_summary.data_packets = entry.second.data_packets;
+        channel_summary.iq_count = entry.second.iq_count;
+        channel_summary.data_bytes = entry.second.data_bytes;
+        channel_summary.zero_padding_bytes = entry.second.zero_padding_bytes;
+        summary.protocol_channels.push_back(channel_summary);
+    }
+    for (const auto& entry : cpi_stats) {
+        ProtocolCpiSummary cpi_summary;
+        cpi_summary.cpi = entry.first;
+        cpi_summary.control_table_packets = entry.second.control_table_packets;
+        cpi_summary.data_packets = entry.second.data_packets;
+        cpi_summary.prt_count = static_cast<std::uint64_t>(entry.second.prts.size());
+        cpi_summary.channel_count = static_cast<std::uint64_t>(entry.second.channels.size());
+        summary.protocol_cpis.push_back(cpi_summary);
+    }
     merge_backend_stats(summary, context.backend->stats());
+    summary.human_summary = build_human_summary(summary);
 
     if (context.config.run_until_stopped && status_output_ != nullptr) {
         print_status_snapshot(*status_output_, summary, end_time - start_time);

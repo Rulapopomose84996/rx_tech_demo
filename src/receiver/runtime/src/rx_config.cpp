@@ -69,6 +69,8 @@ void assign_config_value(RxConfig& config, const std::string& key, const std::st
         config.interface_name = normalized_value;
     } else if (normalized_key == "receiver_ipv4") {
         config.receiver_ipv4 = normalized_value;
+    } else if (normalized_key == "allowed_source_ipv4") {
+        config.allowed_source_ipv4 = normalized_value;
     } else if (normalized_key == "queue_id") {
         config.queue_id = static_cast<std::uint32_t>(std::stoul(normalized_value));
     } else if (normalized_key == "max_burst") {
@@ -97,14 +99,14 @@ void assign_config_value(RxConfig& config, const std::string& key, const std::st
         config.feedback_interval_seconds = static_cast<std::uint32_t>(std::stoul(normalized_value));
     } else if (normalized_key == "feedback_port") {
         config.feedback_port = static_cast<std::uint32_t>(std::stoul(normalized_value));
+    } else if (normalized_key == "allowed_dest_port") {
+        config.allowed_dest_port = static_cast<std::uint32_t>(std::stoul(normalized_value));
     } else if (normalized_key == "feedback_host") {
         config.feedback_host = normalized_value;
     } else if (normalized_key == "feedback_bind_host") {
         config.feedback_bind_host = normalized_value;
     } else if (normalized_key == "feedback_enabled") {
         config.feedback_enabled = parse_bool(normalized_value);
-    } else if (normalized_key == "reassembly_timeout_ms") {
-        config.reassembly_timeout_ms = static_cast<std::uint32_t>(std::stoul(normalized_value));
     } else if (normalized_key == "cpu_cores") {
         config.cpu_cores = parse_int_list(normalized_value);
     } else if (normalized_key == "run_until_stopped") {
@@ -188,6 +190,7 @@ void merge_config(RxConfig& base, const RxConfig& overrides) {
     if (!overrides.output_dir.empty()) base.output_dir = overrides.output_dir;
     if (!overrides.interface_name.empty()) base.interface_name = overrides.interface_name;
     if (!overrides.receiver_ipv4.empty()) base.receiver_ipv4 = overrides.receiver_ipv4;
+    if (!overrides.allowed_source_ipv4.empty()) base.allowed_source_ipv4 = overrides.allowed_source_ipv4;
     if (!overrides.dpdk_pci_addr.empty()) base.dpdk_pci_addr = overrides.dpdk_pci_addr;
     if (!overrides.xdp_bind_mode.empty()) base.xdp_bind_mode = overrides.xdp_bind_mode;
     if (!overrides.feedback_host.empty()) base.feedback_host = overrides.feedback_host;
@@ -212,8 +215,8 @@ void merge_config(RxConfig& base, const RxConfig& overrides) {
     if (overrides.status_interval_seconds != defaults.status_interval_seconds) base.status_interval_seconds = overrides.status_interval_seconds;
     if (overrides.feedback_interval_seconds != defaults.feedback_interval_seconds) base.feedback_interval_seconds = overrides.feedback_interval_seconds;
     if (overrides.feedback_port != defaults.feedback_port) base.feedback_port = overrides.feedback_port;
+    if (overrides.allowed_dest_port != defaults.allowed_dest_port) base.allowed_dest_port = overrides.allowed_dest_port;
     if (overrides.feedback_enabled != defaults.feedback_enabled) base.feedback_enabled = overrides.feedback_enabled;
-    if (overrides.reassembly_timeout_ms != defaults.reassembly_timeout_ms) base.reassembly_timeout_ms = overrides.reassembly_timeout_ms;
     if (overrides.dpdk_port_id != defaults.dpdk_port_id) base.dpdk_port_id = overrides.dpdk_port_id;
     if (overrides.dpdk_socket_mem_mb != defaults.dpdk_socket_mem_mb) base.dpdk_socket_mem_mb = overrides.dpdk_socket_mem_mb;
     if (overrides.dpdk_mempool_size != defaults.dpdk_mempool_size) base.dpdk_mempool_size = overrides.dpdk_mempool_size;

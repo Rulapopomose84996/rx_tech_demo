@@ -1,3 +1,4 @@
+#include <cstdio>
 #include <fstream>
 #include <iostream>
 
@@ -29,7 +30,8 @@ int main() {
         out << "feedback_host: 172.20.11.11\n";
         out << "feedback_bind_host: 172.20.11.100\n";
         out << "feedback_port: 9999\n";
-        out << "reassembly_timeout_ms: 1500\n";
+        out << "allowed_source_ipv4: 172.20.11.222\n";
+        out << "allowed_dest_port: 9999\n";
         out << "xdp_bind_mode: copy\n";
         out << "xdp_rx_ring_size: 512\n";
         out << "xdp_tx_ring_size: 128\n";
@@ -48,7 +50,8 @@ int main() {
         config.cpu_cores[0] != 16 || !config.run_until_stopped ||
         config.status_interval_seconds != 10U || config.feedback_interval_seconds != 1U || !config.feedback_enabled ||
         config.feedback_host != "172.20.11.11" || config.feedback_bind_host != "172.20.11.100" || config.feedback_port != 9999U ||
-        config.reassembly_timeout_ms != 1500U || config.xdp_bind_mode != "copy" ||
+        config.allowed_source_ipv4 != "172.20.11.222" || config.allowed_dest_port != 9999U ||
+        config.xdp_bind_mode != "copy" ||
         config.xdp_rx_ring_size != 512U || config.xdp_tx_ring_size != 128U ||
         config.xdp_fill_ring_size != 1024U || config.xdp_completion_ring_size != 512U ||
         config.xdp_frame_size != 4096U || config.xdp_frame_count != 8192U ||
@@ -56,5 +59,16 @@ int main() {
         std::cerr << "config parsing regression in test_rx_config\n";
         return 1;
     }
+
+    const rxtech::RxConfig dpdk_config = rxtech::load_config_file("configs/dpdk_single_face.conf");
+    if (dpdk_config.backend_name != "dpdk" || dpdk_config.interface_name != "receiver0" ||
+        dpdk_config.receiver_ipv4 != "172.20.11.100" ||
+        dpdk_config.allowed_source_ipv4 != "172.20.11.222" ||
+        dpdk_config.allowed_dest_port != 9999U ||
+        dpdk_config.dpdk_pci_addr != "0001:05:00.0") {
+        std::cerr << "dpdk single face config should point at receiver0 / 172.20.11.100 / 172.20.11.222 / 9999 / 0001:05:00.0\n";
+        return 1;
+    }
+    std::remove(path);
     return 0;
 }

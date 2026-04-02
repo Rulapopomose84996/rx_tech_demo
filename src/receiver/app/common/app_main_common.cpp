@@ -148,7 +148,6 @@ void print_dry_run(const RxConfig& config) {
     std::cout << "max_burst=" << config.max_burst << std::endl;
     std::cout << "packet_size_bytes=" << config.packet_size_bytes << std::endl;
     std::cout << "xdp_bind_mode=" << config.xdp_bind_mode << std::endl;
-    std::cout << "reassembly_timeout_ms=" << config.reassembly_timeout_ms << std::endl;
     std::cout << "run_until_stopped=" << (config.run_until_stopped ? "true" : "false") << std::endl;
     std::cout << "status_interval_seconds=" << config.status_interval_seconds << std::endl;
     std::cout << "feedback_enabled=" << (config.feedback_enabled ? "true" : "false") << std::endl;
@@ -183,13 +182,22 @@ int run_app(const std::string& backend_name, int argc, char** argv) {
                   << " backend=" << summary.backend
                   << " queue_id=" << summary.queue_id
                   << " rx_packets=" << summary.rx_packets
+                  << " raw_rx_packets=" << summary.raw_rx_packets
+                  << " filtered_packets=" << summary.filtered_packets
                   << " parsed_packets=" << summary.parsed_packets
                   << " control_table_packets=" << summary.control_table_packets
                   << " data_packets=" << summary.data_packets
                   << " dropped_packets=" << summary.dropped_packets
                   << " captured_packets=" << summary.captured_packets
+                  << " packet_count=" << summary.packet_count
+                  << " cpi_count=" << summary.cpi_count
+                  << " prt_count=" << summary.prt_count
+                  << " channel_count=" << summary.channel_count
                   << " capture_index=" << summary.capture_index_path
                   << std::endl;
+        if (!summary.human_summary.empty()) {
+            std::cout << summary.human_summary;
+        }
         if (summary.run_status != "success") {
             std::cerr << "run failed: " << summary.error_message << std::endl;
             return summary.run_status == "unavailable" ? 2 : 1;

@@ -12,6 +12,7 @@ struct RxConfig {
     std::string output_dir = "results";
     std::string interface_name = "receiver0";
     std::string receiver_ipv4;
+    std::string allowed_source_ipv4;
     std::string dpdk_pci_addr;
     std::string xdp_bind_mode = "auto";
     std::string feedback_host;
@@ -30,13 +31,13 @@ struct RxConfig {
     std::uint32_t status_interval_seconds = 10;
     std::uint32_t feedback_interval_seconds = 1;
     std::uint32_t feedback_port = 0;
+    std::uint32_t allowed_dest_port = 0;
     std::uint32_t dpdk_port_id = 0;
     std::uint32_t dpdk_socket_mem_mb = 1024;
     std::uint32_t dpdk_mempool_size = 4096;
     std::uint32_t dpdk_mbuf_cache_size = 256;
     std::uint32_t dpdk_rx_desc = 256;
     std::uint32_t dpdk_tx_desc = 256;
-    std::uint32_t reassembly_timeout_ms = 1000;
     bool run_until_stopped = false;
     bool feedback_enabled = false;
     std::vector<int> cpu_cores;

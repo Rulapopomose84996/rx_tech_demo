@@ -242,6 +242,22 @@ BackendInitResult DpdkIngress::init(const RxConfig& config) {
             impl_->local_ip_be = ntohl(addr.s_addr);
         }
     }
+    // Drain any stale packets already queued in the NIC hardware ring before
+    // starting normal operation so that background traffic received prior to
+    // this application launching does not appear in the statistics.
+    {
+        std::vector<rte_mbuf*> drain_mbufs(64);
+        std::uint16_t drained = 0;
+        do {
+            drained = rte_eth_rx_burst(impl_->port_id, 0, drain_mbufs.data(),
+                                       static_cast<std::uint16_t>(drain_mbufs.size()));
+            for (std::uint16_t i = 0; i < drained; ++i) {
+                rte_pktmbuf_free(drain_mbufs[i]);
+            }
+        } while (drained > 0);
+    }
+
+    stats_ = {};
     stats_.queue_id = 0;
     BackendInitResult result;
     result.ok = true;

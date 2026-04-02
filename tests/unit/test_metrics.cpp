@@ -17,7 +17,6 @@ int main() {
     metrics.on_duplicate_fragment(0U);
     metrics.on_invalid_header(1U);
     metrics.on_missing_fragments(1U, 2U);
-    metrics.on_reassembly_timeout(1U);
 
     const rxtech::RunSummary summary = metrics.finalize("socket", "rx_only", "smoke", 1U);
     assert(summary.rx_packets == 4U);
@@ -35,7 +34,6 @@ int main() {
     assert(summary.per_port[0].duplicate_fragments == 1U);
     assert(summary.per_port[1].invalid_header_count == 1U);
     assert(summary.per_port[1].missing_fragments == 2U);
-    assert(summary.per_port[1].reassembly_timeout_count == 1U);
 
     auto other = metrics.clone_empty();
     other->on_burst(2U, 256U);

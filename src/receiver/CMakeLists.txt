@@ -1,10 +1,9 @@
 add_library(rx_receiver_core
     core/src/owner_loop.cpp
-    protocol/src/parser.cpp
-    protocol/src/packet_validator.cpp
+    protocol/src/protocol_sequence_interpreter.cpp
     protocol/src/sample_packet_parser.cpp
     protocol/src/sample_packet_validator.cpp
-    storage/src/reassembly.cpp
+    protocol/src/udp_payload_assembler.cpp
     sidecar/src/metrics.cpp
     runtime/src/rx_config.cpp
     runtime/src/receive_runner.cpp
@@ -14,7 +13,6 @@ target_include_directories(rx_receiver_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/core
         ${CMAKE_CURRENT_SOURCE_DIR}/protocol
-        ${CMAKE_CURRENT_SOURCE_DIR}/storage
         ${CMAKE_CURRENT_SOURCE_DIR}/sidecar
         ${CMAKE_CURRENT_SOURCE_DIR}/runtime
 )

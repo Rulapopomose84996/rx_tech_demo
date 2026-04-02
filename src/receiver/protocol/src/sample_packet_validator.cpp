@@ -6,7 +6,8 @@ namespace {
 
 constexpr std::uint32_t kExpectedPayloadBytes = 2032U;
 constexpr std::uint16_t kMaxChannel = 3U;
-constexpr std::uint16_t kMaxPacketIndex = 8U;
+constexpr std::uint16_t kMinPacketIndex = 1U;
+constexpr std::uint16_t kMaxPacketIndex = 9U;
 constexpr std::uint32_t kValidTail = 0x55AAFF30U;
 
 }  // namespace
@@ -17,27 +18,27 @@ SamplePacketValidation SamplePacketValidator::validate(const SamplePacketView& p
     }
 
     if (packet.kind == SamplePacketKind::control_table) {
-        if (packet.ip_fragment_offset != 0U) {
-            return {false, "control table continuation fragment"};
+        if (packet.ip_fragment_offset != 0U || packet.more_ip_fragments) {
+            return {false, "control table is fragmented"};
         }
-        if (packet.payload_len == 0U) {
-            return {false, "empty control table payload"};
+        if (packet.frame_length != 14U + 20U + 8U + 2048U) {
+            return {false, "unexpected control table frame length"};
         }
         return {true, ""};
     }
 
     if (packet.kind == SamplePacketKind::data_packet) {
-        if (packet.ip_fragment_offset != 0U) {
-            return {false, "data continuation fragment"};
+        if (packet.ip_fragment_offset != 0U || packet.more_ip_fragments) {
+            return {false, "data packet is fragmented"};
         }
         if (packet.channel > kMaxChannel) {
             return {false, "channel out of range"};
         }
-        if (packet.packet_index > kMaxPacketIndex) {
+        if (packet.packet_index < kMinPacketIndex || packet.packet_index > kMaxPacketIndex) {
             return {false, "packet index out of range"};
         }
-        if (packet.payload_len == 0U) {
-            return {false, "empty data payload"};
+        if (packet.payload_len != kExpectedPayloadBytes) {
+            return {false, "unexpected data payload length"};
         }
         if (packet.tail != 0U && packet.tail != kValidTail) {
             return {false, "invalid packet tail"};

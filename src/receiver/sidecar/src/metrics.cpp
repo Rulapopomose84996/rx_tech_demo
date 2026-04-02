@@ -77,10 +77,6 @@ void MetricsCollector::on_invalid_header(std::uint32_t port_id) {
     ++get_or_create_port_metrics(port_id).invalid_header_count;
 }
 
-void MetricsCollector::on_reassembly_timeout(std::uint32_t port_id) {
-    ++get_or_create_port_metrics(port_id).reassembly_timeout_count;
-}
-
 std::unique_ptr<IMetricsCollector> MetricsCollector::clone_empty() const {
     return std::make_unique<MetricsCollector>();
 }
@@ -115,7 +111,6 @@ bool MetricsCollector::absorb(const IMetricsCollector& other) {
         current.missing_fragments += per_port.missing_fragments;
         current.duplicate_fragments += per_port.duplicate_fragments;
         current.invalid_header_count += per_port.invalid_header_count;
-        current.reassembly_timeout_count += per_port.reassembly_timeout_count;
     }
     return true;
 }
@@ -174,7 +169,6 @@ RunSummary MetricsCollector::finalize(const std::string& backend,
         per_port.missing_fragments = metrics.missing_fragments;
         per_port.duplicate_fragments = metrics.duplicate_fragments;
         per_port.invalid_header_count = metrics.invalid_header_count;
-        per_port.reassembly_timeout_count = metrics.reassembly_timeout_count;
         if (duration_seconds > 0U) {
             per_port.throughput_gbps =
                 (static_cast<double>(metrics.rx_bytes) * 8.0) / static_cast<double>(duration_seconds) / 1'000'000'000.0;

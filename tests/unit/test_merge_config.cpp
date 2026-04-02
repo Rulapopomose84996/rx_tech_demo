@@ -15,6 +15,8 @@ int main() {
     overrides.xdp_fill_ring_size = 2048U;
     overrides.xdp_frame_count = 8192U;
     overrides.xdp_poll_timeout_ms = 3U;
+    overrides.allowed_source_ipv4 = "172.20.11.222";
+    overrides.allowed_dest_port = 9999U;
 
     rxtech::merge_config(base, overrides);
     assert(base.output_dir == "results/merged");
@@ -27,5 +29,7 @@ int main() {
     assert(base.xdp_fill_ring_size == 2048U);
     assert(base.xdp_frame_count == 8192U);
     assert(base.xdp_poll_timeout_ms == 3U);
+    assert(base.allowed_source_ipv4 == "172.20.11.222");
+    assert(base.allowed_dest_port == 9999U);
     return 0;
 }

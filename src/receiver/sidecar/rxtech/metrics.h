@@ -16,8 +16,24 @@ struct PerPortSummary {
     std::uint64_t missing_fragments = 0;
     std::uint64_t duplicate_fragments = 0;
     std::uint64_t invalid_header_count = 0;
-    std::uint64_t reassembly_timeout_count = 0;
     double throughput_gbps = 0.0;
+};
+
+struct ProtocolChannelSummary {
+    std::uint16_t channel = 0;
+    std::string channel_name;
+    std::uint64_t data_packets = 0;
+    std::uint64_t iq_count = 0;
+    std::uint64_t data_bytes = 0;
+    std::uint64_t zero_padding_bytes = 0;
+};
+
+struct ProtocolCpiSummary {
+    std::uint64_t cpi = 0;
+    std::uint64_t control_table_packets = 0;
+    std::uint64_t data_packets = 0;
+    std::uint64_t prt_count = 0;
+    std::uint64_t channel_count = 0;
 };
 
 struct StepSummary {
@@ -69,14 +85,24 @@ struct RunSummary {
     std::string error_message;
     std::string backend_status = "available";
     std::string backend_reason;
+    std::string human_summary;
     std::string capture_packets_path;
     std::string capture_index_path;
     std::uint64_t rx_packets = 0;
     std::uint64_t rx_bytes = 0;
+    std::uint64_t raw_rx_packets = 0;
+    std::uint64_t raw_rx_bytes = 0;
+    std::uint64_t filtered_packets = 0;
     std::uint64_t captured_packets = 0;
     std::uint64_t captured_bytes = 0;
     std::uint64_t recorded_packets = 0;
     std::uint64_t recorded_bytes = 0;
+    std::uint64_t packet_count = 0;
+    std::uint64_t cpi_count = 0;
+    std::uint64_t prt_count = 0;
+    std::uint64_t channel_count = 0;
+    std::uint64_t complete_prt_count = 0;
+    std::uint64_t final_tail_packets = 0;
     std::uint64_t control_table_packets = 0;
     std::uint64_t data_packets = 0;
     std::uint64_t parsed_packets = 0;
@@ -116,6 +142,8 @@ struct RunSummary {
     bool cpu_metrics_available = false;
     std::string cpu_metrics_status = "unavailable";
     std::vector<PerPortSummary> per_port;
+    std::vector<ProtocolChannelSummary> protocol_channels;
+    std::vector<ProtocolCpiSummary> protocol_cpis;
     std::vector<StepSummary> steps;
 };
 
@@ -135,7 +163,6 @@ public:
     virtual void on_missing_fragments(std::uint32_t port_id, std::uint64_t count) = 0;
     virtual void on_duplicate_fragment(std::uint32_t port_id) = 0;
     virtual void on_invalid_header(std::uint32_t port_id) = 0;
-    virtual void on_reassembly_timeout(std::uint32_t port_id) = 0;
     virtual void on_control_table_packet() = 0;
     virtual void on_data_packet() = 0;
     virtual std::unique_ptr<IMetricsCollector> clone_empty() const = 0;
@@ -160,7 +187,6 @@ public:
     void on_missing_fragments(std::uint32_t port_id, std::uint64_t count) override;
     void on_duplicate_fragment(std::uint32_t port_id) override;
     void on_invalid_header(std::uint32_t port_id) override;
-    void on_reassembly_timeout(std::uint32_t port_id) override;
     void on_control_table_packet() override;
     void on_data_packet() override;
     std::unique_ptr<IMetricsCollector> clone_empty() const override;
@@ -178,7 +204,6 @@ private:
         std::uint64_t missing_fragments = 0;
         std::uint64_t duplicate_fragments = 0;
         std::uint64_t invalid_header_count = 0;
-        std::uint64_t reassembly_timeout_count = 0;
     };
 
     PerPortMetrics& get_or_create_port_metrics(std::uint32_t port_id);

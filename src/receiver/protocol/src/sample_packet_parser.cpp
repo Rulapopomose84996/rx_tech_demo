@@ -26,6 +26,13 @@ std::uint16_t read_u16_be(const std::uint8_t* data) {
                                       static_cast<std::uint16_t>(data[1]));
 }
 
+std::uint32_t read_u32_be(const std::uint8_t* data) {
+    return (static_cast<std::uint32_t>(data[0]) << 24U) |
+           (static_cast<std::uint32_t>(data[1]) << 16U) |
+           (static_cast<std::uint32_t>(data[2]) << 8U) |
+           static_cast<std::uint32_t>(data[3]);
+}
+
 std::uint32_t resolve_payload_offset(const PacketDesc& packet) {
     if (packet.len >= 14U) {
         const std::uint16_t ether_type = read_u16_be(packet.data + 12U);
@@ -76,6 +83,13 @@ SamplePacketView SamplePacketParser::parse(const PacketDesc& packet) const noexc
     const std::uint16_t fragment_field = ipv4_fragment_field(packet);
     parsed.ip_fragment_offset = static_cast<std::uint16_t>((fragment_field & 0x1FFFU) * 8U);
     parsed.more_ip_fragments = (fragment_field & 0x2000U) != 0U;
+    if (payload_offset != 0U && packet.len >= payload_offset) {
+        parsed.is_ipv4_udp = true;
+        parsed.source_ipv4_be = read_u32_be(packet.data + 26U);
+        parsed.dest_ipv4_be = read_u32_be(packet.data + 30U);
+        parsed.source_port = read_u16_be(packet.data + payload_offset - 8U);
+        parsed.dest_port = read_u16_be(packet.data + payload_offset - 6U);
+    }
     if (packet.len < payload_offset + 16U) {
         parsed.error_reason = "packet too short";
         return parsed;
@@ -101,6 +115,51 @@ SamplePacketView SamplePacketParser::parse(const PacketDesc& packet) const noexc
         parsed.tail = read_u32_le(payload + 12U);
         parsed.payload_ptr = payload + 16U;
         parsed.payload_len = packet.len - payload_offset - 16U;
+        parsed.valid = true;
+        return parsed;
+    }
+
+    parsed.error_reason = "unknown packet magic";
+    return parsed;
+}
+
+SamplePacketView SamplePacketParser::parse(const UdpPayloadFrame& frame) const noexcept {
+    SamplePacketView parsed;
+    if (frame.udp_payload.size() < 16U) {
+        parsed.error_reason = "packet too short";
+        return parsed;
+    }
+
+    parsed.header_offset = 0U;
+    parsed.frame_length = static_cast<std::uint32_t>(frame.udp_payload.size());
+    parsed.is_ipv4_udp = true;
+    parsed.source_ipv4_be = frame.source_ipv4_be;
+    parsed.dest_ipv4_be = frame.dest_ipv4_be;
+    parsed.source_port = frame.source_port;
+    parsed.dest_port = frame.dest_port;
+    parsed.ip_fragment_offset = 0U;
+    parsed.more_ip_fragments = false;
+
+    const std::uint8_t* payload = frame.udp_payload.data();
+    parsed.magic = read_u32_le(payload + 0U);
+    parsed.cpi = read_u16_le(payload + 4U);
+
+    if (parsed.magic == kControlTableMagic) {
+        parsed.kind = SamplePacketKind::control_table;
+        parsed.payload_ptr = payload + 16U;
+        parsed.payload_len = static_cast<std::uint32_t>(frame.udp_payload.size() - 16U);
+        parsed.valid = true;
+        return parsed;
+    }
+
+    if (parsed.magic == kDataPacketMagic) {
+        parsed.kind = SamplePacketKind::data_packet;
+        parsed.channel = read_u16_le(payload + 6U);
+        parsed.prt = read_u16_le(payload + 8U);
+        parsed.packet_index = read_u16_le(payload + 10U);
+        parsed.tail = read_u32_le(payload + 12U);
+        parsed.payload_ptr = payload + 16U;
+        parsed.payload_len = static_cast<std::uint32_t>(frame.udp_payload.size() - 16U);
         parsed.valid = true;
         return parsed;
     }
