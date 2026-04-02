@@ -9,6 +9,7 @@ echo "Using shared third-party cache: ${THIRD_PARTY_CACHE}"
 
 cmake -S "${ROOT_DIR}" \
       -B "${BUILD_DIR}" \
+      -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
       -DRXTECH_THIRD_PARTY_CACHE="${THIRD_PARTY_CACHE}"
 

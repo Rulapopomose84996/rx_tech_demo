@@ -146,6 +146,70 @@ namespace rxtech
                 }
                 config.capture_data_filename = normalized_value;
             }
+            else if (normalized_key == "raw_record.enabled" || normalized_key == "raw_record_enabled")
+            {
+                if (should_skip_assignment("raw_record_enabled", section_key, section_assigned_keys))
+                {
+                    return;
+                }
+                config.raw_record_enabled = parse_bool(normalized_value);
+            }
+            else if (normalized_key == "raw_record.output_dir" || normalized_key == "raw_record_output_dir")
+            {
+                if (should_skip_assignment("raw_record_output_dir", section_key, section_assigned_keys))
+                {
+                    return;
+                }
+                config.raw_record_output_dir = normalized_value;
+            }
+            else if (normalized_key == "raw_record.file_prefix" || normalized_key == "raw_record_file_prefix")
+            {
+                if (should_skip_assignment("raw_record_file_prefix", section_key, section_assigned_keys))
+                {
+                    return;
+                }
+                config.raw_record_file_prefix = normalized_value;
+            }
+            else if (normalized_key == "raw_record.ring_slots" || normalized_key == "raw_record_ring_slots")
+            {
+                if (should_skip_assignment("raw_record_ring_slots", section_key, section_assigned_keys))
+                {
+                    return;
+                }
+                config.raw_record_ring_slots = static_cast<std::uint32_t>(std::stoul(normalized_value));
+            }
+            else if (normalized_key == "raw_record.writer_batch_size" || normalized_key == "raw_record_writer_batch_size")
+            {
+                if (should_skip_assignment("raw_record_writer_batch_size", section_key, section_assigned_keys))
+                {
+                    return;
+                }
+                config.raw_record_writer_batch_size = static_cast<std::uint32_t>(std::stoul(normalized_value));
+            }
+            else if (normalized_key == "raw_record.max_frame_bytes" || normalized_key == "raw_record_max_frame_bytes")
+            {
+                if (should_skip_assignment("raw_record_max_frame_bytes", section_key, section_assigned_keys))
+                {
+                    return;
+                }
+                config.raw_record_max_frame_bytes = static_cast<std::uint32_t>(std::stoul(normalized_value));
+            }
+            else if (normalized_key == "raw_record.segment_bytes" || normalized_key == "raw_record_segment_bytes")
+            {
+                if (should_skip_assignment("raw_record_segment_bytes", section_key, section_assigned_keys))
+                {
+                    return;
+                }
+                config.raw_record_segment_bytes = static_cast<std::uint64_t>(std::stoull(normalized_value));
+            }
+            else if (normalized_key == "raw_record.max_total_bytes" || normalized_key == "raw_record_max_total_bytes")
+            {
+                if (should_skip_assignment("raw_record_max_total_bytes", section_key, section_assigned_keys))
+                {
+                    return;
+                }
+                config.raw_record_max_total_bytes = static_cast<std::uint64_t>(std::stoull(normalized_value));
+            }
             else if (normalized_key == "interface" || normalized_key == "interface_name" ||
                      normalized_key == "network.interface_name")
             {
@@ -544,6 +608,10 @@ namespace rxtech
             base.capture_index_filename = overrides.capture_index_filename;
         if (!overrides.capture_data_filename.empty())
             base.capture_data_filename = overrides.capture_data_filename;
+        if (!overrides.raw_record_output_dir.empty())
+            base.raw_record_output_dir = overrides.raw_record_output_dir;
+        if (!overrides.raw_record_file_prefix.empty())
+            base.raw_record_file_prefix = overrides.raw_record_file_prefix;
         if (!overrides.interface_name.empty())
             base.interface_name = overrides.interface_name;
         if (!overrides.receiver_ipv4.empty())
@@ -605,6 +673,8 @@ namespace rxtech
             base.feedback_enabled = overrides.feedback_enabled;
         if (overrides.capture_enabled != defaults.capture_enabled)
             base.capture_enabled = overrides.capture_enabled;
+        if (overrides.raw_record_enabled != defaults.raw_record_enabled)
+            base.raw_record_enabled = overrides.raw_record_enabled;
         if (overrides.dpdk_port_id != defaults.dpdk_port_id)
             base.dpdk_port_id = overrides.dpdk_port_id;
         if (overrides.dpdk_socket_mem_mb != defaults.dpdk_socket_mem_mb)
@@ -629,6 +699,16 @@ namespace rxtech
         {
             base.protocol_packets_per_channel = overrides.protocol_packets_per_channel;
         }
+        if (overrides.raw_record_ring_slots != defaults.raw_record_ring_slots)
+            base.raw_record_ring_slots = overrides.raw_record_ring_slots;
+        if (overrides.raw_record_writer_batch_size != defaults.raw_record_writer_batch_size)
+            base.raw_record_writer_batch_size = overrides.raw_record_writer_batch_size;
+        if (overrides.raw_record_max_frame_bytes != defaults.raw_record_max_frame_bytes)
+            base.raw_record_max_frame_bytes = overrides.raw_record_max_frame_bytes;
+        if (overrides.raw_record_segment_bytes != defaults.raw_record_segment_bytes)
+            base.raw_record_segment_bytes = overrides.raw_record_segment_bytes;
+        if (overrides.raw_record_max_total_bytes != defaults.raw_record_max_total_bytes)
+            base.raw_record_max_total_bytes = overrides.raw_record_max_total_bytes;
         if (overrides.run_until_stopped != defaults.run_until_stopped)
             base.run_until_stopped = overrides.run_until_stopped;
         if (!overrides.cpu_cores.empty())

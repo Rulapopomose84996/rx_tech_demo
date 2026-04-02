@@ -1,6 +1,8 @@
 add_library(rx_receiver_core
     admit/src/cpi_admission.cpp
     core/src/owner_loop.cpp
+    core/src/owner_loop_summary.cpp
+    core/src/status_panel.cpp
     finalize/src/cpi_finalizer.cpp
     protocol/src/protocol_sequence_interpreter.cpp
     protocol/src/sample_packet_parser.cpp
@@ -10,11 +12,14 @@ add_library(rx_receiver_core
     storage/src/progress_tracker.cpp
     storage/src/slot_writer.cpp
     runtime/src/rx_config.cpp
+    runtime/src/raw_frame_recorder.cpp
     runtime/src/receive_runner.cpp
 )
 
 target_include_directories(rx_receiver_core
     PUBLIC
+    ${CMAKE_SOURCE_DIR}/include
+    PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/core
     ${CMAKE_CURRENT_SOURCE_DIR}/admit
     ${CMAKE_CURRENT_SOURCE_DIR}/finalize
@@ -23,9 +28,15 @@ target_include_directories(rx_receiver_core
     ${CMAKE_CURRENT_SOURCE_DIR}/sidecar
     ${CMAKE_CURRENT_SOURCE_DIR}/storage
     ${CMAKE_CURRENT_SOURCE_DIR}/runtime
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/internal
 )
 
 target_compile_features(rx_receiver_core PUBLIC cxx_std_17)
+
+if(UNIX AND NOT APPLE)
+    target_link_libraries(rx_receiver_core PUBLIC pthread)
+endif()
+
 rxtech_apply_warnings(rx_receiver_core)
 
 add_library(rx_receiver_dpdk_ingress
@@ -34,8 +45,8 @@ add_library(rx_receiver_dpdk_ingress
 )
 
 target_include_directories(rx_receiver_dpdk_ingress
-    PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/ingress/dpdk
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/ingress/dpdk/internal
 )
 
 target_link_libraries(rx_receiver_dpdk_ingress
@@ -70,6 +81,8 @@ target_include_directories(rx_receiver_app_common
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/app/cli
     ${CMAKE_CURRENT_SOURCE_DIR}/app/common
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/ingress/dpdk/internal
 )
 
 target_link_libraries(rx_receiver_app_common

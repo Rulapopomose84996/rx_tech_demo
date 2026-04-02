@@ -13,6 +13,7 @@
 #include <sys/types.h>
 
 #include "rxtech/owner_loop.h"
+#include "rxtech/raw_frame_recorder.h"
 
 namespace rxtech
 {
@@ -172,63 +173,95 @@ namespace rxtech
             return summary;
         }
 
-        const std::string output_dir =
-            context.config.capture_output_dir.empty() ? context.config.output_dir : context.config.capture_output_dir;
-        const bool capture_enabled = context.config.capture_enabled;
-        const std::string capture_packets_path =
-            capture_enabled ? (output_dir + "/" + context.config.capture_data_filename) : std::string{};
-        const std::string capture_index_path =
-            capture_enabled ? (output_dir + "/" + context.config.capture_index_filename) : std::string{};
-        std::ofstream capture_packets_stream;
-        std::ofstream capture_index_stream;
-        std::ostringstream capture_packets_sink;
-        std::ostringstream capture_index_sink;
-        if (capture_enabled)
+        try
         {
-            ensure_parent_directory(capture_packets_path);
-            ensure_parent_directory(capture_index_path);
+            const std::string output_dir =
+                context.config.capture_output_dir.empty() ? context.config.output_dir : context.config.capture_output_dir;
+            const bool capture_enabled = context.config.capture_enabled;
+            const std::string capture_packets_path =
+                capture_enabled ? (output_dir + "/" + context.config.capture_data_filename) : std::string{};
+            const std::string capture_index_path =
+                capture_enabled ? (output_dir + "/" + context.config.capture_index_filename) : std::string{};
+            std::ofstream capture_packets_stream;
+            std::ofstream capture_index_stream;
+            std::ostringstream capture_packets_sink;
+            std::ostringstream capture_index_sink;
+            if (capture_enabled)
+            {
+                ensure_parent_directory(capture_packets_path);
+                ensure_parent_directory(capture_index_path);
 
-            capture_packets_stream.open(capture_packets_path, std::ios::binary | std::ios::trunc);
-            capture_index_stream.open(capture_index_path, std::ios::trunc);
-            if (!capture_packets_stream.is_open())
-            {
-                throw std::runtime_error("failed to open capture file: " + capture_packets_path);
+                capture_packets_stream.open(capture_packets_path, std::ios::binary | std::ios::trunc);
+                capture_index_stream.open(capture_index_path, std::ios::trunc);
+                if (!capture_packets_stream.is_open())
+                {
+                    throw std::runtime_error("failed to open capture file: " + capture_packets_path);
+                }
+                if (!capture_index_stream.is_open())
+                {
+                    throw std::runtime_error("failed to open capture index file: " + capture_index_path);
+                }
             }
-            if (!capture_index_stream.is_open())
+
+            RawFrameRecorder raw_frame_recorder(context.config);
+            if (raw_frame_recorder.enabled())
             {
-                throw std::runtime_error("failed to open capture index file: " + capture_index_path);
+                raw_frame_recorder.start();
             }
+
+            OwnerLoop owner_loop;
+            owner_loop.set_status_output(status_output_);
+            CaptureArtifacts artifacts;
+            artifacts.packet_stream = capture_enabled ? static_cast<std::ostream *>(&capture_packets_stream)
+                                                      : static_cast<std::ostream *>(&capture_packets_sink);
+            artifacts.index_stream = capture_enabled ? static_cast<std::ostream *>(&capture_index_stream)
+                                                     : static_cast<std::ostream *>(&capture_index_sink);
+            artifacts.raw_frame_recorder = raw_frame_recorder.enabled() ? &raw_frame_recorder : nullptr;
+
+            const auto start_time = std::chrono::steady_clock::now();
+            const auto deadline = start_time + std::chrono::seconds(std::max<std::uint32_t>(1U, context.config.duration_seconds));
+            RunSummary summary = owner_loop.run(
+                context,
+                artifacts,
+                [&]()
+                {
+                    return context.config.run_until_stopped ? g_stop_requested.load() : (std::chrono::steady_clock::now() >= deadline);
+                });
+
+            raw_frame_recorder.stop();
+            const std::string raw_record_error = raw_frame_recorder.error_message();
+            if (!raw_record_error.empty())
+            {
+                throw std::runtime_error("raw frame recorder failed: " + raw_record_error);
+            }
+
+            const RawFrameRecorderStats raw_record_stats = raw_frame_recorder.snapshot();
+            summary.backend_available = true;
+            summary.backend_status = "available";
+            summary.capture_packets_path = capture_packets_path;
+            summary.capture_index_path = capture_index_path;
+            summary.captured_packets = artifacts.captured_packets;
+            summary.captured_bytes = artifacts.captured_bytes;
+            summary.recorded_packets = artifacts.recorded_packets;
+            summary.recorded_bytes = artifacts.recorded_bytes;
+            summary.raw_record_output_dir = raw_frame_recorder.enabled() ? raw_frame_recorder.output_dir() : std::string{};
+            summary.raw_record_latest_file_path = raw_record_stats.latest_file_path;
+            summary.raw_record_written_frames = raw_record_stats.written_frames;
+            summary.raw_record_written_bytes = raw_record_stats.written_bytes;
+            summary.raw_record_dropped_frames = raw_record_stats.dropped_frames;
+            summary.raw_record_dropped_bytes = raw_record_stats.dropped_bytes;
+            summary.raw_record_retained_bytes = raw_record_stats.retained_bytes;
+            summary.raw_record_queue_high_watermark = raw_record_stats.queue_high_watermark;
+            summary.human_summary = build_run_human_summary(summary);
+
+            context.backend->shutdown();
+            return summary;
         }
-
-        OwnerLoop owner_loop;
-        owner_loop.set_status_output(status_output_);
-        CaptureArtifacts artifacts;
-        artifacts.packet_stream = capture_enabled ? static_cast<std::ostream *>(&capture_packets_stream)
-                                                  : static_cast<std::ostream *>(&capture_packets_sink);
-        artifacts.index_stream = capture_enabled ? static_cast<std::ostream *>(&capture_index_stream)
-                                                 : static_cast<std::ostream *>(&capture_index_sink);
-
-        const auto start_time = std::chrono::steady_clock::now();
-        const auto deadline = start_time + std::chrono::seconds(std::max<std::uint32_t>(1U, context.config.duration_seconds));
-        RunSummary summary = owner_loop.run(
-            context,
-            artifacts,
-            [&]()
-            {
-                return context.config.run_until_stopped ? g_stop_requested.load() : (std::chrono::steady_clock::now() >= deadline);
-            });
-
-        summary.backend_available = true;
-        summary.backend_status = "available";
-        summary.capture_packets_path = capture_packets_path;
-        summary.capture_index_path = capture_index_path;
-        summary.captured_packets = artifacts.captured_packets;
-        summary.captured_bytes = artifacts.captured_bytes;
-        summary.recorded_packets = artifacts.recorded_packets;
-        summary.recorded_bytes = artifacts.recorded_bytes;
-
-        context.backend->shutdown();
-        return summary;
+        catch (...)
+        {
+            context.backend->shutdown();
+            throw;
+        }
     }
 
 } // namespace rxtech

@@ -9,12 +9,14 @@ namespace rxtech
 
     struct RxConfig
     {
-        std::string backend_name = "af_xdp";
+        std::string backend_name = "dpdk";
         std::string config_path;
         std::string output_dir = "results";
         std::string capture_output_dir = "results";
         std::string capture_index_filename = "capture_index.csv";
         std::string capture_data_filename = "capture_packets.bin";
+        std::string raw_record_output_dir = "/data/rx_tech_demo/raw_frames";
+        std::string raw_record_file_prefix = "radar_raw";
         std::string interface_name = "receiver0";
         std::string receiver_ipv4;
         std::string allowed_source_ipv4;
@@ -49,8 +51,14 @@ namespace rxtech
         std::uint32_t protocol_udp_packet_size = 2048;
         std::uint32_t protocol_channels_per_prt = 3;
         std::uint32_t protocol_packets_per_channel = 9;
+        std::uint32_t raw_record_ring_slots = 4096;
+        std::uint32_t raw_record_writer_batch_size = 64;
+        std::uint32_t raw_record_max_frame_bytes = 16384;
+        std::uint64_t raw_record_segment_bytes = 5368709120ULL / 10ULL;
+        std::uint64_t raw_record_max_total_bytes = 5368709120ULL;
         bool run_until_stopped = false;
         bool capture_enabled = true;
+        bool raw_record_enabled = false;
         bool feedback_enabled = false;
         std::vector<int> cpu_cores;
     };

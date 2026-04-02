@@ -13,7 +13,6 @@ include(cmake/warnings.cmake)
 include(cmake/dependencies.cmake)
 
 add_subdirectory(src/receiver)
-add_subdirectory(src/legacy)
 
 if(BUILD_TESTS)
     enable_testing()

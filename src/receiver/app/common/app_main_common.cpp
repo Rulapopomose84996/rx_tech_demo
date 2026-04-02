@@ -10,12 +10,8 @@
 #include "rxtech/receive_runner.h"
 #include "rxtech/rx_config.h"
 
-#if defined(RXTECH_HAS_AF_XDP_BACKEND)
-#include "rxtech/xdp_backend.h"
-#endif
-
 #if defined(RXTECH_HAS_DPDK_BACKEND)
-#include "rxtech/dpdk_backend.h"
+#include "dpdk_backend.h"
 #endif
 
 namespace rxtech
@@ -71,15 +67,6 @@ namespace rxtech
 
         BackendPtr make_backend(const std::string &backend_name)
         {
-            if (backend_name == "af_xdp")
-            {
-#if defined(RXTECH_HAS_AF_XDP_BACKEND)
-                return std::make_unique<XdpBackend>();
-#else
-                return std::make_unique<UnavailableBackend>("af_xdp", "AF_XDP backend is disabled at build time");
-#endif
-            }
-
             if (backend_name == "dpdk")
             {
 #if defined(RXTECH_HAS_DPDK_BACKEND)
@@ -89,7 +76,7 @@ namespace rxtech
 #endif
             }
 
-            throw std::runtime_error("unknown backend: " + backend_name);
+            throw std::runtime_error("unknown backend: " + backend_name + " (only dpdk is supported)");
         }
 
         void print_usage(std::ostream &out, const char *program_name)
@@ -148,6 +135,41 @@ namespace rxtech
                     return "capture_data_filename must not be empty when capture is enabled";
                 }
             }
+            if (config.raw_record_enabled)
+            {
+                if (config.raw_record_output_dir.empty())
+                {
+                    return "raw_record_output_dir must not be empty when raw recording is enabled";
+                }
+                if (config.raw_record_file_prefix.empty())
+                {
+                    return "raw_record_file_prefix must not be empty when raw recording is enabled";
+                }
+                if (config.raw_record_ring_slots == 0U)
+                {
+                    return "raw_record_ring_slots must be greater than 0";
+                }
+                if (config.raw_record_writer_batch_size == 0U)
+                {
+                    return "raw_record_writer_batch_size must be greater than 0";
+                }
+                if (config.raw_record_max_frame_bytes == 0U)
+                {
+                    return "raw_record_max_frame_bytes must be greater than 0";
+                }
+                if (config.raw_record_segment_bytes == 0U)
+                {
+                    return "raw_record_segment_bytes must be greater than 0";
+                }
+                if (config.raw_record_max_total_bytes == 0U)
+                {
+                    return "raw_record_max_total_bytes must be greater than 0";
+                }
+                if (config.raw_record_segment_bytes > config.raw_record_max_total_bytes)
+                {
+                    return "raw_record_segment_bytes must be less than or equal to raw_record_max_total_bytes";
+                }
+            }
             if (config.log_output == "file" && config.log_file_path.empty())
             {
                 return "log_file_path must not be empty when log_output=file";
@@ -176,6 +198,14 @@ namespace rxtech
             std::cout << "capture_output_dir=" << effective_capture_output_dir(config) << std::endl;
             std::cout << "capture_index_filename=" << config.capture_index_filename << std::endl;
             std::cout << "capture_data_filename=" << config.capture_data_filename << std::endl;
+            std::cout << "raw_record_enabled=" << (config.raw_record_enabled ? "true" : "false") << std::endl;
+            std::cout << "raw_record_output_dir=" << config.raw_record_output_dir << std::endl;
+            std::cout << "raw_record_file_prefix=" << config.raw_record_file_prefix << std::endl;
+            std::cout << "raw_record_ring_slots=" << config.raw_record_ring_slots << std::endl;
+            std::cout << "raw_record_writer_batch_size=" << config.raw_record_writer_batch_size << std::endl;
+            std::cout << "raw_record_max_frame_bytes=" << config.raw_record_max_frame_bytes << std::endl;
+            std::cout << "raw_record_segment_bytes=" << config.raw_record_segment_bytes << std::endl;
+            std::cout << "raw_record_max_total_bytes=" << config.raw_record_max_total_bytes << std::endl;
             std::cout << "interface=" << config.interface_name << std::endl;
             std::cout << "receiver_ipv4=" << config.receiver_ipv4 << std::endl;
             std::cout << "allowed_source_ipv4=" << config.allowed_source_ipv4 << std::endl;

@@ -1,6 +1,6 @@
 # rx_tech_demo
 
-`rx_tech_demo` 是一个 Linux-only 的雷达接收端演示工程。当前主线位于 `src/receiver`，默认叙述和权威验证都以 DPDK 接收路径为准；`src/legacy/af_xdp` 仅保留为兼容/历史参考。
+`rx_tech_demo` 是一个 Linux-only 的雷达接收端演示工程。当前主线位于 `src/receiver`，默认叙述和权威验证都以 DPDK 接收路径为准。
 
 ## 当前定位
 
@@ -27,7 +27,6 @@ src/
     admit/
     output/
     finalize/
-  legacy/
 tests/
 tools/
 configs/
@@ -74,6 +73,7 @@ docs/
 当前示例配置已经按 section 组织，常用 section 包括：
 
 - `[capture]`
+- `[raw_record]`
 - `[network]`
 - `[dpdk]`
 - `[runtime]`
@@ -88,6 +88,17 @@ docs/
 - `cpu_cores`
 - `run_until_stopped`
 - `status_interval_seconds`
+
+`[raw_record]` 常用键包括：
+
+- `enabled`
+- `output_dir`
+- `file_prefix`
+- `ring_slots`
+- `writer_batch_size`
+- `max_frame_bytes`
+- `segment_bytes`
+- `max_total_bytes`
 
 协议默认值：
 
@@ -158,6 +169,16 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 - `capture_packets.bin`
 - `capture_index.csv`
 
+启用 `raw_record` 时，接收端还会在判决、过滤和协议解析之前，把原始接收帧异步写入：
+
+- `/data/rx_tech_demo/raw_frames/*.rawbin`
+
+默认策略：
+
+- 落盘目录位于机械硬盘 RAID10 数据盘 `/data`
+- 目录总保留量上限为 `5GB`
+- writer 线程通过有界 ring 从热路径异步取数，不在判决路径上直接写机械盘
+
 当前 capture index 列为：
 
 ```text
@@ -187,6 +208,11 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 如果你要手工联调，建议先把配置里的 `[runtime]` 改成更适合观察的值，例如：
 
 ```ini
+[raw_record]
+enabled = true
+output_dir = /data/rx_tech_demo/raw_frames
+max_total_bytes = 5368709120
+
 [runtime]
 duration_seconds = 30
 max_burst = 64
@@ -216,7 +242,7 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 - 持续接收模式下，使用 `Ctrl+C` 停止。
 - 状态面板会按 `status_interval_seconds` 或 `--status-interval` 指定的周期重绘。
 - 无业务流量时，状态面板会显示“当前未检测到链路流量”或“当前仅检测到 ARP 探测”。
-- 外部 sender 由独立 Linux 软件负责模拟规定好的雷达时序；主线联调不要求在仓库内自建 sender 脚本。
+- 外部 sender 由独立软件负责模拟规定好的雷达时序；主线联调不要求在仓库内自建 sender 脚本。
 - 仓库中的 `tools/raw_eth_sender.py` 和 `tools/rxtech_protocol_sender.py` 仍保留为辅助工具，但不是当前 README 的主线操作步骤。
 
 ### 4. 查看接收结果
@@ -231,8 +257,10 @@ head -n 5 results/dpdk_single_face/capture_index.csv
 
 如果链路正常，状态面板和最终中文汇总里的 `解析有效包`、`数据包`、`已落盘` 应该增长，并且 `capture_index.csv` 会出现对应的 `cpi/channel/prt/packet_index` 记录。
 
+如果启用了 `raw_record`，还应检查 `/data/rx_tech_demo/raw_frames` 下是否生成 `.rawbin` segment 文件，并确认目录总占用不会超过 `5GB`。
+
 ## 验证边界
 
 - 不要把 Windows 构建、IDE 静态分析或 dry-run 当成权威验证。
-- 不要把 legacy AF_XDP 结果当成当前主线完成度证明。
+- 不要把历史 AF_XDP 结果当成当前主线完成度证明。
 - 只有在 Linux 服务器上完成构建、测试和真实链路联调，才能宣称该层级已验证。

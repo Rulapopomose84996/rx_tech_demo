@@ -24,7 +24,7 @@ int main()
     const char *path = "test_rx_config_generated.conf";
     {
         std::ofstream out(path, std::ios::trunc);
-        out << "backend: af_xdp\n";
+        out << "backend: dpdk\n";
         out << "output_dir: results/legacy_should_not_win\n";
         out << "xdp_bind_mode: copy\n";
         out << "xdp_rx_ring_size: 512\n";
@@ -40,6 +40,15 @@ int main()
         out << "enabled = true\n";
         out << "index_filename = parsed.csv\n";
         out << "data_filename = parsed.bin\n";
+        out << "[raw_record]\n";
+        out << "enabled = true\n";
+        out << "output_dir = /data/rx_tech_demo/test_raw_frames\n";
+        out << "file_prefix = phase3_raw\n";
+        out << "ring_slots = 2048\n";
+        out << "writer_batch_size = 32\n";
+        out << "max_frame_bytes = 12288\n";
+        out << "segment_bytes = 268435456\n";
+        out << "max_total_bytes = 5368709120\n";
         out << "[network]\n";
         out << "interface_name = receiver1\n";
         out << "queue_id = 22\n";
@@ -69,10 +78,16 @@ int main()
     }
 
     const rxtech::RxConfig config = rxtech::load_config_file(path);
-    if (config.backend_name != "af_xdp" || config.capture_output_dir != "results/config_case" ||
+    if (config.backend_name != "dpdk" || config.capture_output_dir != "results/config_case" ||
         config.output_dir != "results/config_case" ||
         !config.capture_enabled || config.capture_index_filename != "parsed.csv" ||
         config.capture_data_filename != "parsed.bin" ||
+        !config.raw_record_enabled || config.raw_record_output_dir != "/data/rx_tech_demo/test_raw_frames" ||
+        config.raw_record_file_prefix != "phase3_raw" ||
+        config.raw_record_ring_slots != 2048U || config.raw_record_writer_batch_size != 32U ||
+        config.raw_record_max_frame_bytes != 12288U ||
+        config.raw_record_segment_bytes != 268435456ULL ||
+        config.raw_record_max_total_bytes != 5368709120ULL ||
         config.interface_name != "receiver1" || config.queue_id != 22U ||
         config.duration_seconds != 12U || config.max_burst != 32U ||
         config.packet_size_bytes != 1024U || config.cpu_cores.size() != 3U ||

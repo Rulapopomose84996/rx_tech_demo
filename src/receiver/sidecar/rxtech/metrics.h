@@ -79,6 +79,8 @@ namespace rxtech
         std::string human_summary;
         std::string capture_packets_path;
         std::string capture_index_path;
+        std::string raw_record_output_dir;
+        std::string raw_record_latest_file_path;
         std::uint64_t rx_packets = 0;
         std::uint64_t rx_bytes = 0;
         std::uint64_t raw_rx_packets = 0;
@@ -90,6 +92,12 @@ namespace rxtech
         std::uint64_t captured_bytes = 0;
         std::uint64_t recorded_packets = 0;
         std::uint64_t recorded_bytes = 0;
+        std::uint64_t raw_record_written_frames = 0;
+        std::uint64_t raw_record_written_bytes = 0;
+        std::uint64_t raw_record_dropped_frames = 0;
+        std::uint64_t raw_record_dropped_bytes = 0;
+        std::uint64_t raw_record_retained_bytes = 0;
+        std::uint64_t raw_record_queue_high_watermark = 0;
         std::uint64_t packet_count = 0;
         std::uint64_t cpi_count = 0;
         std::uint64_t prt_count = 0;

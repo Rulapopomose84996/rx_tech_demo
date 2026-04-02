@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
 #include <cstdint>
 #include <ctime>
 #include <iomanip>
@@ -22,155 +23,21 @@
 #include "rxtech/cpi_context_pool.h"
 #include "rxtech/cpi_finalizer.h"
 #include "rxtech/progress_tracker.h"
+#include "rxtech/raw_frame_recorder.h"
 #include "rxtech/sample_packet_parser.h"
 #include "rxtech/sample_packet_validator.h"
 #include "rxtech/slot_writer.h"
 #include "rxtech/protocol_sequence_interpreter.h"
 #include "rxtech/udp_payload_assembler.h"
+#include "owner_loop_state.h"
+#include "owner_loop_summary.h"
+#include "status_panel.h"
 
 namespace rxtech
 {
 
     namespace
     {
-
-        struct CapturedPacket
-        {
-            std::vector<std::uint8_t> payload;
-            std::uint16_t cpi = 0;
-            std::uint16_t channel = 0;
-            std::uint16_t prt = 0;
-            std::uint16_t packet_index = 0;
-            std::string packet_kind;
-            bool valid = false;
-        };
-
-        struct ProtocolCpiStats
-        {
-            std::uint64_t data_packets = 0;
-            std::unordered_set<std::uint16_t> prts;
-        };
-
-        struct ProtocolChannelStats
-        {
-            std::uint64_t data_packets = 0;
-            std::uint64_t iq_count = 0;
-        };
-
-        using ProtocolPrtCoverage = std::map<std::uint16_t, std::unordered_set<std::uint16_t>>;
-
-        void merge_backend_stats(RunSummary &summary, const BackendStats &backend_stats)
-        {
-            summary.raw_rx_packets = backend_stats.rx_packets;
-            summary.raw_rx_bytes = backend_stats.rx_bytes;
-            summary.dropped_packets += backend_stats.backend_drops;
-            summary.backend_errors += backend_stats.rx_errors;
-            summary.rx_polls = backend_stats.rx_polls;
-            summary.empty_polls = backend_stats.empty_polls;
-            summary.arp_request_packets = backend_stats.arp_request_packets;
-            summary.arp_reply_packets = backend_stats.arp_reply_packets;
-            summary.queue_id = backend_stats.queue_id;
-            summary.xdp_prog_id = backend_stats.xdp_prog_id;
-            summary.xsk_bind_flags = backend_stats.xsk_bind_flags;
-            summary.umem_size = backend_stats.umem_size;
-            summary.frame_size = backend_stats.frame_size;
-            summary.fill_ring_size = backend_stats.fill_ring_size;
-            summary.completion_ring_size = backend_stats.completion_ring_size;
-            summary.xdp_attach_mode = backend_stats.xdp_attach_mode;
-            summary.xsk_mode = backend_stats.xsk_mode;
-            if (summary.rx_polls > 0U)
-            {
-                summary.empty_poll_ratio = static_cast<double>(summary.empty_polls) / static_cast<double>(summary.rx_polls);
-            }
-        }
-
-        double calculate_drop_rate(const RunSummary &summary)
-        {
-            const double total = static_cast<double>(summary.rx_packets + summary.dropped_packets);
-            if (total <= 0.0)
-            {
-                return 0.0;
-            }
-            return static_cast<double>(summary.dropped_packets) / total;
-        }
-
-        void print_status_snapshot(std::ostream &out,
-                                   const RunSummary &summary,
-                                   const std::chrono::steady_clock::duration &elapsed)
-        {
-            const auto elapsed_seconds = std::max<std::uint64_t>(
-                1ULL,
-                static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(elapsed).count()));
-            const double aggregate_gbps =
-                (static_cast<double>(summary.rx_bytes) * 8.0) / static_cast<double>(elapsed_seconds) / 1'000'000'000.0;
-
-            const auto format_wall_clock_timestamp = []()
-            {
-                const std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-                std::tm local_time{};
-#ifdef _WIN32
-                localtime_s(&local_time, &now);
-#else
-                localtime_r(&now, &local_time);
-#endif
-                char buffer[32] = {};
-                if (std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &local_time) == 0U)
-                {
-                    return std::string{};
-                }
-                return std::string(buffer);
-            };
-
-            const auto describe_link_state = [&summary]()
-            {
-                if (summary.parsed_packets > 0U || summary.control_table_packets > 0U || summary.data_packets > 0U)
-                {
-                    return std::string{"已检测到业务协议流量"};
-                }
-                if (summary.arp_request_packets > 0U && summary.raw_rx_packets == 0U)
-                {
-                    return std::string{"当前仅检测到 ARP 探测，尚未收到业务 UDP 流量"};
-                }
-                if (summary.filtered_packets > 0U || summary.raw_rx_packets > 0U)
-                {
-                    return std::string{"当前检测到非目标流量，已按过滤规则忽略"};
-                }
-                return std::string{"当前未检测到链路流量"};
-            };
-
-            std::ostringstream panel;
-            if (&out == &std::cout || &out == &std::cerr)
-            {
-                panel << "\x1b[2J\x1b[H";
-            }
-            panel << "================ 接收状态面板 ================\n";
-            panel << "时间戳: " << format_wall_clock_timestamp() << '\n';
-            panel << "运行时长: " << elapsed_seconds << " s\n";
-            panel << "当前判断: " << describe_link_state() << "\n\n";
-            panel << "链路层\n";
-            panel << "  原始收包: " << summary.raw_rx_packets << " 包 / " << summary.raw_rx_bytes << " 字节\n";
-            panel << "  ARP 请求: " << summary.arp_request_packets << " 包\n";
-            panel << "  ARP 应答: " << summary.arp_reply_packets << " 包\n";
-            panel << "  过滤流量: " << summary.filtered_packets << " 包\n";
-            panel << "  空轮询比: " << std::fixed << std::setprecision(4) << summary.empty_poll_ratio << "\n\n";
-            panel << "协议层\n";
-            panel << "  候选业务包: " << summary.rx_packets << " 包 / " << summary.rx_bytes << " 字节\n";
-            panel << "  解析有效: " << summary.parsed_packets << " 包\n";
-            panel << "  控制表包: " << summary.control_table_packets << " 包\n";
-            panel << "  数据包: " << summary.data_packets << " 包\n";
-            panel << "  协议丢弃: " << summary.dropped_packets << " 包\n\n";
-            panel << "结果层\n";
-            panel << "  CPI: " << summary.cpi_count << "\n";
-            panel << "  PRT: " << summary.prt_count << "\n";
-            panel << "  通道: " << summary.channel_count << "\n";
-            panel << "  已落盘: " << summary.packet_count << " 包 / " << summary.recorded_bytes << " 字节\n";
-            panel << "  平均吞吐: " << std::fixed << std::setprecision(6) << aggregate_gbps << " Gbps\n";
-            panel << "  丢包率: " << std::fixed << std::setprecision(6) << calculate_drop_rate(summary) << "\n";
-            panel << "=============================================\n";
-
-            out << panel.str();
-            out.flush();
-        }
 
         std::uint32_t parse_ipv4_be(const std::string &ipv4)
         {
@@ -221,71 +88,10 @@ namespace rxtech
             return true;
         }
 
-        const char *protocol_channel_name(std::uint16_t channel)
-        {
-            switch (channel)
-            {
-            case 0:
-                return "和路";
-            case 1:
-                return "俯仰差";
-            case 2:
-                return "方位差";
-            case 3:
-                return "辅助通道";
-            default:
-                return "未知通道";
-            }
-        }
+    } // namespace
 
-        std::string build_human_summary(const RunSummary &summary)
-        {
-            std::ostringstream out;
-            out << "\n========== 接收结束汇总 ==========\n";
-            out << "运行结果： " << (summary.run_status == "success" ? "成功" : "失败") << "\n";
-            out << "后端类型： " << summary.backend << "\n";
-            out << "接收队列： " << summary.queue_id << "\n";
-            out << "原始收包： " << summary.raw_rx_packets << " 包，" << summary.raw_rx_bytes << " 字节\n";
-            out << "ARP 请求： " << summary.arp_request_packets << " 包\n";
-            out << "ARP 应答： " << summary.arp_reply_packets << " 包\n";
-            out << "过滤丢弃： " << summary.filtered_packets << " 包\n";
-            out << "候选业务包： " << summary.rx_packets << " 包，" << summary.rx_bytes << " 字节\n";
-            out << "解析有效包： " << summary.parsed_packets << " 包\n";
-            out << "控制表包： " << summary.control_table_packets << " 包\n";
-            out << "数据包： " << summary.data_packets << " 包\n";
-            out << "协议丢弃： " << summary.dropped_packets << " 包\n";
-            out << "CPI 数： " << summary.cpi_count << "\n";
-            out << "PRT 数： " << summary.prt_count << "\n";
-            out << "完整 PRT 数： " << summary.complete_prt_count << "\n";
-            out << "通道数： " << summary.channel_count << "\n";
-            out << "最终包尾数量： " << summary.final_tail_packets << "\n";
-            out << "已落盘包数： " << summary.packet_count << "\n";
-            out << "抓包索引： " << summary.capture_index_path << "\n";
-            out << "抓包数据： " << summary.capture_packets_path << "\n";
-            if (!summary.protocol_channels.empty())
-            {
-                out << "通道分布：\n";
-                for (const auto &channel : summary.protocol_channels)
-                {
-                    out << "  - 通道 " << channel.channel << "（" << protocol_channel_name(channel.channel) << "）："
-                        << channel.data_packets << " 个数据包，"
-                        << channel.iq_count << " 个 IQ\n";
-                }
-            }
-            if (!summary.protocol_cpis.empty())
-            {
-                out << "CPI 分布：\n";
-                for (const auto &cpi : summary.protocol_cpis)
-                {
-                    out << "  - CPI " << cpi.cpi
-                        << "：数据包 " << cpi.data_packets
-                        << " 包，PRT 数 " << cpi.prt_count << "\n";
-                }
-            }
-            out << "==================================\n";
-            return out.str();
-        }
-
+    namespace
+    {
         void send_feedback_snapshot(const RxConfig &config, const RunSummary &summary, std::ostream *status_output)
         {
 #ifdef __linux__
@@ -449,6 +255,7 @@ namespace rxtech
         const auto feedback_interval = std::chrono::seconds(std::max<std::uint32_t>(1U, context.config.feedback_interval_seconds));
         auto next_status_at = start_time + status_interval;
         auto next_feedback_at = start_time + feedback_interval;
+        StatusPanelWriter status_panel(status_output_);
         std::string run_status = "success";
         std::string run_error;
         std::uint32_t invalid_dumped = 0;
@@ -524,6 +331,11 @@ namespace rxtech
             std::size_t accepted_packets = 0U;
             for (const PacketDesc &packet : burst.packets)
             {
+                if (artifacts.raw_frame_recorder != nullptr)
+                {
+                    artifacts.raw_frame_recorder->submit(packet);
+                }
+
                 const auto udp_frames = payload_assembler.push(packet);
                 for (const auto &udp_frame : udp_frames)
                 {
@@ -546,7 +358,7 @@ namespace rxtech
                             diagnostic_packet.data = const_cast<std::uint8_t *>(udp_frame.udp_payload.data());
                             diagnostic_packet.len = static_cast<std::uint32_t>(udp_frame.udp_payload.size());
                             diagnostic_packet.queue_id = packet.queue_id;
-                            std::ostream &diagnostic_stream = status_output_ != nullptr ? *status_output_ : std::cerr;
+                            std::ostream &diagnostic_stream = *status_panel.diagnostic_output();
                             emit_invalid_packet_diagnostic(diagnostic_stream, diagnostic_packet, parsed, validation.reason);
                             ++invalid_dumped;
                         }
@@ -563,7 +375,7 @@ namespace rxtech
                             diagnostic_packet.data = const_cast<std::uint8_t *>(udp_frame.udp_payload.data());
                             diagnostic_packet.len = static_cast<std::uint32_t>(udp_frame.udp_payload.size());
                             diagnostic_packet.queue_id = packet.queue_id;
-                            std::ostream &diagnostic_stream = status_output_ != nullptr ? *status_output_ : std::cerr;
+                            std::ostream &diagnostic_stream = *status_panel.diagnostic_output();
                             emit_invalid_packet_diagnostic(
                                 diagnostic_stream, diagnostic_packet, parsed, protocol_packet.reject_reason);
                             ++invalid_dumped;
@@ -694,14 +506,15 @@ namespace rxtech
                 status_summary.prt_count = static_cast<std::uint64_t>(unique_prts.size());
                 status_summary.channel_count = static_cast<std::uint64_t>(unique_channels.size());
                 merge_backend_stats(status_summary, context.backend->stats());
+                apply_raw_record_stats(status_summary, artifacts.raw_frame_recorder);
                 if (status_output_ != nullptr && now >= next_status_at)
                 {
-                    print_status_snapshot(*status_output_, status_summary, now - start_time);
+                    status_panel.render(status_summary, now - start_time);
                     next_status_at = now + status_interval;
                 }
                 if (context.config.feedback_enabled && now >= next_feedback_at)
                 {
-                    send_feedback_snapshot(context.config, status_summary, status_output_);
+                    send_feedback_snapshot(context.config, status_summary, status_panel.diagnostic_output());
                     next_feedback_at = now + feedback_interval;
                 }
             }
@@ -776,13 +589,14 @@ namespace rxtech
             summary.protocol_cpis.push_back(cpi_summary);
         }
         merge_backend_stats(summary, context.backend->stats());
-        summary.human_summary = build_human_summary(summary);
+        apply_raw_record_stats(summary, artifacts.raw_frame_recorder);
+        summary.human_summary = build_run_human_summary(summary);
 
         if (context.config.run_until_stopped && status_output_ != nullptr)
         {
-            print_status_snapshot(*status_output_, summary, end_time - start_time);
+            status_panel.render(summary, end_time - start_time);
         }
-        send_feedback_snapshot(context.config, summary, status_output_);
+        send_feedback_snapshot(context.config, summary, status_panel.diagnostic_output());
         release_active_ctx();
 
         return summary;

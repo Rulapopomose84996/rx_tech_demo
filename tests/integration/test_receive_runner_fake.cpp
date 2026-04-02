@@ -107,6 +107,14 @@ namespace
         {
             burst.packets.clear();
             ++calls_;
+            ++stats_.rx_polls;
+            if (served_)
+            {
+                ++stats_.empty_polls;
+                return true;
+            }
+            served_ = true;
+
             packet_storage_.push_back(make_udp_frame(make_control_table_packet(2U), 0xAC140BDEU, 0xAC140B64U, 30001U, 9999U));
             packet_storage_.push_back(make_udp_frame(make_data_packet(2U, 0U, 1U, 1U, false), 0xAC140BDEU, 0xAC140B64U, 30001U, 9999U));
             packet_storage_.push_back(make_udp_frame(make_data_packet(2U, 0U, 1U, 9U, true), 0xAC140BDEU, 0xAC140B64U, 30001U, 9999U));
@@ -126,7 +134,6 @@ namespace
             {
                 stats_.rx_bytes += packet.len;
             }
-            ++stats_.rx_polls;
             return true;
         }
 
@@ -146,6 +153,7 @@ namespace
         }
 
     private:
+        bool served_ = false;
         std::size_t calls_ = 0;
         rxtech::BackendStats stats_{};
         std::vector<std::vector<std::uint8_t>> packet_storage_;
@@ -274,6 +282,14 @@ int main()
         rxtech::ReceiveContext context;
         context.config = rxtech::load_default_config();
         context.config.capture_output_dir = "results/test_receive_runner_fake";
+        context.config.raw_record_enabled = true;
+        context.config.raw_record_output_dir = "results/test_receive_runner_fake_raw";
+        context.config.raw_record_file_prefix = "raw_capture";
+        context.config.raw_record_ring_slots = 8;
+        context.config.raw_record_writer_batch_size = 2;
+        context.config.raw_record_max_frame_bytes = 4096;
+        context.config.raw_record_segment_bytes = 65536;
+        context.config.raw_record_max_total_bytes = 1048576;
         context.config.duration_seconds = 1;
         context.backend = std::make_unique<FakeBackend>();
         context.metrics = std::make_unique<rxtech::MetricsCollector>();
@@ -295,11 +311,18 @@ int main()
         assert(summary.complete_prt_count == 0U);
         assert(summary.final_tail_packets == 1U);
         assert(summary.packet_count == summary.recorded_packets);
+        assert(summary.raw_record_written_frames >= 3U);
+        assert(summary.raw_record_written_bytes > 0U);
+        assert(summary.raw_record_dropped_frames == 0U);
+        assert(!summary.raw_record_output_dir.empty());
+        assert(!summary.raw_record_latest_file_path.empty());
         assert(summary.human_summary.find("接收结束汇总") != std::string::npos);
+        assert(summary.human_summary.find("原始帧目录") != std::string::npos);
         assert(summary.human_summary.find("通道分布") != std::string::npos);
         assert(summary.human_summary.find("和路") != std::string::npos);
         assert(file_exists("results/test_receive_runner_fake/capture_packets.bin"));
         assert(file_exists("results/test_receive_runner_fake/capture_index.csv"));
+        assert(file_exists(summary.raw_record_latest_file_path.c_str()));
 
         std::ifstream capture_file("results/test_receive_runner_fake/capture_packets.bin", std::ios::binary);
         assert(capture_file.is_open());
@@ -349,11 +372,11 @@ int main()
         assert(summary.prt_count == 1U);
         assert(summary.channel_count == 1U);
         assert(summary.packet_count == summary.recorded_packets);
-        assert(status_stream.str().find("接收状态面板") != std::string::npos);
+        assert(status_stream.str().find("实时接收状态") != std::string::npos);
         assert(status_stream.str().find("时间戳") != std::string::npos);
-        assert(status_stream.str().find("当前判断") != std::string::npos);
-        assert(status_stream.str().find("已落盘") != std::string::npos);
-        assert(status_stream.str().find("CPI") != std::string::npos);
+        assert(status_stream.str().find("链路判定") != std::string::npos);
+        assert(status_stream.str().find("落盘记录") != std::string::npos);
+        assert(status_stream.str().find("CPI 数量") != std::string::npos);
     }
 
     {

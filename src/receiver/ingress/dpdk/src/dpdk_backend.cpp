@@ -1,11 +1,11 @@
-#include "rxtech/dpdk_backend.h"
+#include "dpdk_backend.h"
 
 #include <algorithm>
 #include <array>
 #include <cstring>
 #include <vector>
 
-#include "rxtech/arp_responder.h"
+#include "arp_responder.h"
 #include "rxtech/rx_config.h"
 #include "rxtech/time_utils.h"
 

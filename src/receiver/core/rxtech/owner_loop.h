@@ -3,14 +3,20 @@
 #include <cstdint>
 #include <functional>
 #include <iosfwd>
+#include <string>
 
 #include "rxtech/receive_context.h"
 
 namespace rxtech {
 
+class RawFrameRecorder;
+
+std::string build_run_human_summary(const RunSummary &summary);
+
 struct CaptureArtifacts {
     std::ostream* packet_stream = nullptr;
     std::ostream* index_stream = nullptr;
+    RawFrameRecorder* raw_frame_recorder = nullptr;
     std::uint64_t file_offset = 0;
     std::uint64_t recorded_packets = 0;
     std::uint64_t recorded_bytes = 0;

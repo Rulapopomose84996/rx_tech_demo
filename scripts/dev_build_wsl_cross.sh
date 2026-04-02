@@ -6,6 +6,7 @@ BUILD_DIR="${ROOT_DIR}/build_wsl_cross_dev"
 
 cmake -S "${ROOT_DIR}" \
       -B "${BUILD_DIR}" \
+      -G Ninja \
       -DCMAKE_TOOLCHAIN_FILE="${ROOT_DIR}/cmake/toolchains/aarch64-linux-gnu.cmake" \
       -DCMAKE_BUILD_TYPE=Debug
 
