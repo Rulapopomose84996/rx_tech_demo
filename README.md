@@ -126,7 +126,7 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 
 ```bash
 cd /home/devuser/WorkSpace/rx_tech_demo
-bash ./scripts/build/server_shared_cache.sh
+bash ./scripts/compile/server_shared_cache.sh
 ```
 
 单元测试：

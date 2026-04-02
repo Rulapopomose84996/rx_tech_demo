@@ -1,7 +1,7 @@
 build/
 build*/
-!scripts/build/
-!scripts/build/*.sh
+!scripts/compile/
+!scripts/compile/*.sh
 .cache/
 .idea/
 .vscode/
