@@ -1,38 +1,42 @@
-# DPDK Replay Receiver Plan
+# Documentation Sync Plan
 
 ## Goal
 
-在仓库内直接构建一条最短闭环：
+把规划文件和项目文档统一到当前仓库代码事实，避免继续把旧的 AF_XDP benchmark 叙述写成现状。
 
-- 从 `data/cpi_0002_complete/cpi_0002_replay_manifest.json` 读取样本
-- 按 manifest 顺序重放控制表包和数据包
-- 使用 `receiver0` 的 DPDK 接收链路收包
-- 只做轻量协议解析和统计
-- 以“成功识别控制表包和数据包”为当前阶段成功标志
+本次同步范围：
+
+- `task_plan.md`
+- `findings.md`
+- `progress.md`
+- `docs/当前接收端代码实现与执行逻辑详解.md`
+- `README.md`
+- `AGENTS.md`
 
 ## Current Phase
 
-- [in_progress] Phase 1: 把计划切换到 replay sender + DPDK 轻量解析闭环
-- [completed] Phase 2: 为 replay manifest 解析与发送路径补失败测试
-- [in_progress] Phase 3: 实现最小 replay sender
-- [pending] Phase 4: 收缩 receiver 主线到 DPDK ingress + parser + validator + 轻量统计
-- [pending] Phase 5: 本地代码验证并推送远端
-- [pending] Phase 6: 服务器拉取、构建、测试、闭环验证
+- [completed] Phase 1: 读取现有规划文件和目标文档，确认哪些内容已经偏离当前代码
+- [completed] Phase 2: 在独立工作树 `D:\WorkSpace\Company\Tower\rx_tech_demo\.worktrees\codex-docs-current-impl` 上建立文档修改分支
+- [completed] Phase 3: 基于当前 `src/receiver` 实现重新梳理主线接收链路、解析规则、落盘行为和验证边界
+- [completed] Phase 4: 回写规划文件、README、AGENTS 和代码逻辑说明文档
+- [completed] Phase 5: 做一致性检查，确认文档口径与当前代码实现一致
 
 ## Key Decisions
 
-- 当前目标不是完整接收端生命周期管理，而是尽快形成“可发、可收、可解析”的接收代码。
-- sender 直接内置在本仓库，不依赖其他仓库或历史脚本。
-- sender 输入以 `cpi_0002_replay_manifest.json` 为准，不自行推导包序。
-- receiver 成功标志暂不要求完整的 CPI admission/finalize/output。
-- receiver 当前保留 `DPDK ingress + PacketParser + PacketValidator + 轻量统计` 即可。
-- `AF_XDP` 相关主线演进暂时停止，只作为 `legacy` 保留。
-- 项目以 Linux 服务器为唯一正式运行平台；不再新增任何 Windows 平台分支代码。
+- 当前主线以 `src/receiver` 中的 DPDK 接收链路为准。
+- `src/legacy` 下的 AF_XDP 代码与相关脚本、配置只作为兼容/历史参考，不再写成当前主线。
+- 文档重点描述已经落地的事实：
+  - DPDK 收包
+  - IPv4/UDP payload 提取与分片重组
+  - 样本协议解析与校验
+  - 实时落盘到 `capture_packets.bin` / `capture_index.csv`
+  - 终端摘要与统计
+- 本次是文档同步，不额外改代码行为。
+- 本次会明确说明验证边界：Windows 会话中只做代码阅读和文档更新，不把本地结果写成权威验证。
 
 ## Errors Encountered
 
 | Error | Attempt | Resolution |
 |-------|---------|------------|
-| 任务目标多次从 AF_XDP/完整接收端切换到 DPDK replay 闭环 | 1 | 重新写计划文件，明确当前唯一目标是 replay sender + DPDK 轻量解析 |
-| 多次出现 `.git/index.lock` 阻塞提交 | 1 | 每次 Git 操作前先检查并清理残留锁文件 |
-| 服务器 `ctest` 经常在构建完成前抢跑 | 1 | 改为顺序执行：先构建，确认完成后单独再跑 `ctest` |
+| 主工作区存在未提交改动，不适合直接改文档 | 1 | 新建独立工作树和分支 `codex/docs-current-impl` 进行修改 |
+| 现有文档仍以 AF_XDP benchmark 框架为主叙述 | 1 | 直接按当前代码重写关键章节，不在旧叙述上零碎修补 |

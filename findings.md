@@ -1,50 +1,60 @@
 # Findings
 
-## Replay Sender Direction
+## Current Receiver Mainline
 
-- `data/cpi_0002_complete/cpi_0002_replay_manifest.json` 已包含顺序化重放信息。
-- manifest 中每个条目至少有：
-  - `sequence`
-  - `kind`
-  - `file`
-  - `offset_bytes`
-  - `length_bytes`
-  - 对数据包还带 `cpi / prt / channel / channel_name / packet_index`
-- 当前样本目录中真正参与重放的文件是：
-  - `cpi_0002_control_table.bin`
-  - `cpi_0002_data_payloads.bin`
-- manifest 是现成的重放事实源，因此 sender 不需要猜测协议切片规则。
-- sender 当前已经具备两层可复用能力：
-  - `load_replay_manifest(path)`
-  - `build_replay_plan(unit_dir, manifest)`
-- 下一步只需要补 Linux UDP 发送薄壳，即可形成最小 `replay_sender` 可执行。
-- 样本协议与当前仓库旧 parser 使用的 `TPDX` 头并不一致：
-  - 控制表包头前 4 字节为 `00 ff aa 55`，即小端 `0x55AAFF00`
-  - 数据包头前 4 字节为 `03 ff aa 55`，即小端 `0x55AAFF03`
-  - 数据包采用 16 字节信息头：`magic/cpi/channel/prt/packet_index/tail`
-- 这意味着当前闭环要优先支持的是“样本协议轻量解析”，而不是继续沿用历史 `TPDX` 风格字段模型。
+- 当前主线在 `src/receiver`，构建产物是：
+  - `rx_receiver_dpdk`
+  - `rxbench_dpdk`
+- `src/receiver/CMakeLists.txt` 当前只把 DPDK ingress 链接进主应用公共层。
+- `src/legacy` 仍保留旧 AF_XDP 代码和相关目标，但不应继续写成当前主线。
 
-## Receiver Baseline
+## Runtime Flow
 
-- 当前 `src/receiver` 已有：
-  - `ingress/dpdk`
-  - `protocol/parser`
-  - `protocol/packet_validator`
-  - `core/owner_loop`
-  - 一些更重的 CPI 生命周期雏形
-- 用户最新目标明确要求：
-  - receiver 只保留 `DPDK ingress + PacketParser + PacketValidator + 轻量统计`
-  - 当前不以完整 CPI 生命周期闭环为成功标准
+- `app/main_dpdk.cpp` 通过 `run_app("dpdk", argc, argv)` 进入统一启动流程。
+- `app/common/app_main_common.cpp` 负责：
+  - 解析 CLI
+  - 加载并合并配置
+  - 创建 DPDK backend
+  - 创建 `MetricsCollector`
+  - 调用 `ReceiveRunner`
+- `ReceiveRunner` 在启动时直接打开落盘文件：
+  - `capture_packets.bin`
+  - `capture_index.csv`
+- 主循环不等待“暂停后统一保存”；通过校验的数据会在运行中实时写入上述文件。
 
-## Platform Constraint
+## Packet Pipeline
 
-- 用户明确指出项目是 Linux-only，不能继续引入 Windows 平台代码。
-- `docs/设计方案/平台与环境适配说明.md` 也明确目标平台是 `Kylin Linux Advanced Server V10 (GFB), aarch64`。
+- DPDK backend 从网卡批量取包，必要时自动应答 ARP。
+- `UdpPayloadAssembler` 负责从以太网帧中提取 IPv4/UDP payload，并可重组 IP 分片。
+- `SamplePacketParser` 当前解析的是 16 字节小端样本头，不是旧文档里的 `TPDX`/`DemoHeader` 模型：
+  - 控制表 magic: `0x55AAFF00`
+  - 数据包 magic: `0x55AAFF03`
+- `SamplePacketValidator` 当前校验重点是：
+  - 不接受 IP 分片状态下的业务包
+  - 包体长度必须符合 2048/2032 字节约束
+  - 数据包 `channel`、`packet_index`、`tail` 必须落在当前实现允许范围内
+- `ProtocolSequenceInterpreter` 当前对数据包的 PRT/通道/包序采用“按 CPI 内到达顺序推导”的实现，而不是完全信任包头中的对应字段。
 
-## Validation Workflow
+## Recording And Output
 
-- 最终权威验证仍应通过 `ssh kds` 在 `/home/devuser/WorkSpace/rx_tech_demo` 上完成。
-- 服务器构建命令继续使用仓库已有脚本：
-  - `bash ./scripts/build_server_shared_cache.sh`
-- 服务器测试命令继续使用：
-  - `cd /home/devuser/WorkSpace/rx_tech_demo/build && ctest --output-on-failure`
+- 当前默认输出目录仍是 `results`，可通过 `--output` 或配置文件覆盖。
+- 当前会持续写出两类落盘文件：
+  - `capture_packets.bin`：顺序拼接的已接收 UDP payload
+  - `capture_index.csv`：每包的 offset、length、时间戳、CPI、通道、PRT、packet index 等索引
+- 终端还会输出：
+  - 单行状态摘要
+  - 中文人类可读汇总
+  - `run_until_stopped=true` 时的周期性 `[status]` 快照
+
+## Filtering Rules
+
+- 当前支持三类前置过滤：
+  - `allowed_source_ipv4`
+  - `receiver_ipv4`
+  - `allowed_dest_port`
+- 被过滤掉的包计入 `filtered_packets`，不会进入解析成功统计，也不会写入落盘文件。
+
+## Validation Boundary
+
+- 当前仓库和项目规则都要求 Linux 服务器是唯一权威验证环境。
+- 本次会话只完成代码核对和文档同步，没有在 Linux 服务器上重新做构建、测试或链路验证。

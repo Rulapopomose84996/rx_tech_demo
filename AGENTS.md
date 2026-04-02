@@ -35,16 +35,15 @@
 - Language standard: `C++17`
 - Build system baseline: `CMake 3.16.x`
 - Preferred generator: `Ninja` where applicable
-- Core networking stack:
-  - `DPDK` for the current mainline receiver path
-  - `AF_XDP` only as legacy/reference/experimental path unless the project documents explicitly promote it again
+- Current runtime mainline:
+  - `DPDK` in `src/receiver`
+- Historical/reference path:
+  - `AF_XDP` in `src/legacy`
 - Common third-party libraries may include:
-  - `yaml-cpp`
-  - `spdlog`
+  - `libdpdk`
   - `Google Test`
 - Shared third-party cache reference:
   - `/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo`
-- Third-party references for this project mainly involve `DPDK` and `AF_XDP`.
 - Do not silently upgrade language standard, build baseline, or dependency assumptions without updating project docs and validation flow.
 
 ## Code Organization Principles
@@ -53,12 +52,11 @@
 - Treat `src/legacy` as compatibility or historical reference code, not as the place for new mainline behavior.
 - Place new or changed logic in the smallest module that matches its responsibility:
   - `app`: process entry and CLI
-  - `runtime`: config, context, lifecycle skeleton
+  - `runtime`: config, context, run loop setup, output path preparation
   - `ingress`: backend-specific packet acquisition
   - `core`: hot-path orchestration
-  - `protocol`: packet parsing and validation
+  - `protocol`: UDP payload assembly, parsing, validation, sequence interpretation
   - `sidecar`: metrics and observation
-  - `storage`: data persistence and reconstruction helpers
 - Avoid mixing these concerns in one file when extending the system.
 - Prefer stable interfaces between layers, such as:
   - `IRxBackend`
@@ -67,6 +65,7 @@
   - parser/validator result types
 - Keep the receiver mainline understandable as a pipeline:
   - acquire packets
+  - extract UDP payload
   - parse
   - validate
   - record
@@ -76,6 +75,7 @@
 ## Runtime And Validation Rules
 
 - Treat the current DPDK receiver path as the main runtime path unless project code and docs explicitly change that.
+- Do not describe `src/legacy/af_xdp` as the current mainline.
 - Treat fake tests, parser tests, and isolated unit tests as useful evidence, but not as proof of real network-path success.
 - Only claim “real closed-loop validation” when the required external sender, network path, and receiver runtime are actually validated on the server.
 - If the external sender is unavailable, say so explicitly and limit claims to the level that was truly validated.
@@ -94,8 +94,10 @@
 - Keep `README.md` aligned with:
   - the current mainline entrypoints,
   - the real build/test path,
+  - the actual packet pipeline,
   - the current validation boundary.
 - Do not write future plans, ideal architecture, or intended end-state as if they are already implemented.
+- Do not carry forward old AF_XDP benchmark descriptions into mainline docs unless the code is actually switched back.
 
 ## Git And Branching Guidance
 
@@ -117,5 +119,6 @@
 - Prefer concise, enforceable project rules over broad generic advice.
 - When uncertain, bias toward:
   - preserving Linux-server-first validation,
-  - keeping the receiver pipeline boundaries clear,
-  - reporting validated facts rather than assumptions.
+  - keeping the DPDK receiver pipeline boundaries clear,
+  - reporting validated facts rather than assumptions,
+  - distinguishing current mainline from legacy/reference code.
