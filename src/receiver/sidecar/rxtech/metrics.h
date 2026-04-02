@@ -84,6 +84,8 @@ namespace rxtech
         std::uint64_t raw_rx_packets = 0;
         std::uint64_t raw_rx_bytes = 0;
         std::uint64_t filtered_packets = 0;
+        std::uint64_t arp_request_packets = 0;
+        std::uint64_t arp_reply_packets = 0;
         std::uint64_t captured_packets = 0;
         std::uint64_t captured_bytes = 0;
         std::uint64_t recorded_packets = 0;
