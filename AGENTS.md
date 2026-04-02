@@ -34,11 +34,9 @@
 
 - Language standard: `C++17`
 - Build system baseline: `CMake 3.16.x`
-- Preferred generator: `Ninja` where applicable
+- Preferred generator: `Ninja`
 - Current runtime mainline:
   - `DPDK` in `src/receiver`
-- Historical/reference path:
-  - `AF_XDP` in `src/legacy`
 - Common third-party libraries may include:
   - `libdpdk`
   - `Google Test`
@@ -49,14 +47,18 @@
 ## Code Organization Principles
 
 - Keep the current mainline centered in `src/receiver`.
-- Treat `src/legacy` as compatibility or historical reference code, not as the place for new mainline behavior.
+- Public headers live in `include/rxtech`.
+- Private helper headers should stay in module-local `internal/` directories.
 - Place new or changed logic in the smallest module that matches its responsibility:
-  - `app`: process entry and CLI
+  - `app`: process entry, CLI, startup assembly
   - `runtime`: config, context, run loop setup, output path preparation
   - `ingress`: backend-specific packet acquisition
   - `core`: hot-path orchestration
   - `protocol`: UDP payload assembly, parsing, validation, sequence interpretation
   - `sidecar`: metrics and observation
+  - `storage`: CPI context, slot write, progress tracking
+  - `admit`: CPI admission policy
+  - `finalize`: CPI finalize and finalized output structure
 - Avoid mixing these concerns in one file when extending the system.
 - Prefer stable interfaces between layers, such as:
   - `IRxBackend`
@@ -70,12 +72,11 @@
   - validate
   - record
   - summarize
-- Reading-oriented comments and teaching-oriented edits should normally live on a dedicated annotation branch, not on the product branch by default.
 
 ## Runtime And Validation Rules
 
-- Treat the current DPDK receiver path as the main runtime path unless project code and docs explicitly change that.
-- Do not describe `src/legacy/af_xdp` as the current mainline.
+- Treat the current DPDK receiver path as the only active runtime path unless project code and docs explicitly change that.
+- Do not reintroduce AF_XDP assumptions into mainline docs, config semantics, or runtime status fields without explicit user direction.
 - Treat fake tests, parser tests, and isolated unit tests as useful evidence, but not as proof of real network-path success.
 - Only claim “real closed-loop validation” when the required external sender, network path, and receiver runtime are actually validated on the server.
 - If the external sender is unavailable, say so explicitly and limit claims to the level that was truly validated.
@@ -90,35 +91,33 @@
 - These environment/baseline documents may be updated as the real platform and setup evolve.
 - Code-logic summary document:
   - [docs/当前接收端代码实现与执行逻辑详解.md](D:\WorkSpace\Company\Tower\rx_tech_demo\docs\当前接收端代码实现与执行逻辑详解.md)
-- Update that code-logic summary document only when the user explicitly asks to do so.
 - Keep `README.md` aligned with:
-  - the current mainline entrypoints,
-  - the real build/test path,
-  - the actual packet pipeline,
-  - the current validation boundary.
+  - current mainline entrypoints
+  - current source layout
+  - real build/test path
+  - actual packet pipeline
+  - current validation boundary
 - Do not write future plans, ideal architecture, or intended end-state as if they are already implemented.
-- Do not carry forward old AF_XDP benchmark descriptions into mainline docs unless the code is actually switched back.
 
 ## Git And Branching Guidance
 
 - Keep `main` focused on real product code and necessary project docs.
 - Use separate branches for:
-  - staged feature work,
-  - reading/annotation work,
-  - experimental validation work if needed.
-- If maintaining a long-lived annotation branch, keep it synchronized from `main` regularly and avoid letting annotation-only content leak back into `main` unintentionally.
+  - staged feature work
+  - reading/annotation work
+  - experimental validation work if needed
 - Keep commits logically grouped:
-  - behavior change,
-  - build/test wiring,
-  - docs,
-  - annotation-only changes.
+  - behavior change
+  - build/test wiring
+  - docs
+  - annotation-only changes
 
 ## Agent Behavior In This Repository
 
 - Before making implementation or validation decisions, inspect the current repository state and the active docs relevant to the task.
 - Prefer concise, enforceable project rules over broad generic advice.
 - When uncertain, bias toward:
-  - preserving Linux-server-first validation,
-  - keeping the DPDK receiver pipeline boundaries clear,
-  - reporting validated facts rather than assumptions,
-  - distinguishing current mainline from legacy/reference code.
+  - preserving Linux-server-first validation
+  - keeping the DPDK receiver pipeline boundaries clear
+  - reporting validated facts rather than assumptions
+  - distinguishing current mainline from removed historical paths

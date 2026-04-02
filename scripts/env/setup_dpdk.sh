@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Purpose: install and prepare the shared-cache DPDK toolchain on the Linux server.
+# Environment: run on the Linux server with package/network permissions as needed.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

@@ -8,6 +8,7 @@ namespace rxtech {
 
 void request_receive_stop();
 void reset_receive_stop();
+void prepare_run_artifact_paths(RxConfig& config);
 
 class ReceiveRunner {
 public:

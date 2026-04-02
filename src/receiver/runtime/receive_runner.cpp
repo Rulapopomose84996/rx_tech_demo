@@ -55,6 +55,109 @@ namespace rxtech
             return ch == '/' || ch == '\\';
         }
 
+        std::string path_filename(const std::string &path)
+        {
+            std::string normalized = path;
+            while (!normalized.empty() && is_path_separator(normalized.back()))
+            {
+                normalized.pop_back();
+            }
+            const std::size_t pos = normalized.find_last_of("/\\");
+            return pos == std::string::npos ? normalized : normalized.substr(pos + 1U);
+        }
+
+        std::string path_parent(const std::string &path)
+        {
+            std::string normalized = path;
+            while (!normalized.empty() && is_path_separator(normalized.back()))
+            {
+                normalized.pop_back();
+            }
+            const std::size_t pos = normalized.find_last_of("/\\");
+            return pos == std::string::npos ? std::string{} : normalized.substr(0U, pos);
+        }
+
+        std::string join_path(const std::string &base, const std::string &name)
+        {
+            if (base.empty())
+            {
+                return name;
+            }
+            if (is_path_separator(base.back()))
+            {
+                return base + name;
+            }
+            return base + "/" + name;
+        }
+
+        std::string sanitize_run_label(std::string label)
+        {
+            for (char &ch : label)
+            {
+                const bool keep =
+                    (ch >= 'a' && ch <= 'z') ||
+                    (ch >= 'A' && ch <= 'Z') ||
+                    (ch >= '0' && ch <= '9') ||
+                    ch == '_' || ch == '-';
+                if (!keep)
+                {
+                    ch = '_';
+                }
+            }
+            while (!label.empty() && (label.front() == '_' || label.front() == '-'))
+            {
+                label.erase(label.begin());
+            }
+            return label.empty() ? std::string{"run"} : label;
+        }
+
+        std::string make_run_timestamp()
+        {
+            const std::time_t now = std::time(nullptr);
+            std::tm local_time{};
+#ifdef _WIN32
+            localtime_s(&local_time, &now);
+#else
+            localtime_r(&now, &local_time);
+#endif
+            char buffer[32] = {};
+            if (std::strftime(buffer, sizeof(buffer), "%Y%m%d_%H%M%S", &local_time) == 0U)
+            {
+                throw std::runtime_error("failed to format run timestamp");
+            }
+            return buffer;
+        }
+
+        std::string choose_run_suffix(const RxConfig &config)
+        {
+            const std::string capture_dir =
+                config.capture_output_dir.empty() ? config.output_dir : config.capture_output_dir;
+            std::string suffix = sanitize_run_label(path_filename(capture_dir));
+            if (suffix == "run" && !config.backend_name.empty())
+            {
+                suffix = sanitize_run_label(config.backend_name);
+            }
+            return suffix;
+        }
+
+        std::string make_capture_run_dir(const std::string &capture_dir, const std::string &run_label)
+        {
+            const std::string parent = path_parent(capture_dir);
+            return join_path(parent, run_label);
+        }
+
+        std::string make_raw_record_run_dir(const std::string &raw_record_dir, const std::string &run_label)
+        {
+            return join_path(raw_record_dir, run_label);
+        }
+
+        std::string make_log_run_path(const std::string &log_file_path, const std::string &run_label)
+        {
+            const std::string parent = path_parent(log_file_path);
+            const std::string filename = path_filename(log_file_path);
+            return join_path(join_path(parent, run_label), filename);
+        }
+
         void create_directory_if_needed(const std::string &path)
         {
             if (path.empty())
@@ -150,6 +253,38 @@ namespace rxtech
         g_stop_requested.store(false);
     }
 
+    void prepare_run_artifact_paths(RxConfig &config)
+    {
+        if (config.run_artifacts_prepared)
+        {
+            return;
+        }
+
+        const std::string run_suffix = choose_run_suffix(config);
+        config.run_label = make_run_timestamp() + "_" + run_suffix;
+
+        const std::string capture_dir =
+            config.capture_output_dir.empty() ? config.output_dir : config.capture_output_dir;
+        if (!capture_dir.empty())
+        {
+            const std::string run_capture_dir = make_capture_run_dir(capture_dir, config.run_label);
+            config.output_dir = run_capture_dir;
+            config.capture_output_dir = run_capture_dir;
+        }
+
+        if (config.raw_record_enabled && !config.raw_record_output_dir.empty())
+        {
+            config.raw_record_output_dir = make_raw_record_run_dir(config.raw_record_output_dir, config.run_label);
+        }
+
+        if (config.log_output == "file" && !config.log_file_path.empty())
+        {
+            config.log_file_path = make_log_run_path(config.log_file_path, config.run_label);
+        }
+
+        config.run_artifacts_prepared = true;
+    }
+
     void ReceiveRunner::set_status_output(std::ostream *output)
     {
         status_output_ = output;
@@ -164,6 +299,7 @@ namespace rxtech
 
         reset_receive_stop();
         SignalHandlerGuard signal_guard;
+        prepare_run_artifact_paths(context.config);
 
         const BackendInitResult init_result = context.backend->init(context.config);
         if (!init_result.ok)
@@ -244,6 +380,7 @@ namespace rxtech
             summary.captured_bytes = artifacts.captured_bytes;
             summary.recorded_packets = artifacts.recorded_packets;
             summary.recorded_bytes = artifacts.recorded_bytes;
+            summary.run_artifact_dir = output_dir;
             summary.raw_record_output_dir = raw_frame_recorder.enabled() ? raw_frame_recorder.output_dir() : std::string{};
             summary.raw_record_latest_file_path = raw_record_stats.latest_file_path;
             summary.raw_record_written_frames = raw_record_stats.written_frames;

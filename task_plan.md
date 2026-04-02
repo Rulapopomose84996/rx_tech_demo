@@ -1,29 +1,27 @@
-# Phase 3 Closeout Plan
+# Receiver Refactor And Docs Sync Plan
 
 ## Goal
 
-在不改变当前主线边界的前提下，完成 Phase 3 收尾工作：
+把项目文档同步到当前仓库真实实现，确保以下事实一致：
 
-- 清理非阻塞构建告警
-- 同步项目文档到当前实现事实
-- 补齐真实接收解析联调所需 sender
-- 保持 Linux 服务器构建与测试通过
+- 当前主线只有 `src/receiver` 的 DPDK 路径
+- 公共头统一位于 `include/rxtech`
+- `src/receiver` 已完成目录收平与模块边界重整
+- `output` 已并入 `finalize`
+- `runtime` 已清理旧 `xdp_/xsk_` 语义
+- 权威验证结果来自 `ssh kds` 上的最新隔离目录复验
 
 ## Current Status
 
-- [completed] 清理 `RXTECH_THIRD_PARTY_CACHE` 未使用告警
-- [completed] 清理 legacy AF_XDP deprecation 告警噪声
-- [completed] 修复 Release 下 `test_arp_responder` 的假阳性问题
-- [completed] 新增协议正确 sender：`tools/rxtech_protocol_sender.py`
-- [completed] 服务器构建复验
-- [completed] 服务器 unit / integration 测试复验
-- [completed] README、实现说明、进度与 findings 文档同步
-- [completed] 分类提交全部修改并推送到 `gitea` / `github`
-- [completed] 服务器主工作区拉取目标分支
+- [completed] 更新项目根级工作记忆文件：`task_plan.md` / `findings.md` / `progress.md`
+- [completed] 更新仓库规则文档：`AGENTS.md`
+- [completed] 更新主用户文档：`README.md`
+- [completed] 更新历史技术方案文档：`docs/设计方案/AF_XDP_DPDK_准备与分工.md`
+- [completed] 更新当前实现说明：`docs/当前接收端代码实现与执行逻辑详解.md`
 
 ## Key Decisions
 
-- 继续坚持 Linux server-first 验证，不把 Windows 侧行为写成权威结果。
-- 对 legacy AF_XDP 的处理以“局部降噪、不改主线语义”为原则。
-- 真实解析联调依赖协议正确 sender，因此新增 sender 工具比继续复用旧的 raw sender 更稳妥。
-- 文档统一以当前 `src/receiver` DPDK 主线和 Phase 3 热路径骨架为准。
+- 文档只描述当前已落地实现，不再把 AF_XDP 作为当前代码主线。
+- `include/rxtech` 是唯一公共头入口，不再保留模块级兼容公共头。
+- `output` 不再单独作为模块叙述；相关结构已并入 `finalize` 边界。
+- 对外验证结果统一引用 `ssh kds` 隔离目录的最新构建与测试结果。

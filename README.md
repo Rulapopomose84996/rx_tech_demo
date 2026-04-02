@@ -1,31 +1,35 @@
 # rx_tech_demo
 
-`rx_tech_demo` 是一个 Linux-only 的雷达接收端演示工程。当前主线位于 `src/receiver`，默认叙述和权威验证都以 DPDK 接收路径为准。
+`rx_tech_demo` 是一个 Linux-only 的雷达接收端演示工程。当前唯一主线位于 `src/receiver`，默认叙述和权威验证都以 DPDK 接收路径为准。
 
 ## 当前定位
 
 - 当前目标是把真实网卡收包、UDP payload 提取、协议解析、轻量统计和旁路落盘串成一条稳定接收链。
-- 当前已经落地的 Phase 3 重点包括：
-  - section 化配置和精简 CLI
-  - 协议参数化 (`ProtocolSpec`)
-  - sidecar 语义化指标
-  - 热路径骨架 (`storage` / `admit` / `output` / `finalize`)
 - 当前并不宣称已经完成完整业务接收模块；它仍是分阶段演进中的主线 demo。
+- 当前代码已经完成一次结构收口：
+  - 公共头统一到 `include/rxtech`
+  - `src/receiver` 模块实现文件已收平到模块根目录
+  - `app` 入口层已收平
+  - `output` 已并入 `finalize`
 
 ## 目录概览
 
 ```text
+include/
+  rxtech/
 src/
   receiver/
     app/
     core/
+      internal/
     ingress/
+      dpdk/
+        internal/
     protocol/
     runtime/
     sidecar/
     storage/
     admit/
-    output/
     finalize/
 tests/
 tools/
@@ -106,12 +110,6 @@ docs/
 - `channels_per_prt = 3`
 - `packets_per_channel = 9`
 
-持续接收模式的终端行为：
-
-- 状态输出不再滚动打印单行摘要，而是按周期重绘中文状态面板。
-- 状态面板会显示时间戳、运行时长、链路层统计、协议层统计和结果层统计。
-- 当没有业务协议流量时，面板会明确显示“当前未检测到链路流量”或“当前仅检测到 ARP 探测”，而不是把这种情况表现为错误。
-
 ## 服务器构建与测试
 
 执行环境：Linux 服务器。
@@ -121,7 +119,6 @@ docs/
 进入服务器工作目录：
 
 ```bash
-ssh kds
 cd /home/devuser/WorkSpace/rx_tech_demo
 ```
 
@@ -129,7 +126,7 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 
 ```bash
 cd /home/devuser/WorkSpace/rx_tech_demo
-bash ./scripts/build_server_shared_cache.sh
+bash ./scripts/build/server_shared_cache.sh
 ```
 
 单元测试：
@@ -155,12 +152,32 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 
 ## 当前已验证结果
 
-本轮 Phase 3 收尾改动已在 Linux 服务器隔离目录完成复验：
+最近一轮结构重构与命名收口已在 Linux 服务器隔离目录完成复验：
 
+- 验证目录：`/home/devuser/WorkSpace/rx_tech_demo_codex_validate_20260403`
 - 构建通过
-- unit tests 通过：11/11
+- unit tests 通过：14/14
 - integration tests 通过：1/1
-- 新增 sender 脚本通过 `python3 -m py_compile`
+
+## 运行产物目录约定
+
+- `results/`
+  - 当前主线运行结果目录
+  - 每次运行会自动生成一个时间戳目录
+  - 目录名格式：`YYYYMMDD_HHMMSS_xxx`
+  - 例如：`results/20260403_103012_dpdk_single_face/`
+- `data/`
+  - 样例、参考、离线分析数据的保留目录
+  - 不作为当前主线运行输出目录
+- `stdout/`
+  - 历史遗留目录
+  - 当前主线不再使用
+
+当前运行产物策略：
+
+- capture 输出会进入时间戳运行目录
+- `raw_record` 会在配置根目录下再创建同名时间戳运行目录
+- 如果 `log_output=file`，日志文件会写入对应时间戳运行目录
 
 ## 输出文件
 
@@ -172,12 +189,6 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 启用 `raw_record` 时，接收端还会在判决、过滤和协议解析之前，把原始接收帧异步写入：
 
 - `/data/rx_tech_demo/raw_frames/*.rawbin`
-
-默认策略：
-
-- 落盘目录位于机械硬盘 RAID10 数据盘 `/data`
-- 目录总保留量上限为 `5GB`
-- writer 线程通过有界 ring 从热路径异步取数，不在判决路径上直接写机械盘
 
 当前 capture index 列为：
 
@@ -205,24 +216,6 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 
 ### 2. 固定时长接收
 
-如果你要手工联调，建议先把配置里的 `[runtime]` 改成更适合观察的值，例如：
-
-```ini
-[raw_record]
-enabled = true
-output_dir = /data/rx_tech_demo/raw_frames
-max_total_bytes = 5368709120
-
-[runtime]
-duration_seconds = 30
-max_burst = 64
-cpu_cores = [16]
-run_until_stopped = false
-status_interval_seconds = 1
-```
-
-然后在服务器上启动：
-
 ```bash
 cd /home/devuser/WorkSpace/rx_tech_demo
 ./build/src/receiver/rx_receiver_dpdk --config configs/dpdk_single_face.conf --duration 30
@@ -230,24 +223,12 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 
 ### 3. 持续接收，直到手工停止
 
-如果需要持续等待外部雷达时序软件送流，可以直接开启持续接收模式：
-
 ```bash
 cd /home/devuser/WorkSpace/rx_tech_demo
 ./build/src/receiver/rx_receiver_dpdk --config configs/dpdk_single_face.conf --run-until-stopped --status-interval 1
 ```
 
-注意：
-
-- 持续接收模式下，使用 `Ctrl+C` 停止。
-- 状态面板会按 `status_interval_seconds` 或 `--status-interval` 指定的周期重绘。
-- 无业务流量时，状态面板会显示“当前未检测到链路流量”或“当前仅检测到 ARP 探测”。
-- 外部 sender 由独立软件负责模拟规定好的雷达时序；主线联调不要求在仓库内自建 sender 脚本。
-- 仓库中的 `tools/raw_eth_sender.py` 和 `tools/rxtech_protocol_sender.py` 仍保留为辅助工具，但不是当前 README 的主线操作步骤。
-
 ### 4. 查看接收结果
-
-运行结束后检查：
 
 ```bash
 cd /home/devuser/WorkSpace/rx_tech_demo
@@ -255,12 +236,18 @@ ls -l results/dpdk_single_face
 head -n 5 results/dpdk_single_face/capture_index.csv
 ```
 
-如果链路正常，状态面板和最终中文汇总里的 `解析有效包`、`数据包`、`已落盘` 应该增长，并且 `capture_index.csv` 会出现对应的 `cpi/channel/prt/packet_index` 记录。
+现在应改为先查看最新时间戳目录，例如：
 
-如果启用了 `raw_record`，还应检查 `/data/rx_tech_demo/raw_frames` 下是否生成 `.rawbin` segment 文件，并确认目录总占用不会超过 `5GB`。
+```bash
+cd /home/devuser/WorkSpace/rx_tech_demo
+ls -lt results
+LATEST_RUN_DIR="$(find results -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)"
+ls -l "${LATEST_RUN_DIR}"
+head -n 5 "${LATEST_RUN_DIR}/capture_index.csv"
+```
 
 ## 验证边界
 
 - 不要把 Windows 构建、IDE 静态分析或 dry-run 当成权威验证。
-- 不要把历史 AF_XDP 结果当成当前主线完成度证明。
+- 不要把历史 AF_XDP 结论当成当前主线完成度证明。
 - 只有在 Linux 服务器上完成构建、测试和真实链路联调，才能宣称该层级已验证。

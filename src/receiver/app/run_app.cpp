@@ -1,8 +1,12 @@
 #include "run_app.h"
 
+#include <algorithm>
+#include <cerrno>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <sys/stat.h>
 
 #include "cli_args.h"
 #include "rxtech/metrics.h"
@@ -93,6 +97,85 @@ namespace rxtech
         std::string effective_capture_output_dir(const RxConfig &config)
         {
             return config.capture_output_dir.empty() ? config.output_dir : config.capture_output_dir;
+        }
+
+        bool is_path_separator(char ch)
+        {
+            return ch == '/' || ch == '\\';
+        }
+
+        void create_directory_if_needed(const std::string &path)
+        {
+            if (path.empty())
+            {
+                return;
+            }
+
+#if defined(_WIN32)
+            const int result = _mkdir(path.c_str());
+#else
+            const int result = mkdir(path.c_str(), 0755);
+#endif
+            if (result != 0 && errno != EEXIST)
+            {
+                throw std::runtime_error("failed to create directory: " + path);
+            }
+        }
+
+        void ensure_parent_directory(const std::string &file_path)
+        {
+            std::string normalized = file_path;
+            std::replace(normalized.begin(), normalized.end(), '\\', '/');
+            const std::size_t separator_pos = normalized.find_last_of('/');
+            if (separator_pos == std::string::npos)
+            {
+                return;
+            }
+
+            const std::string parent = normalized.substr(0U, separator_pos);
+            if (parent.empty())
+            {
+                return;
+            }
+
+            std::size_t start = 0;
+            if (parent.size() >= 2U && parent[1] == ':')
+            {
+                start = 2U;
+            }
+            else if (is_path_separator(parent[0]))
+            {
+                start = 1U;
+            }
+
+            std::string current = parent.substr(0U, start);
+            while (start < parent.size())
+            {
+                while (start < parent.size() && is_path_separator(parent[start]))
+                {
+                    if (current.empty())
+                    {
+                        current.push_back('/');
+                    }
+                    ++start;
+                }
+                const std::size_t next = parent.find('/', start);
+                const std::string part = parent.substr(start, next == std::string::npos ? std::string::npos : next - start);
+                if (!part.empty())
+                {
+                    if (!current.empty() && !is_path_separator(current.back()) && current.back() != ':')
+                    {
+                        current.push_back('/');
+                    }
+                    current += part;
+                    create_directory_if_needed(current);
+                }
+                if (next == std::string::npos)
+                {
+                    break;
+                }
+                start = next + 1U;
+            }
         }
 
         RxConfig build_effective_config(const std::string &backend_name, const CliArgs &args)
@@ -262,6 +345,7 @@ namespace rxtech
 
             ReceiveContext context;
             context.config = build_effective_config(backend_name, args);
+            prepare_run_artifact_paths(context.config);
 
             const std::string validation_error = validate_config(context.config);
             if (!validation_error.empty())
@@ -280,14 +364,40 @@ namespace rxtech
             context.metrics = std::make_unique<MetricsCollector>();
 
             ReceiveRunner runner;
-            if (context.config.run_until_stopped)
+            std::ofstream log_stream;
+            std::ostream *status_output = nullptr;
+            if (context.config.log_output == "file" && !context.config.log_file_path.empty())
             {
-                runner.set_status_output(&std::cout);
+                ensure_parent_directory(context.config.log_file_path);
+                log_stream.open(context.config.log_file_path, std::ios::out | std::ios::trunc);
+                if (!log_stream.is_open())
+                {
+                    throw std::runtime_error("failed to open log file: " + context.config.log_file_path);
+                }
+                status_output = &log_stream;
+            }
+            else if (context.config.run_until_stopped)
+            {
+                status_output = &std::cout;
+            }
+            if (status_output != nullptr)
+            {
+                runner.set_status_output(status_output);
             }
             const RunSummary summary = runner.run(context);
             if (!summary.human_summary.empty())
             {
-                std::cout << summary.human_summary;
+                if (log_stream.is_open())
+                {
+                    log_stream << summary.human_summary;
+                    log_stream.flush();
+                    std::cout << summary.human_summary;
+                    std::cout << "日志文件： " << context.config.log_file_path << std::endl;
+                }
+                else
+                {
+                    std::cout << summary.human_summary;
+                }
             }
             else
             {

@@ -274,6 +274,18 @@ namespace
         return input.good();
     }
 
+    bool contains_run_stamp(const std::string &path, const std::string &suffix)
+    {
+        const std::string marker = "_" + suffix;
+        const std::size_t pos = path.find(marker);
+        if (pos == std::string::npos || pos < 16U)
+        {
+            return false;
+        }
+        const std::string stamp = path.substr(pos - 15U, 15U);
+        return stamp[8] == '_';
+    }
+
 } // namespace
 
 int main()
@@ -320,11 +332,13 @@ int main()
         assert(summary.human_summary.find("原始帧目录") != std::string::npos);
         assert(summary.human_summary.find("通道分布") != std::string::npos);
         assert(summary.human_summary.find("和路") != std::string::npos);
-        assert(file_exists("results/test_receive_runner_fake/capture_packets.bin"));
-        assert(file_exists("results/test_receive_runner_fake/capture_index.csv"));
+        assert(contains_run_stamp(summary.capture_packets_path, "test_receive_runner_fake"));
+        assert(contains_run_stamp(summary.capture_index_path, "test_receive_runner_fake"));
+        assert(file_exists(summary.capture_packets_path.c_str()));
+        assert(file_exists(summary.capture_index_path.c_str()));
         assert(file_exists(summary.raw_record_latest_file_path.c_str()));
 
-        std::ifstream capture_file("results/test_receive_runner_fake/capture_packets.bin", std::ios::binary);
+        std::ifstream capture_file(summary.capture_packets_path, std::ios::binary);
         assert(capture_file.is_open());
         capture_file.seekg(0, std::ios::end);
         assert(capture_file.tellg() > 0);
@@ -343,7 +357,7 @@ int main()
         assert(summary.run_status == "unavailable");
         assert(!summary.backend_available);
         assert(summary.backend_reason == "backend unavailable in test");
-        assert(!file_exists("results/test_receive_runner_unavailable/capture_packets.bin"));
+        assert(summary.capture_packets_path.empty());
     }
 
     {
@@ -401,6 +415,7 @@ int main()
         assert(summary.data_packets == 1U);
         assert(summary.final_tail_packets == 1U);
         assert(summary.packet_count == 1U);
+        assert(contains_run_stamp(summary.capture_packets_path, "test_receive_runner_filtered"));
     }
 
     return 0;

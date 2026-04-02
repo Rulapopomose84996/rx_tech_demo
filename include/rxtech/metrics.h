@@ -79,6 +79,7 @@ namespace rxtech
         std::string capture_index_path;
         std::string raw_record_output_dir;
         std::string raw_record_latest_file_path;
+        std::string run_artifact_dir;
         std::uint64_t rx_packets = 0;
         std::uint64_t rx_bytes = 0;
         std::uint64_t raw_rx_packets = 0;

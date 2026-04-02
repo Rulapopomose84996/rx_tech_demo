@@ -1,5 +1,7 @@
 build/
 build*/
+!scripts/build/
+!scripts/build/*.sh
 .cache/
 .idea/
 .vscode/
@@ -18,6 +20,7 @@ data/*
 
 results/*
 !results/.gitkeep
+stdout/
 
 deps_offline/*
 !deps_offline/.gitkeep

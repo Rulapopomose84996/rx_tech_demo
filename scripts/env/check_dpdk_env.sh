@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Purpose: inspect DPDK prerequisites on the Linux server before binding or running the receiver.
+# Environment: run on the Linux server; this is a read-only environment check.
 set -euo pipefail
 
 TARGET_BDF="${1:-0001:05:00.0}"
