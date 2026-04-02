@@ -1,3 +1,6 @@
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 #include <cassert>
 #include <fstream>
 #include <memory>
@@ -12,229 +15,265 @@
 #include "rxtech/rx_config.h"
 #include "rxtech/time_utils.h"
 
-namespace {
+namespace
+{
 
-std::vector<std::uint8_t> make_control_table_packet(std::uint16_t cpi) {
-    std::vector<std::uint8_t> bytes = {
-        0x00, 0xFF, 0xAA, 0x55,
-        static_cast<std::uint8_t>(cpi & 0xFFU), static_cast<std::uint8_t>((cpi >> 8U) & 0xFFU),
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-    };
-    bytes.resize(2048U, 0x00U);
-    return bytes;
-}
-
-std::vector<std::uint8_t> make_data_packet(std::uint16_t cpi,
-                                           std::uint16_t channel,
-                                           std::uint16_t prt,
-                                           std::uint16_t packet_index,
-                                           bool final_packet) {
-    std::vector<std::uint8_t> bytes = {
-        0x03, 0xFF, 0xAA, 0x55,
-        static_cast<std::uint8_t>(cpi & 0xFFU), static_cast<std::uint8_t>((cpi >> 8U) & 0xFFU),
-        static_cast<std::uint8_t>(channel & 0xFFU), static_cast<std::uint8_t>((channel >> 8U) & 0xFFU),
-        static_cast<std::uint8_t>(prt & 0xFFU), static_cast<std::uint8_t>((prt >> 8U) & 0xFFU),
-        static_cast<std::uint8_t>(packet_index & 0xFFU), static_cast<std::uint8_t>((packet_index >> 8U) & 0xFFU),
-        final_packet ? 0x30U : 0x00U, 0xFFU, 0xAAU, 0x55U
-    };
-    bytes.resize(2048U, 0xABU);
-    if (!final_packet) {
-        bytes[12] = 0x00U;
-        bytes[13] = 0x00U;
-        bytes[14] = 0x00U;
-        bytes[15] = 0x00U;
-    }
-    return bytes;
-}
-
-std::vector<std::uint8_t> make_udp_frame(const std::vector<std::uint8_t>& payload,
-                                         std::uint32_t source_ipv4_be,
-                                         std::uint32_t dest_ipv4_be,
-                                         std::uint16_t source_port,
-                                         std::uint16_t dest_port) {
-    const std::uint16_t udp_length = static_cast<std::uint16_t>(8U + payload.size());
-    const std::uint16_t total_length = static_cast<std::uint16_t>(20U + udp_length);
-    std::vector<std::uint8_t> bytes = {
-        0x9c, 0x47, 0x82, 0xe1, 0x36, 0xd0, 0x9c, 0x47, 0x82, 0xe1, 0x36, 0xdc, 0x08, 0x00,
-        0x45, 0x00,
-        static_cast<std::uint8_t>((total_length >> 8U) & 0xFFU), static_cast<std::uint8_t>(total_length & 0xFFU),
-        0x00, 0x00, 0x00, 0x00, 0x40, 0x11, 0x00, 0x00,
-        static_cast<std::uint8_t>((source_ipv4_be >> 24U) & 0xFFU),
-        static_cast<std::uint8_t>((source_ipv4_be >> 16U) & 0xFFU),
-        static_cast<std::uint8_t>((source_ipv4_be >> 8U) & 0xFFU),
-        static_cast<std::uint8_t>(source_ipv4_be & 0xFFU),
-        static_cast<std::uint8_t>((dest_ipv4_be >> 24U) & 0xFFU),
-        static_cast<std::uint8_t>((dest_ipv4_be >> 16U) & 0xFFU),
-        static_cast<std::uint8_t>((dest_ipv4_be >> 8U) & 0xFFU),
-        static_cast<std::uint8_t>(dest_ipv4_be & 0xFFU),
-        static_cast<std::uint8_t>((source_port >> 8U) & 0xFFU), static_cast<std::uint8_t>(source_port & 0xFFU),
-        static_cast<std::uint8_t>((dest_port >> 8U) & 0xFFU), static_cast<std::uint8_t>(dest_port & 0xFFU),
-        static_cast<std::uint8_t>((udp_length >> 8U) & 0xFFU), static_cast<std::uint8_t>(udp_length & 0xFFU),
-        0x00, 0x00
-    };
-    bytes.insert(bytes.end(), payload.begin(), payload.end());
-    return bytes;
-}
-
-class FakeBackend final : public rxtech::IRxBackend {
-public:
-    std::string name() const override {
-        return "fake";
+    std::vector<std::uint8_t> make_control_table_packet(std::uint16_t cpi)
+    {
+        std::vector<std::uint8_t> bytes = {
+            0x00, 0xFF, 0xAA, 0x55,
+            static_cast<std::uint8_t>(cpi & 0xFFU), static_cast<std::uint8_t>((cpi >> 8U) & 0xFFU),
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+        bytes.resize(2048U, 0x00U);
+        return bytes;
     }
 
-    rxtech::BackendInitResult init(const rxtech::RxConfig&) override {
-        rxtech::BackendInitResult result;
-        result.ok = true;
-        return result;
+    std::vector<std::uint8_t> make_data_packet(std::uint16_t cpi,
+                                               std::uint16_t channel,
+                                               std::uint16_t prt,
+                                               std::uint16_t packet_index,
+                                               bool final_packet)
+    {
+        std::vector<std::uint8_t> bytes = {
+            0x03, 0xFF, 0xAA, 0x55,
+            static_cast<std::uint8_t>(cpi & 0xFFU), static_cast<std::uint8_t>((cpi >> 8U) & 0xFFU),
+            static_cast<std::uint8_t>(channel & 0xFFU), static_cast<std::uint8_t>((channel >> 8U) & 0xFFU),
+            static_cast<std::uint8_t>(prt & 0xFFU), static_cast<std::uint8_t>((prt >> 8U) & 0xFFU),
+            static_cast<std::uint8_t>(packet_index & 0xFFU), static_cast<std::uint8_t>((packet_index >> 8U) & 0xFFU),
+            static_cast<std::uint8_t>(final_packet ? 0x30U : 0x00U), 0xFFU, 0xAAU, 0x55U};
+        bytes.resize(2048U, 0xABU);
+        if (!final_packet)
+        {
+            bytes[12] = 0x00U;
+            bytes[13] = 0x00U;
+            bytes[14] = 0x00U;
+            bytes[15] = 0x00U;
+        }
+        else if (packet_index == 9U)
+        {
+            for (std::size_t index = 16U + (476U * 4U); index < bytes.size(); ++index)
+            {
+                bytes[index] = 0U;
+            }
+        }
+        return bytes;
     }
 
-    bool recv_burst(rxtech::RxBurst& burst, std::uint32_t) override {
-        burst.packets.clear();
-        ++calls_;
-        packet_storage_.push_back(make_control_table_packet(2U));
-        packet_storage_.push_back(make_data_packet(2U, 0U, 1U, 1U, false));
-        packet_storage_.push_back(make_data_packet(2U, 0U, 1U, 9U, true));
+    std::vector<std::uint8_t> make_udp_frame(const std::vector<std::uint8_t> &payload,
+                                             std::uint32_t source_ipv4_be,
+                                             std::uint32_t dest_ipv4_be,
+                                             std::uint16_t source_port,
+                                             std::uint16_t dest_port)
+    {
+        const std::uint16_t udp_length = static_cast<std::uint16_t>(8U + payload.size());
+        const std::uint16_t total_length = static_cast<std::uint16_t>(20U + udp_length);
+        std::vector<std::uint8_t> bytes = {
+            0x9c, 0x47, 0x82, 0xe1, 0x36, 0xd0, 0x9c, 0x47, 0x82, 0xe1, 0x36, 0xdc, 0x08, 0x00,
+            0x45, 0x00,
+            static_cast<std::uint8_t>((total_length >> 8U) & 0xFFU), static_cast<std::uint8_t>(total_length & 0xFFU),
+            0x00, 0x00, 0x00, 0x00, 0x40, 0x11, 0x00, 0x00,
+            static_cast<std::uint8_t>((source_ipv4_be >> 24U) & 0xFFU),
+            static_cast<std::uint8_t>((source_ipv4_be >> 16U) & 0xFFU),
+            static_cast<std::uint8_t>((source_ipv4_be >> 8U) & 0xFFU),
+            static_cast<std::uint8_t>(source_ipv4_be & 0xFFU),
+            static_cast<std::uint8_t>((dest_ipv4_be >> 24U) & 0xFFU),
+            static_cast<std::uint8_t>((dest_ipv4_be >> 16U) & 0xFFU),
+            static_cast<std::uint8_t>((dest_ipv4_be >> 8U) & 0xFFU),
+            static_cast<std::uint8_t>(dest_ipv4_be & 0xFFU),
+            static_cast<std::uint8_t>((source_port >> 8U) & 0xFFU), static_cast<std::uint8_t>(source_port & 0xFFU),
+            static_cast<std::uint8_t>((dest_port >> 8U) & 0xFFU), static_cast<std::uint8_t>(dest_port & 0xFFU),
+            static_cast<std::uint8_t>((udp_length >> 8U) & 0xFFU), static_cast<std::uint8_t>(udp_length & 0xFFU),
+            0x00, 0x00};
+        bytes.insert(bytes.end(), payload.begin(), payload.end());
+        return bytes;
+    }
 
-        for (const auto& payload : packet_storage_) {
-            rxtech::PacketDesc packet;
-            packet.data = const_cast<std::uint8_t*>(payload.data());
-            packet.len = static_cast<std::uint32_t>(payload.size());
-            packet.ts_ns = rxtech::steady_clock_now_ns();
-            packet.queue_id = 3;
-            burst.packets.push_back(packet);
+    class FakeBackend final : public rxtech::IRxBackend
+    {
+    public:
+        std::string name() const override
+        {
+            return "fake";
         }
 
-        stats_.rx_packets += burst.packets.size();
-        for (const auto& packet : burst.packets) {
-            stats_.rx_bytes += packet.len;
+        rxtech::BackendInitResult init(const rxtech::RxConfig &) override
+        {
+            rxtech::BackendInitResult result;
+            result.ok = true;
+            return result;
         }
-        ++stats_.rx_polls;
-        return true;
-    }
 
-    void release_burst(rxtech::RxBurst& burst) override {
-        burst.packets.clear();
-        packet_storage_.clear();
-    }
+        bool recv_burst(rxtech::RxBurst &burst, std::uint32_t) override
+        {
+            burst.packets.clear();
+            ++calls_;
+            packet_storage_.push_back(make_udp_frame(make_control_table_packet(2U), 0xAC140BDEU, 0xAC140B64U, 30001U, 9999U));
+            packet_storage_.push_back(make_udp_frame(make_data_packet(2U, 0U, 1U, 1U, false), 0xAC140BDEU, 0xAC140B64U, 30001U, 9999U));
+            packet_storage_.push_back(make_udp_frame(make_data_packet(2U, 0U, 1U, 9U, true), 0xAC140BDEU, 0xAC140B64U, 30001U, 9999U));
 
-    rxtech::BackendStats stats() const override {
-        return stats_;
-    }
+            for (const auto &payload : packet_storage_)
+            {
+                rxtech::PacketDesc packet;
+                packet.data = const_cast<std::uint8_t *>(payload.data());
+                packet.len = static_cast<std::uint32_t>(payload.size());
+                packet.ts_ns = rxtech::steady_clock_now_ns();
+                packet.queue_id = 3;
+                burst.packets.push_back(packet);
+            }
 
-    void shutdown() override {
-    }
-
-private:
-    std::size_t calls_ = 0;
-    rxtech::BackendStats stats_{};
-    std::vector<std::vector<std::uint8_t>> packet_storage_;
-};
-
-class UnavailableBackend final : public rxtech::IRxBackend {
-public:
-    std::string name() const override {
-        return "fake_unavailable";
-    }
-
-    rxtech::BackendInitResult init(const rxtech::RxConfig&) override {
-        rxtech::BackendInitResult result;
-        result.available = false;
-        result.reason = "backend unavailable in test";
-        return result;
-    }
-
-    bool recv_burst(rxtech::RxBurst&, std::uint32_t) override {
-        return false;
-    }
-
-    void release_burst(rxtech::RxBurst& burst) override {
-        burst.packets.clear();
-    }
-
-    rxtech::BackendStats stats() const override {
-        return {};
-    }
-
-    void shutdown() override {
-    }
-};
-
-class FilteringFakeBackend final : public rxtech::IRxBackend {
-public:
-    std::string name() const override {
-        return "filtering_fake";
-    }
-
-    rxtech::BackendInitResult init(const rxtech::RxConfig&) override {
-        rxtech::BackendInitResult result;
-        result.ok = true;
-        return result;
-    }
-
-    bool recv_burst(rxtech::RxBurst& burst, std::uint32_t) override {
-        burst.packets.clear();
-        if (served_) {
+            stats_.rx_packets += burst.packets.size();
+            for (const auto &packet : burst.packets)
+            {
+                stats_.rx_bytes += packet.len;
+            }
             ++stats_.rx_polls;
-            ++stats_.empty_polls;
             return true;
         }
-        served_ = true;
 
-        packet_storage_.push_back(make_udp_frame(make_data_packet(2U, 0U, 1U, 1U, true),
-                                                 0xAC140BDEU,
-                                                 0xAC140B64U,
-                                                 30001U,
-                                                 9999U));
-        packet_storage_.push_back(make_udp_frame(make_data_packet(2U, 0U, 1U, 1U, true),
-                                                 0xAC140B63U,
-                                                 0xAC140B64U,
-                                                 30001U,
-                                                 9999U));
-
-        for (const auto& payload : packet_storage_) {
-            rxtech::PacketDesc packet;
-            packet.data = const_cast<std::uint8_t*>(payload.data());
-            packet.len = static_cast<std::uint32_t>(payload.size());
-            packet.ts_ns = rxtech::steady_clock_now_ns();
-            packet.queue_id = 0;
-            burst.packets.push_back(packet);
-            ++stats_.rx_packets;
-            stats_.rx_bytes += packet.len;
+        void release_burst(rxtech::RxBurst &burst) override
+        {
+            burst.packets.clear();
+            packet_storage_.clear();
         }
-        ++stats_.rx_polls;
-        return true;
+
+        rxtech::BackendStats stats() const override
+        {
+            return stats_;
+        }
+
+        void shutdown() override
+        {
+        }
+
+    private:
+        std::size_t calls_ = 0;
+        rxtech::BackendStats stats_{};
+        std::vector<std::vector<std::uint8_t>> packet_storage_;
+    };
+
+    class UnavailableBackend final : public rxtech::IRxBackend
+    {
+    public:
+        std::string name() const override
+        {
+            return "fake_unavailable";
+        }
+
+        rxtech::BackendInitResult init(const rxtech::RxConfig &) override
+        {
+            rxtech::BackendInitResult result;
+            result.available = false;
+            result.reason = "backend unavailable in test";
+            return result;
+        }
+
+        bool recv_burst(rxtech::RxBurst &, std::uint32_t) override
+        {
+            return false;
+        }
+
+        void release_burst(rxtech::RxBurst &burst) override
+        {
+            burst.packets.clear();
+        }
+
+        rxtech::BackendStats stats() const override
+        {
+            return {};
+        }
+
+        void shutdown() override
+        {
+        }
+    };
+
+    class FilteringFakeBackend final : public rxtech::IRxBackend
+    {
+    public:
+        std::string name() const override
+        {
+            return "filtering_fake";
+        }
+
+        rxtech::BackendInitResult init(const rxtech::RxConfig &) override
+        {
+            rxtech::BackendInitResult result;
+            result.ok = true;
+            return result;
+        }
+
+        bool recv_burst(rxtech::RxBurst &burst, std::uint32_t) override
+        {
+            burst.packets.clear();
+            if (served_)
+            {
+                ++stats_.rx_polls;
+                ++stats_.empty_polls;
+                return true;
+            }
+            served_ = true;
+
+            packet_storage_.push_back(make_udp_frame(make_data_packet(2U, 0U, 1U, 1U, true),
+                                                     0xAC140BDEU,
+                                                     0xAC140B64U,
+                                                     30001U,
+                                                     9999U));
+            packet_storage_.push_back(make_udp_frame(make_data_packet(2U, 0U, 1U, 1U, true),
+                                                     0xAC140B63U,
+                                                     0xAC140B64U,
+                                                     30001U,
+                                                     9999U));
+
+            for (const auto &payload : packet_storage_)
+            {
+                rxtech::PacketDesc packet;
+                packet.data = const_cast<std::uint8_t *>(payload.data());
+                packet.len = static_cast<std::uint32_t>(payload.size());
+                packet.ts_ns = rxtech::steady_clock_now_ns();
+                packet.queue_id = 0;
+                burst.packets.push_back(packet);
+                ++stats_.rx_packets;
+                stats_.rx_bytes += packet.len;
+            }
+            ++stats_.rx_polls;
+            return true;
+        }
+
+        void release_burst(rxtech::RxBurst &burst) override
+        {
+            burst.packets.clear();
+            packet_storage_.clear();
+        }
+
+        rxtech::BackendStats stats() const override
+        {
+            return stats_;
+        }
+
+        void shutdown() override
+        {
+        }
+
+    private:
+        bool served_ = false;
+        rxtech::BackendStats stats_{};
+        std::vector<std::vector<std::uint8_t>> packet_storage_;
+    };
+
+    bool file_exists(const char *path)
+    {
+        std::ifstream input(path, std::ios::binary);
+        return input.good();
     }
 
-    void release_burst(rxtech::RxBurst& burst) override {
-        burst.packets.clear();
-        packet_storage_.clear();
-    }
+} // namespace
 
-    rxtech::BackendStats stats() const override {
-        return stats_;
-    }
-
-    void shutdown() override {
-    }
-
-private:
-    bool served_ = false;
-    rxtech::BackendStats stats_{};
-    std::vector<std::vector<std::uint8_t>> packet_storage_;
-};
-
-bool file_exists(const char* path) {
-    std::ifstream input(path, std::ios::binary);
-    return input.good();
-}
-
-}  // namespace
-
-int main() {
+int main()
+{
     {
         rxtech::ReceiveContext context;
         context.config = rxtech::load_default_config();
-        context.config.output_dir = "results/test_receive_runner_fake";
+        context.config.capture_output_dir = "results/test_receive_runner_fake";
         context.config.duration_seconds = 1;
         context.backend = std::make_unique<FakeBackend>();
         context.metrics = std::make_unique<rxtech::MetricsCollector>();
@@ -245,8 +284,9 @@ int main() {
         assert(summary.run_status == "success");
         assert(summary.rx_packets > 0U);
         assert(summary.rx_bytes > 0U);
-        assert(summary.captured_packets == summary.rx_packets);
-        assert(summary.recorded_packets == summary.rx_packets);
+        assert(summary.captured_packets > 0U);
+        assert(summary.captured_packets <= summary.rx_packets);
+        assert(summary.recorded_packets == summary.captured_packets);
         assert(summary.control_table_packets > 0U);
         assert(summary.data_packets > 0U);
         assert(summary.cpi_count == 1U);
@@ -270,7 +310,7 @@ int main() {
     {
         rxtech::ReceiveContext context;
         context.config = rxtech::load_default_config();
-        context.config.output_dir = "results/test_receive_runner_unavailable";
+        context.config.capture_output_dir = "results/test_receive_runner_unavailable";
         context.backend = std::make_unique<UnavailableBackend>();
         context.metrics = std::make_unique<rxtech::MetricsCollector>();
 
@@ -286,17 +326,17 @@ int main() {
     {
         rxtech::ReceiveContext context;
         context.config = rxtech::load_default_config();
-        context.config.output_dir = "results/test_receive_runner_until_stopped";
+        context.config.capture_output_dir = "results/test_receive_runner_until_stopped";
         context.config.run_until_stopped = true;
         context.config.status_interval_seconds = 1;
         context.backend = std::make_unique<FakeBackend>();
         context.metrics = std::make_unique<rxtech::MetricsCollector>();
         std::ostringstream status_stream;
 
-        std::thread stopper([]() {
+        std::thread stopper([]()
+                            {
             std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-            rxtech::request_receive_stop();
-        });
+            rxtech::request_receive_stop(); });
 
         rxtech::ReceiveRunner runner;
         runner.set_status_output(&status_stream);
@@ -319,7 +359,7 @@ int main() {
     {
         rxtech::ReceiveContext context;
         context.config = rxtech::load_default_config();
-        context.config.output_dir = "results/test_receive_runner_filtered";
+        context.config.capture_output_dir = "results/test_receive_runner_filtered";
         context.config.duration_seconds = 1;
         context.config.receiver_ipv4 = "172.20.11.100";
         context.config.allowed_source_ipv4 = "172.20.11.222";

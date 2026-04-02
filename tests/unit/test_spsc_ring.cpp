@@ -1,8 +1,12 @@
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 #include <cassert>
 
 #include "rxtech/spsc_ring.h"
 
-int main() {
+int main()
+{
     rxtech::SpscRing<int> ring(2U);
     assert(ring.push(1));
     assert(ring.push(2));

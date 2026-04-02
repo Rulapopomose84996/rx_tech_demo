@@ -2,20 +2,18 @@
 
 #include <string>
 
-namespace rxtech {
+namespace rxtech
+{
 
-struct CliArgs {
-    std::string config_path;
-    std::string output_dir;
-    std::string interface_name;
-    std::string queue_id;
-    std::string duration_seconds;
-    std::string max_burst;
-    std::string cpu_cores;
-    bool until_stopped = false;
-    bool dry_run = false;
-};
+    struct CliArgs
+    {
+        std::string config_path;
+        bool dry_run = false;
+        bool help = false;
+        bool valid = true;
+        std::string error_message;
+    };
 
-CliArgs parse_cli_args(int argc, char** argv);
+    CliArgs parse_cli_args(int argc, char **argv);
 
-}  // namespace rxtech
+} // namespace rxtech

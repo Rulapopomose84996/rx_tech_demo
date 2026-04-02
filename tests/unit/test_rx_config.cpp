@@ -4,34 +4,28 @@
 
 #include "rxtech/rx_config.h"
 
-int main() {
+int main()
+{
     const rxtech::RxConfig default_config = rxtech::load_default_config();
-    if (default_config.interface_name != "receiver0") {
+    if (default_config.interface_name != "receiver0")
+    {
         std::cerr << "expected default interface receiver0, got "
                   << default_config.interface_name << '\n';
         return 1;
     }
+    if (default_config.capture_output_dir != "results" ||
+        default_config.capture_index_filename != "capture_index.csv" ||
+        default_config.capture_data_filename != "capture_packets.bin")
+    {
+        std::cerr << "unexpected default capture configuration\n";
+        return 1;
+    }
 
-    const char* path = "test_rx_config_generated.conf";
+    const char *path = "test_rx_config_generated.conf";
     {
         std::ofstream out(path, std::ios::trunc);
         out << "backend: af_xdp\n";
-        out << "output_dir: results/config_case\n";
-        out << "interface_name: receiver1\n";
-        out << "queue_id: 22\n";
-        out << "duration_seconds: 12\n";
-        out << "max_burst: 32\n";
-        out << "cpu_cores: [16,17,18]\n";
-        out << "packet_size_bytes: 1024\n";
-        out << "run_until_stopped: true\n";
-        out << "status_interval_seconds: 10\n";
-        out << "feedback_interval_seconds: 1\n";
-        out << "feedback_enabled: true\n";
-        out << "feedback_host: 172.20.11.11\n";
-        out << "feedback_bind_host: 172.20.11.100\n";
-        out << "feedback_port: 9999\n";
-        out << "allowed_source_ipv4: 172.20.11.222\n";
-        out << "allowed_dest_port: 9999\n";
+        out << "output_dir: results/legacy_should_not_win\n";
         out << "xdp_bind_mode: copy\n";
         out << "xdp_rx_ring_size: 512\n";
         out << "xdp_tx_ring_size: 128\n";
@@ -40,10 +34,45 @@ int main() {
         out << "xdp_frame_size: 4096\n";
         out << "xdp_frame_count: 8192\n";
         out << "xdp_poll_timeout_ms: 0\n";
+        out << "packet_size_bytes: 1024\n";
+        out << "[capture]\n";
+        out << "output_dir = results/config_case\n";
+        out << "enabled = true\n";
+        out << "index_filename = parsed.csv\n";
+        out << "data_filename = parsed.bin\n";
+        out << "[network]\n";
+        out << "interface_name = receiver1\n";
+        out << "queue_id = 22\n";
+        out << "receiver_ipv4 = 172.20.11.100\n";
+        out << "allowed_source_ipv4 = 172.20.11.222\n";
+        out << "allowed_dest_port = 9999\n";
+        out << "[runtime]\n";
+        out << "duration_seconds = 12\n";
+        out << "max_burst = 32\n";
+        out << "cpu_cores = [16,17,18]\n";
+        out << "run_until_stopped = true\n";
+        out << "status_interval_seconds = 10\n";
+        out << "[feedback]\n";
+        out << "interval_seconds = 1\n";
+        out << "enabled = true\n";
+        out << "host = 172.20.11.11\n";
+        out << "bind_host = 172.20.11.100\n";
+        out << "port = 9999\n";
+        out << "[log]\n";
+        out << "level = debug\n";
+        out << "output = file\n";
+        out << "file_path = logs/rx.log\n";
+        out << "[protocol]\n";
+        out << "udp_packet_size = 2048\n";
+        out << "channels_per_prt = 3\n";
+        out << "packets_per_channel = 9\n";
     }
 
     const rxtech::RxConfig config = rxtech::load_config_file(path);
-    if (config.backend_name != "af_xdp" || config.output_dir != "results/config_case" ||
+    if (config.backend_name != "af_xdp" || config.capture_output_dir != "results/config_case" ||
+        config.output_dir != "results/config_case" ||
+        !config.capture_enabled || config.capture_index_filename != "parsed.csv" ||
+        config.capture_data_filename != "parsed.bin" ||
         config.interface_name != "receiver1" || config.queue_id != 22U ||
         config.duration_seconds != 12U || config.max_burst != 32U ||
         config.packet_size_bytes != 1024U || config.cpu_cores.size() != 3U ||
@@ -51,11 +80,15 @@ int main() {
         config.status_interval_seconds != 10U || config.feedback_interval_seconds != 1U || !config.feedback_enabled ||
         config.feedback_host != "172.20.11.11" || config.feedback_bind_host != "172.20.11.100" || config.feedback_port != 9999U ||
         config.allowed_source_ipv4 != "172.20.11.222" || config.allowed_dest_port != 9999U ||
+        config.log_level != "debug" || config.log_output != "file" || config.log_file_path != "logs/rx.log" ||
+        config.protocol_udp_packet_size != 2048U || config.protocol_channels_per_prt != 3U ||
+        config.protocol_packets_per_channel != 9U ||
         config.xdp_bind_mode != "copy" ||
         config.xdp_rx_ring_size != 512U || config.xdp_tx_ring_size != 128U ||
         config.xdp_fill_ring_size != 1024U || config.xdp_completion_ring_size != 512U ||
         config.xdp_frame_size != 4096U || config.xdp_frame_count != 8192U ||
-        config.xdp_poll_timeout_ms != 0U) {
+        config.xdp_poll_timeout_ms != 0U)
+    {
         std::cerr << "config parsing regression in test_rx_config\n";
         return 1;
     }
@@ -65,7 +98,8 @@ int main() {
         dpdk_config.receiver_ipv4 != "172.20.11.100" ||
         dpdk_config.allowed_source_ipv4 != "172.20.11.222" ||
         dpdk_config.allowed_dest_port != 9999U ||
-        dpdk_config.dpdk_pci_addr != "0001:05:00.0") {
+        dpdk_config.dpdk_pci_addr != "0001:05:00.0")
+    {
         std::cerr << "dpdk single face config should point at receiver0 / 172.20.11.100 / 172.20.11.222 / 9999 / 0001:05:00.0\n";
         return 1;
     }

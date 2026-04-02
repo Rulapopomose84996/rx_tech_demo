@@ -4,53 +4,40 @@ namespace rxtech {
 
 namespace {
 
-constexpr std::uint32_t kExpectedPayloadBytes = 2032U;
-constexpr std::uint32_t kExpectedUdpPayloadBytes = 2048U;
-constexpr std::uint16_t kMaxChannel = 3U;
-constexpr std::uint16_t kMinPacketIndex = 1U;
-constexpr std::uint16_t kMaxPacketIndex = 9U;
-constexpr std::uint32_t kValidTail = 0x55AAFF30U;
-
+std::uint32_t control_table_payload_len(const ProtocolSpec& spec) {
+    return spec.control_table_size > spec.packet_header_size ? (spec.control_table_size - spec.packet_header_size) : 0U;
+}
 }  // namespace
 
-SamplePacketValidation SamplePacketValidator::validate(const SamplePacketView& packet) const noexcept {
+PacketValidity PacketValidator::validate(const ParsedPacketView& packet) const noexcept {
     if (!packet.valid) {
-        return {false, packet.error_reason.empty() ? "parse failed" : packet.error_reason};
+        return {false, packet.reject_reason == RejectReason::none ? RejectReason::invalid_header : packet.reject_reason};
     }
 
-    if (packet.kind == SamplePacketKind::control_table) {
-        if (packet.ip_fragment_offset != 0U || packet.more_ip_fragments) {
-            return {false, "control table is fragmented"};
+    if (packet.kind == PacketKind::control_table) {
+        if (packet.payload_ptr == nullptr || packet.payload_len != control_table_payload_len(spec_)) {
+            return {false, RejectReason::invalid_len};
         }
-        if (packet.frame_length != kExpectedUdpPayloadBytes) {
-            return {false, "unexpected control table payload length"};
-        }
-        if (packet.payload_len != kExpectedPayloadBytes || packet.payload_ptr == nullptr) {
-            return {false, "unexpected control table body length"};
-        }
-        return {true, ""};
+        return {true, RejectReason::none};
     }
 
-    if (packet.kind == SamplePacketKind::data_packet) {
-        if (packet.ip_fragment_offset != 0U || packet.more_ip_fragments) {
-            return {false, "data packet is fragmented"};
+    if (packet.kind == PacketKind::data_packet) {
+        if (packet.channel >= spec_.channels_per_prt) {
+            return {false, RejectReason::invalid_channel};
         }
-        if (packet.channel > kMaxChannel) {
-            return {false, "channel out of range"};
+        if (packet.packet_index == 0U || packet.packet_index > spec_.packets_per_channel) {
+            return {false, RejectReason::invalid_packet_index};
         }
-        if (packet.packet_index < kMinPacketIndex || packet.packet_index > kMaxPacketIndex) {
-            return {false, "packet index out of range"};
+        if (packet.payload_ptr == nullptr || packet.payload_len != spec_.packet_data_size) {
+            return {false, RejectReason::invalid_len};
         }
-        if (packet.payload_len != kExpectedPayloadBytes) {
-            return {false, "unexpected data payload length"};
+        if (packet.tail != 0U && packet.tail != spec_.magic_tail) {
+            return {false, RejectReason::invalid_tail};
         }
-        if (packet.tail != 0U && packet.tail != kValidTail) {
-            return {false, "invalid packet tail"};
-        }
-        return {true, ""};
+        return {true, RejectReason::none};
     }
 
-    return {false, "unsupported packet kind"};
+    return {false, RejectReason::invalid_field_combo};
 }
 
 }  // namespace rxtech

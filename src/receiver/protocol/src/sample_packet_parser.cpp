@@ -1,171 +1,181 @@
 #include "rxtech/sample_packet_parser.h"
 
-namespace rxtech {
+namespace rxtech
+{
 
-namespace {
+    namespace
+    {
 
-constexpr std::uint32_t kControlTableMagic = 0x55AAFF00U;
-constexpr std::uint32_t kDataPacketMagic = 0x55AAFF03U;
-constexpr std::uint16_t kEtherTypeIpv4 = 0x0800U;
-constexpr std::uint8_t kIpProtoUdp = 17U;
+        constexpr std::uint16_t kEtherTypeIpv4 = 0x0800U;
+        constexpr std::uint8_t kIpProtoUdp = 17U;
 
-std::uint16_t read_u16_le(const std::uint8_t* data) {
-    return static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[0]) |
-                                      (static_cast<std::uint16_t>(data[1]) << 8U));
-}
-
-std::uint32_t read_u32_le(const std::uint8_t* data) {
-    return static_cast<std::uint32_t>(data[0]) |
-           (static_cast<std::uint32_t>(data[1]) << 8U) |
-           (static_cast<std::uint32_t>(data[2]) << 16U) |
-           (static_cast<std::uint32_t>(data[3]) << 24U);
-}
-
-std::uint16_t read_u16_be(const std::uint8_t* data) {
-    return static_cast<std::uint16_t>((static_cast<std::uint16_t>(data[0]) << 8U) |
-                                      static_cast<std::uint16_t>(data[1]));
-}
-
-std::uint32_t read_u32_be(const std::uint8_t* data) {
-    return (static_cast<std::uint32_t>(data[0]) << 24U) |
-           (static_cast<std::uint32_t>(data[1]) << 16U) |
-           (static_cast<std::uint32_t>(data[2]) << 8U) |
-           static_cast<std::uint32_t>(data[3]);
-}
-
-std::uint32_t resolve_payload_offset(const PacketDesc& packet) {
-    if (packet.len >= 14U) {
-        const std::uint16_t ether_type = read_u16_be(packet.data + 12U);
-        if (ether_type == kEtherTypeIpv4 && packet.len >= 42U) {
-            const std::uint8_t version_ihl = packet.data[14U];
-            const std::uint8_t version = static_cast<std::uint8_t>((version_ihl >> 4U) & 0x0FU);
-            const std::uint8_t ihl_words = static_cast<std::uint8_t>(version_ihl & 0x0FU);
-            const std::uint32_t ip_header_bytes = static_cast<std::uint32_t>(ihl_words) * 4U;
-            if (version == 4U && ihl_words >= 5U && packet.len >= 14U + ip_header_bytes + 8U && packet.data[23U] == kIpProtoUdp) {
-                return 14U + ip_header_bytes + 8U;
-            }
+        std::uint16_t read_u16_le(const std::uint8_t *data)
+        {
+            return static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[0]) |
+                                              (static_cast<std::uint16_t>(data[1]) << 8U));
         }
-    }
-    return 0U;
-}
 
-std::uint16_t ipv4_fragment_field(const PacketDesc& packet) {
-    if (packet.len < 22U) {
-        return 0U;
-    }
-    return read_u16_be(packet.data + 20U);
-}
+        std::uint32_t read_u32_le(const std::uint8_t *data)
+        {
+            return static_cast<std::uint32_t>(data[0]) |
+                   (static_cast<std::uint32_t>(data[1]) << 8U) |
+                   (static_cast<std::uint32_t>(data[2]) << 16U) |
+                   (static_cast<std::uint32_t>(data[3]) << 24U);
+        }
 
-}  // namespace
+        std::uint16_t read_u16_be(const std::uint8_t *data)
+        {
+            return static_cast<std::uint16_t>((static_cast<std::uint16_t>(data[0]) << 8U) |
+                                              static_cast<std::uint16_t>(data[1]));
+        }
 
-const char* sample_packet_kind_name(SamplePacketKind kind) noexcept {
-    switch (kind) {
-        case SamplePacketKind::control_table:
+        std::uint32_t resolve_payload_offset(const PacketDesc &packet)
+        {
+            if (packet.len >= 14U)
+            {
+                const std::uint16_t ether_type = read_u16_be(packet.data + 12U);
+                if (ether_type == kEtherTypeIpv4 && packet.len >= 42U)
+                {
+                    const std::uint8_t version_ihl = packet.data[14U];
+                    const std::uint8_t version = static_cast<std::uint8_t>((version_ihl >> 4U) & 0x0FU);
+                    const std::uint8_t ihl_words = static_cast<std::uint8_t>(version_ihl & 0x0FU);
+                    const std::uint32_t ip_header_bytes = static_cast<std::uint32_t>(ihl_words) * 4U;
+                    if (version == 4U && ihl_words >= 5U && packet.len >= 14U + ip_header_bytes + 8U && packet.data[23U] == kIpProtoUdp)
+                    {
+                        return 14U + ip_header_bytes + 8U;
+                    }
+                }
+            }
+            return 0U;
+        }
+
+    } // namespace
+
+    const char *packet_kind_name(PacketKind kind) noexcept
+    {
+        switch (kind)
+        {
+        case PacketKind::control_table:
             return "control_table";
-        case SamplePacketKind::data_packet:
+        case PacketKind::data_packet:
             return "data_packet";
-        case SamplePacketKind::unknown:
+        case PacketKind::unknown:
             return "unknown";
+        }
+        return "unknown";
     }
-    return "unknown";
-}
 
-SamplePacketView SamplePacketParser::parse(const PacketDesc& packet) const noexcept {
-    SamplePacketView parsed;
-    if (packet.data == nullptr) {
-        parsed.error_reason = "packet too short";
+    const char *reject_reason_name(RejectReason reason) noexcept
+    {
+        switch (reason)
+        {
+        case RejectReason::none:
+            return "none";
+        case RejectReason::invalid_len:
+            return "invalid_len";
+        case RejectReason::invalid_header:
+            return "invalid_header";
+        case RejectReason::invalid_channel:
+            return "invalid_channel";
+        case RejectReason::invalid_packet_index:
+            return "invalid_packet_index";
+        case RejectReason::invalid_tail:
+            return "invalid_tail";
+        case RejectReason::invalid_field_combo:
+            return "invalid_field_combo";
+        }
+        return "invalid_field_combo";
+    }
+
+    ParsedPacketView PacketParser::parse(const PacketDesc &packet) const noexcept
+    {
+        ParsedPacketView parsed;
+        if (packet.data == nullptr)
+        {
+            parsed.reject_reason = RejectReason::invalid_len;
+            return parsed;
+        }
+
+        const std::uint32_t payload_offset = resolve_payload_offset(packet);
+        if (payload_offset == 0U)
+        {
+            parsed.reject_reason = RejectReason::invalid_header;
+            return parsed;
+        }
+        if (packet.len < payload_offset + spec_.packet_header_size)
+        {
+            parsed.reject_reason = RejectReason::invalid_len;
+            return parsed;
+        }
+
+        const std::uint8_t *payload = packet.data + payload_offset;
+        const std::uint32_t magic = read_u32_le(payload + 0U);
+        parsed.cpi = read_u16_le(payload + 4U);
+        parsed.rx_tsc = packet.ts_ns;
+
+        if (magic == spec_.magic_control)
+        {
+            parsed.kind = PacketKind::control_table;
+            parsed.payload_ptr = payload + spec_.packet_header_size;
+            parsed.payload_len = packet.len - payload_offset - spec_.packet_header_size;
+            parsed.valid = true;
+            return parsed;
+        }
+
+        if (magic == spec_.magic_data)
+        {
+            parsed.kind = PacketKind::data_packet;
+            parsed.channel = read_u16_le(payload + 6U);
+            parsed.prt = read_u16_le(payload + 8U);
+            parsed.packet_index = read_u16_le(payload + 10U);
+            parsed.tail = read_u32_le(payload + 12U);
+            parsed.payload_ptr = payload + spec_.packet_header_size;
+            parsed.payload_len = packet.len - payload_offset - spec_.packet_header_size;
+            parsed.valid = true;
+            return parsed;
+        }
+
+        parsed.reject_reason = RejectReason::invalid_header;
         return parsed;
     }
 
-    const std::uint32_t payload_offset = resolve_payload_offset(packet);
-    parsed.header_offset = payload_offset;
-    parsed.frame_length = packet.len;
-    const std::uint16_t fragment_field = ipv4_fragment_field(packet);
-    parsed.ip_fragment_offset = static_cast<std::uint16_t>((fragment_field & 0x1FFFU) * 8U);
-    parsed.more_ip_fragments = (fragment_field & 0x2000U) != 0U;
-    if (payload_offset != 0U && packet.len >= payload_offset) {
-        parsed.is_ipv4_udp = true;
-        parsed.source_ipv4_be = read_u32_be(packet.data + 26U);
-        parsed.dest_ipv4_be = read_u32_be(packet.data + 30U);
-        parsed.source_port = read_u16_be(packet.data + payload_offset - 8U);
-        parsed.dest_port = read_u16_be(packet.data + payload_offset - 6U);
-    }
-    if (packet.len < payload_offset + 16U) {
-        parsed.error_reason = "packet too short";
+    ParsedPacketView PacketParser::parse(const UdpPayloadFrame &frame) const noexcept
+    {
+        ParsedPacketView parsed;
+        if (frame.udp_payload.size() < spec_.packet_header_size)
+        {
+            parsed.reject_reason = RejectReason::invalid_len;
+            return parsed;
+        }
+
+        const std::uint8_t *payload = frame.udp_payload.data();
+        const std::uint32_t magic = read_u32_le(payload + 0U);
+        parsed.cpi = read_u16_le(payload + 4U);
+
+        if (magic == spec_.magic_control)
+        {
+            parsed.kind = PacketKind::control_table;
+            parsed.payload_ptr = payload + spec_.packet_header_size;
+            parsed.payload_len = static_cast<std::uint32_t>(frame.udp_payload.size() - spec_.packet_header_size);
+            parsed.valid = true;
+            return parsed;
+        }
+
+        if (magic == spec_.magic_data)
+        {
+            parsed.kind = PacketKind::data_packet;
+            parsed.channel = read_u16_le(payload + 6U);
+            parsed.prt = read_u16_le(payload + 8U);
+            parsed.packet_index = read_u16_le(payload + 10U);
+            parsed.tail = read_u32_le(payload + 12U);
+            parsed.payload_ptr = payload + spec_.packet_header_size;
+            parsed.payload_len = static_cast<std::uint32_t>(frame.udp_payload.size() - spec_.packet_header_size);
+            parsed.valid = true;
+            return parsed;
+        }
+
+        parsed.reject_reason = RejectReason::invalid_header;
         return parsed;
     }
 
-    const std::uint8_t* payload = packet.data + payload_offset;
-    parsed.magic = read_u32_le(payload + 0U);
-    parsed.cpi = read_u16_le(payload + 4U);
-
-    if (parsed.magic == kControlTableMagic) {
-        parsed.kind = SamplePacketKind::control_table;
-        parsed.payload_ptr = payload + 16U;
-        parsed.payload_len = packet.len - payload_offset - 16U;
-        parsed.valid = true;
-        return parsed;
-    }
-
-    if (parsed.magic == kDataPacketMagic) {
-        parsed.kind = SamplePacketKind::data_packet;
-        parsed.channel = read_u16_le(payload + 6U);
-        parsed.prt = read_u16_le(payload + 8U);
-        parsed.packet_index = read_u16_le(payload + 10U);
-        parsed.tail = read_u32_le(payload + 12U);
-        parsed.payload_ptr = payload + 16U;
-        parsed.payload_len = packet.len - payload_offset - 16U;
-        parsed.valid = true;
-        return parsed;
-    }
-
-    parsed.error_reason = "unknown packet magic";
-    return parsed;
-}
-
-SamplePacketView SamplePacketParser::parse(const UdpPayloadFrame& frame) const noexcept {
-    SamplePacketView parsed;
-    if (frame.udp_payload.size() < 16U) {
-        parsed.error_reason = "packet too short";
-        return parsed;
-    }
-
-    parsed.header_offset = 0U;
-    parsed.frame_length = static_cast<std::uint32_t>(frame.udp_payload.size());
-    parsed.is_ipv4_udp = true;
-    parsed.source_ipv4_be = frame.source_ipv4_be;
-    parsed.dest_ipv4_be = frame.dest_ipv4_be;
-    parsed.source_port = frame.source_port;
-    parsed.dest_port = frame.dest_port;
-    parsed.ip_fragment_offset = 0U;
-    parsed.more_ip_fragments = false;
-
-    const std::uint8_t* payload = frame.udp_payload.data();
-    parsed.magic = read_u32_le(payload + 0U);
-    parsed.cpi = read_u16_le(payload + 4U);
-
-    if (parsed.magic == kControlTableMagic) {
-        parsed.kind = SamplePacketKind::control_table;
-        parsed.payload_ptr = payload + 16U;
-        parsed.payload_len = static_cast<std::uint32_t>(frame.udp_payload.size() - 16U);
-        parsed.valid = true;
-        return parsed;
-    }
-
-    if (parsed.magic == kDataPacketMagic) {
-        parsed.kind = SamplePacketKind::data_packet;
-        parsed.channel = read_u16_le(payload + 6U);
-        parsed.prt = read_u16_le(payload + 8U);
-        parsed.packet_index = read_u16_le(payload + 10U);
-        parsed.tail = read_u32_le(payload + 12U);
-        parsed.payload_ptr = payload + 16U;
-        parsed.payload_len = static_cast<std::uint32_t>(frame.udp_payload.size() - 16U);
-        parsed.valid = true;
-        return parsed;
-    }
-
-    parsed.error_reason = "unknown packet magic";
-    return parsed;
-}
-
-}  // namespace rxtech
+} // namespace rxtech

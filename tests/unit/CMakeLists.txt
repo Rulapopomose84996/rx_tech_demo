@@ -40,6 +40,18 @@ add_test(NAME test_protocol_sequence_interpreter COMMAND test_protocol_sequence_
 set_tests_properties(test_protocol_sequence_interpreter PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(test_protocol_sequence_interpreter)
 
+add_executable(test_slot_writer test_slot_writer.cpp)
+target_link_libraries(test_slot_writer PRIVATE rx_receiver_core)
+add_test(NAME test_slot_writer COMMAND test_slot_writer)
+set_tests_properties(test_slot_writer PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+rxtech_apply_warnings(test_slot_writer)
+
+add_executable(test_cpi_admission test_cpi_admission.cpp)
+target_link_libraries(test_cpi_admission PRIVATE rx_receiver_core)
+add_test(NAME test_cpi_admission COMMAND test_cpi_admission)
+set_tests_properties(test_cpi_admission PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+rxtech_apply_warnings(test_cpi_admission)
+
 add_executable(test_udp_payload_assembler test_udp_payload_assembler.cpp)
 target_link_libraries(test_udp_payload_assembler PRIVATE rx_receiver_core)
 add_test(NAME test_udp_payload_assembler COMMAND test_udp_payload_assembler)

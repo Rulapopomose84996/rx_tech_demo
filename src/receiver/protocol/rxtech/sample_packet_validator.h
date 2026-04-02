@@ -1,19 +1,24 @@
 #pragma once
 
-#include <string>
-
 #include "rxtech/sample_packet_parser.h"
 
 namespace rxtech {
 
-struct SamplePacketValidation {
+struct PacketValidity {
     bool ok = false;
-    std::string reason;
+    RejectReason reason = RejectReason::none;
 };
 
-class SamplePacketValidator {
+class PacketValidator {
 public:
-    SamplePacketValidation validate(const SamplePacketView& packet) const noexcept;
+    PacketValidator() = default;
+    explicit PacketValidator(const ProtocolSpec& spec) : spec_(spec) {
+    }
+
+    PacketValidity validate(const ParsedPacketView& packet) const noexcept;
+
+private:
+    ProtocolSpec spec_{};
 };
 
 }  // namespace rxtech

@@ -27,6 +27,9 @@ if(UNIX AND NOT APPLE)
             CXX_EXTENSIONS ON
         )
         target_compile_options(rx_legacy_af_xdp PRIVATE ${LIBBPF_CFLAGS_OTHER})
+        if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+            target_compile_options(rx_legacy_af_xdp PRIVATE -Wno-deprecated-declarations)
+        endif()
         rxtech_apply_warnings(rx_legacy_af_xdp)
     else()
         message(WARNING "libbpf not found, AF_XDP backend target is disabled")
@@ -46,5 +49,8 @@ else()
             rx_receiver_core
     )
 
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(rx_legacy_af_xdp PRIVATE -Wno-deprecated-declarations)
+    endif()
     rxtech_apply_warnings(rx_legacy_af_xdp)
 endif()

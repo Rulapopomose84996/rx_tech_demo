@@ -4,75 +4,65 @@ namespace rxtech {
 
 namespace {
 
-constexpr std::uint16_t kPacketsPerChannel = 9U;
-constexpr std::uint16_t kExpectedChannels = 3U;
-constexpr std::uint16_t kExpectedPacketsPerPrt = kPacketsPerChannel * kExpectedChannels;
-constexpr std::uint32_t kFullPacketIq = 508U;
-constexpr std::uint32_t kNinthPacketIq = 476U;
 constexpr std::uint32_t kBytesPerIq = 4U;
-
-const char* channel_name(std::uint16_t channel) {
-    switch (channel) {
-        case 0:
-            return "和路";
-        case 1:
-            return "俯仰差";
-        case 2:
-            return "方位差";
-        default:
-            return "未知通道";
-    }
-}
 
 }  // namespace
 
-ProtocolPacketView ProtocolSequenceInterpreter::interpret(const SamplePacketView& packet) noexcept {
-    ProtocolPacketView result;
+InterpretedPacketView ProtocolSequenceInterpreter::interpret(const ParsedPacketView& packet) const noexcept {
+    InterpretedPacketView result;
     result.kind = packet.kind;
     result.cpi = packet.cpi;
 
     if (!packet.valid) {
-        result.error_reason = packet.error_reason.empty() ? "parse failed" : packet.error_reason;
+        result.reject_reason = packet.reject_reason == RejectReason::none ? RejectReason::invalid_header : packet.reject_reason;
         return result;
     }
 
-    if (packet.kind == SamplePacketKind::control_table) {
+    if (packet.kind == PacketKind::control_table) {
         result.valid = true;
         return result;
     }
 
-    if (packet.kind != SamplePacketKind::data_packet) {
-        result.error_reason = "unsupported packet kind";
+    if (packet.kind != PacketKind::data_packet) {
+        result.reject_reason = RejectReason::invalid_field_combo;
         return result;
     }
 
-    std::uint32_t& counter = data_packet_counters_[packet.cpi];
-    ++counter;
-    const std::uint16_t position_in_prt =
-        static_cast<std::uint16_t>(((counter - 1U) % kExpectedPacketsPerPrt) + 1U);
-    result.packet_position_in_prt = position_in_prt;
-    result.prt = static_cast<std::uint16_t>(((counter - 1U) / kExpectedPacketsPerPrt) + 1U);
-
-    result.channel = static_cast<std::uint16_t>((position_in_prt - 1U) / kPacketsPerChannel);
-    result.channel_name = channel_name(result.channel);
-    result.packet_index = static_cast<std::uint16_t>(((position_in_prt - 1U) % kPacketsPerChannel) + 1U);
-
-    if (packet.payload_len != 2032U || packet.payload_ptr == nullptr) {
-        result.error_reason = "unexpected data payload length";
+    if (packet.channel >= spec_.channels_per_prt) {
+        result.reject_reason = RejectReason::invalid_channel;
+        return result;
+    }
+    if (packet.packet_index == 0U || packet.packet_index > spec_.packets_per_channel) {
+        result.reject_reason = RejectReason::invalid_packet_index;
         return result;
     }
 
-    if (result.packet_index == 9U) {
-        result.iq_count = kNinthPacketIq;
-        result.zero_padding_bytes = packet.payload_len - (kNinthPacketIq * kBytesPerIq);
-        for (std::uint32_t index = kNinthPacketIq * kBytesPerIq; index < packet.payload_len; ++index) {
+    result.prt = packet.prt;
+    result.channel = packet.channel;
+    result.packet_index = packet.packet_index;
+    result.packet_position_in_prt = static_cast<std::uint16_t>(packet.channel * spec_.packets_per_channel + packet.packet_index);
+
+    if (packet.payload_len != spec_.packet_data_size || packet.payload_ptr == nullptr) {
+        result.reject_reason = RejectReason::invalid_len;
+        return result;
+    }
+
+    if (result.packet_index == spec_.packets_per_channel) {
+        result.iq_count = spec_.iq_per_last_packet;
+        const std::uint32_t used_bytes = spec_.iq_per_last_packet * kBytesPerIq;
+        if (used_bytes > packet.payload_len) {
+            result.reject_reason = RejectReason::invalid_len;
+            return result;
+        }
+        result.zero_padding_bytes = packet.payload_len - used_bytes;
+        for (std::uint32_t index = used_bytes; index < packet.payload_len; ++index) {
             if (packet.payload_ptr[index] != 0U) {
-                result.error_reason = "ninth packet zero padding is not all zero";
+                result.reject_reason = RejectReason::invalid_field_combo;
                 return result;
             }
         }
     } else {
-        result.iq_count = kFullPacketIq;
+        result.iq_count = spec_.iq_per_full_packet;
         result.zero_padding_bytes = 0U;
     }
 

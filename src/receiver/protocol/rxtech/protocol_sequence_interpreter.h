@@ -1,33 +1,34 @@
 #pragma once
 
 #include <cstdint>
-#include <string>
-#include <unordered_map>
 
 #include "rxtech/sample_packet_parser.h"
 
 namespace rxtech {
 
-struct ProtocolPacketView {
+struct InterpretedPacketView {
     bool valid = false;
-    SamplePacketKind kind = SamplePacketKind::unknown;
+    PacketKind kind = PacketKind::unknown;
     std::uint16_t cpi = 0;
     std::uint16_t prt = 0;
     std::uint16_t channel = 0;
-    std::string channel_name;
     std::uint16_t packet_index = 0;
     std::uint16_t packet_position_in_prt = 0;
     std::uint32_t iq_count = 0;
     std::uint32_t zero_padding_bytes = 0;
-    std::string error_reason;
+    RejectReason reject_reason = RejectReason::none;
 };
 
 class ProtocolSequenceInterpreter {
 public:
-    ProtocolPacketView interpret(const SamplePacketView& packet) noexcept;
+    ProtocolSequenceInterpreter() = default;
+    explicit ProtocolSequenceInterpreter(const ProtocolSpec& spec) : spec_(spec) {
+    }
+
+    InterpretedPacketView interpret(const ParsedPacketView& packet) const noexcept;
 
 private:
-    std::unordered_map<std::uint16_t, std::uint32_t> data_packet_counters_;
+    ProtocolSpec spec_{};
 };
 
 }  // namespace rxtech

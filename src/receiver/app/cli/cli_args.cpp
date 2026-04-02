@@ -1,70 +1,57 @@
 #include "cli_args.h"
 
-#include <stdexcept>
 #include <string>
 
-namespace rxtech {
+namespace rxtech
+{
 
-CliArgs parse_cli_args(int argc, char** argv) {
-    CliArgs args;
-    int positional_index = 0;
+    CliArgs parse_cli_args(int argc, char **argv)
+    {
+        CliArgs args;
 
-    for (int index = 1; index < argc; ++index) {
-        const std::string current = argv[index];
-        if (current.rfind("--", 0) == 0) {
-            if (current == "--dry-run") {
-                args.dry_run = true;
+        for (int index = 1; index < argc; ++index)
+        {
+            const std::string current = argv[index];
+            if (current == "-h" || current == "--help")
+            {
+                args.help = true;
                 continue;
             }
-            if (current == "--until-stopped") {
-                args.until_stopped = true;
+
+            if (current.rfind("--", 0) == 0)
+            {
+                if (current == "--dry-run")
+                {
+                    args.dry_run = true;
+                    continue;
+                }
+                if (index + 1 >= argc)
+                {
+                    args.valid = false;
+                    args.error_message = "missing value for argument: " + current;
+                    return args;
+                }
+
+                const std::string value = argv[++index];
+                if (current == "--config")
+                {
+                    args.config_path = value;
+                }
+                else
+                {
+                    args.valid = false;
+                    args.error_message = "unknown argument: " + current;
+                    return args;
+                }
                 continue;
             }
-            if (index + 1 >= argc) {
-                throw std::runtime_error("missing value for argument: " + current);
-            }
 
-            const std::string value = argv[++index];
-            if (current == "--config") {
-                args.config_path = value;
-            } else if (current == "--output") {
-                args.output_dir = value;
-            } else if (current == "--iface") {
-                args.interface_name = value;
-            } else if (current == "--queue") {
-                args.queue_id = value;
-            } else if (current == "--duration") {
-                args.duration_seconds = value;
-            } else if (current == "--max-burst") {
-                args.max_burst = value;
-            } else if (current == "--cores") {
-                args.cpu_cores = value;
-            } else {
-                throw std::runtime_error("unknown argument: " + current);
-            }
-            continue;
+            args.valid = false;
+            args.error_message = "unexpected positional argument: " + current;
+            return args;
         }
 
-        switch (positional_index) {
-            case 0:
-                args.output_dir = current;
-                break;
-            case 1:
-                args.interface_name = current;
-                break;
-            case 2:
-                args.queue_id = current;
-                break;
-            case 3:
-                args.duration_seconds = current;
-                break;
-            default:
-                throw std::runtime_error("unexpected positional argument: " + current);
-        }
-        ++positional_index;
+        return args;
     }
 
-    return args;
-}
-
-}  // namespace rxtech
+} // namespace rxtech

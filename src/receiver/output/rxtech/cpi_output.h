@@ -1,0 +1,42 @@
+#pragma once
+
+#include <cstdint>
+
+#include "rxtech/cpi_context.h"
+
+namespace rxtech
+{
+
+    struct CpiReadOnlyView
+    {
+        const std::uint8_t *payload_base = nullptr;
+        const std::uint16_t *slot_valid_bytes = nullptr;
+        const PrtSummary *prt_summary = nullptr;
+        std::uint32_t n_prt = 0;
+        std::uint32_t slot_count = 0;
+        std::uint32_t payload_stride = kCpiSlotStride;
+    };
+
+    struct CpiOutput
+    {
+        std::uint16_t cpi_id = 0;
+        CpiDecision decision = CpiDecision::DISCARD_INVALID;
+        std::uint32_t received_slot_count = 0;
+        std::uint32_t missing_slot_count = 0;
+        std::uint32_t duplicate_count = 0;
+        std::uint32_t ready_prt_count = 0;
+        std::uint64_t first_rx_tsc = 0;
+        std::uint64_t last_rx_tsc = 0;
+        std::uint64_t seal_tsc = 0;
+        CpiReadOnlyView view{};
+        std::uint32_t pool_index = kInvalidPoolIndex;
+        std::uint64_t output_id = 0;
+    };
+
+    struct ReleaseToken
+    {
+        std::uint64_t output_id = 0;
+        std::uint32_t ctx_pool_index = kInvalidPoolIndex;
+    };
+
+} // namespace rxtech
