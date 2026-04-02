@@ -11,10 +11,10 @@ add_library(rx_receiver_core
 
 target_include_directories(rx_receiver_core
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/core
-        ${CMAKE_CURRENT_SOURCE_DIR}/protocol
-        ${CMAKE_CURRENT_SOURCE_DIR}/sidecar
-        ${CMAKE_CURRENT_SOURCE_DIR}/runtime
+    ${CMAKE_CURRENT_SOURCE_DIR}/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/protocol
+    ${CMAKE_CURRENT_SOURCE_DIR}/sidecar
+    ${CMAKE_CURRENT_SOURCE_DIR}/runtime
 )
 
 target_compile_features(rx_receiver_core PUBLIC cxx_std_17)
@@ -27,16 +27,17 @@ add_library(rx_receiver_dpdk_ingress
 
 target_include_directories(rx_receiver_dpdk_ingress
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/ingress/dpdk
+    ${CMAKE_CURRENT_SOURCE_DIR}/ingress/dpdk
 )
 
 target_link_libraries(rx_receiver_dpdk_ingress
     PUBLIC
-        rx_receiver_core
+    rx_receiver_core
 )
 
 if(UNIX AND NOT APPLE)
     find_package(PkgConfig QUIET)
+
     if(PkgConfig_FOUND)
         pkg_check_modules(LIBDPDK QUIET libdpdk)
     endif()
@@ -59,14 +60,14 @@ add_library(rx_receiver_app_common
 
 target_include_directories(rx_receiver_app_common
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/app/cli
-        ${CMAKE_CURRENT_SOURCE_DIR}/app/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/app/cli
+    ${CMAKE_CURRENT_SOURCE_DIR}/app/common
 )
 
 target_link_libraries(rx_receiver_app_common
     PUBLIC
-        rx_receiver_core
-        rx_receiver_dpdk_ingress
+    rx_receiver_core
+    rx_receiver_dpdk_ingress
 )
 
 target_compile_definitions(rx_receiver_app_common PUBLIC RXTECH_HAS_DPDK_BACKEND=1)
