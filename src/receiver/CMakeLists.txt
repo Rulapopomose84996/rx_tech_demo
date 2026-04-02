@@ -73,14 +73,13 @@ endif()
 rxtech_apply_warnings(rx_receiver_dpdk_ingress)
 
 add_library(rx_receiver_app_common
-    app/cli/cli_args.cpp
-    app/common/app_main_common.cpp
+    app/cli_args.cpp
+    app/run_app.cpp
 )
 
 target_include_directories(rx_receiver_app_common
     PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/app/cli
-    ${CMAKE_CURRENT_SOURCE_DIR}/app/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/app
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/ingress/dpdk/internal
 )

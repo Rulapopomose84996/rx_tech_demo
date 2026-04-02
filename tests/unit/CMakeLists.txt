@@ -10,6 +10,13 @@ add_test(NAME test_metrics COMMAND test_metrics)
 set_tests_properties(test_metrics PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(test_metrics)
 
+add_executable(test_cli_args test_cli_args.cpp)
+target_link_libraries(test_cli_args PRIVATE rx_receiver_app_common)
+target_include_directories(test_cli_args PRIVATE ${CMAKE_SOURCE_DIR}/src/receiver/app)
+add_test(NAME test_cli_args COMMAND test_cli_args)
+set_tests_properties(test_cli_args PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+rxtech_apply_warnings(test_cli_args)
+
 add_executable(test_rx_config test_rx_config.cpp)
 target_link_libraries(test_rx_config PRIVATE rx_receiver_core)
 add_test(NAME test_rx_config COMMAND test_rx_config)

@@ -1,4 +1,4 @@
-#include "app_main_common.h"
+#include "run_app.h"
 
 #include <iostream>
 #include <memory>
