@@ -38,3 +38,14 @@
 - 集成测试通过：1/1。
 - 新增 sender 脚本语法检查通过。
 - 构建输出已经比上一轮更干净，当前剩余输出主要是正常的 build progress，而不是配置或已知 legacy 告警噪声。
+
+## 本轮发布
+
+- 本地分支：`dev/phase3-infra`。
+- 已生成两个分类提交：
+  - `3a138f0 feat: implement phase3 receiver pipeline refactor`
+  - `94c22f8 docs: sync phase3 status and validation guide`
+- 已推送到：
+  - `gitea/dev/phase3-infra`
+  - `github/dev/phase3-infra`
+- 服务器主工作区 `/home/devuser/WorkSpace/rx_tech_demo` 已切换并拉取到 `dev/phase3-infra`。

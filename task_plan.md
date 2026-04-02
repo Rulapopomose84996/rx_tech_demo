@@ -18,8 +18,8 @@
 - [completed] 服务器构建复验
 - [completed] 服务器 unit / integration 测试复验
 - [completed] README、实现说明、进度与 findings 文档同步
-- [pending] 分类提交全部修改并推送到 `gitea` / `github`
-- [pending] 服务器主工作区拉取目标分支
+- [completed] 分类提交全部修改并推送到 `gitea` / `github`
+- [completed] 服务器主工作区拉取目标分支
 
 ## Key Decisions
 
