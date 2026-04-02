@@ -5,6 +5,7 @@ namespace rxtech {
 namespace {
 
 constexpr std::uint32_t kExpectedPayloadBytes = 2032U;
+constexpr std::uint32_t kExpectedUdpPayloadBytes = 2048U;
 constexpr std::uint16_t kMaxChannel = 3U;
 constexpr std::uint16_t kMinPacketIndex = 1U;
 constexpr std::uint16_t kMaxPacketIndex = 9U;
@@ -21,8 +22,11 @@ SamplePacketValidation SamplePacketValidator::validate(const SamplePacketView& p
         if (packet.ip_fragment_offset != 0U || packet.more_ip_fragments) {
             return {false, "control table is fragmented"};
         }
-        if (packet.frame_length != 14U + 20U + 8U + 2048U) {
-            return {false, "unexpected control table frame length"};
+        if (packet.frame_length != kExpectedUdpPayloadBytes) {
+            return {false, "unexpected control table payload length"};
+        }
+        if (packet.payload_len != kExpectedPayloadBytes || packet.payload_ptr == nullptr) {
+            return {false, "unexpected control table body length"};
         }
         return {true, ""};
     }

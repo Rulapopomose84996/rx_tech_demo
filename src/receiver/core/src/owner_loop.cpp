@@ -307,6 +307,15 @@ std::string hex_preview(const std::uint8_t* data, std::size_t size, std::size_t 
     return out.str();
 }
 
+std::string format_ipv4_be(std::uint32_t ipv4_be) {
+    std::ostringstream out;
+    out << ((ipv4_be >> 24U) & 0xFFU) << '.'
+        << ((ipv4_be >> 16U) & 0xFFU) << '.'
+        << ((ipv4_be >> 8U) & 0xFFU) << '.'
+        << (ipv4_be & 0xFFU);
+    return out.str();
+}
+
 void emit_invalid_packet_diagnostic(std::ostream& out,
                                     const PacketDesc& packet,
                                     const SamplePacketView& parsed,
@@ -321,6 +330,26 @@ void emit_invalid_packet_diagnostic(std::ostream& out,
         << std::dec
         << " reason=" << validation.reason
         << "\n";
+    out << "[invalid-sample] decoded="
+        << " kind=" << sample_packet_kind_name(parsed.kind)
+        << " magic=0x" << std::hex << std::setw(8) << std::setfill('0') << parsed.magic
+        << std::dec
+        << " cpi=" << parsed.cpi
+        << " channel=" << parsed.channel
+        << " prt=" << parsed.prt
+        << " packet_index=" << parsed.packet_index
+        << " tail=0x" << std::hex << std::setw(8) << std::setfill('0') << parsed.tail
+        << std::dec
+        << " frame_length=" << parsed.frame_length
+        << " payload_len=" << parsed.payload_len
+        << " ip_fragment_offset=" << parsed.ip_fragment_offset
+        << " more_ip_fragments=" << (parsed.more_ip_fragments ? "true" : "false")
+        << " is_ipv4_udp=" << (parsed.is_ipv4_udp ? "true" : "false");
+    if (parsed.is_ipv4_udp) {
+        out << " source=" << format_ipv4_be(parsed.source_ipv4_be) << ':' << parsed.source_port
+            << " dest=" << format_ipv4_be(parsed.dest_ipv4_be) << ':' << parsed.dest_port;
+    }
+    out << "\n";
     out << "[invalid-sample] preview=" << hex_preview(packet.data, packet.len, 64U) << "\n";
     out.flush();
 }

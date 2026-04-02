@@ -1,9 +1,12 @@
 #include <iostream>
+#include <vector>
 
 #include "rxtech/sample_packet_parser.h"
 #include "rxtech/sample_packet_validator.h"
+#include "rxtech/udp_payload_assembler.h"
 
 int main() {
+    rxtech::SamplePacketParser parser;
     rxtech::SamplePacketValidator validator;
 
     rxtech::SamplePacketView packet;
@@ -47,6 +50,19 @@ int main() {
     if (fragmented.ok || fragmented.reason != "data packet is fragmented") {
         std::cerr << "expected fragmented packet to be rejected, got ok=" << fragmented.ok
                   << " reason=" << fragmented.reason << '\n';
+        return 1;
+    }
+
+    rxtech::UdpPayloadFrame control_table_frame;
+    control_table_frame.udp_payload = std::vector<std::uint8_t>(
+        {0x00, 0xFF, 0xAA, 0x55, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00});
+    control_table_frame.udp_payload.resize(2048U, 0x00U);
+
+    const rxtech::SamplePacketView control_table_packet = parser.parse(control_table_frame);
+    const rxtech::SamplePacketValidation control_table_valid = validator.validate(control_table_packet);
+    if (!control_table_valid.ok || !control_table_valid.reason.empty()) {
+        std::cerr << "expected control table from UDP payload frame to be accepted, got ok="
+                  << control_table_valid.ok << " reason=" << control_table_valid.reason << '\n';
         return 1;
     }
 
