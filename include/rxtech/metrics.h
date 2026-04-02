@@ -70,8 +70,6 @@ namespace rxtech
         std::string mode;
         std::string scenario;
         std::string packet_size_profile;
-        std::string xdp_attach_mode;
-        std::string xsk_mode;
         std::string run_status = "success";
         std::string error_message;
         std::string backend_status = "available";
@@ -115,8 +113,6 @@ namespace rxtech
         std::uint64_t rx_polls = 0;
         std::uint64_t empty_polls = 0;
         std::uint32_t queue_id = 0;
-        std::uint32_t xdp_prog_id = 0;
-        std::uint32_t xsk_bind_flags = 0;
         std::uint64_t umem_size = 0;
         std::uint32_t frame_size = 0;
         std::uint32_t fill_ring_size = 0;

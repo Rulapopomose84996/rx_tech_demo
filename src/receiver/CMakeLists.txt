@@ -23,7 +23,6 @@ target_include_directories(rx_receiver_core
     ${CMAKE_CURRENT_SOURCE_DIR}/core
     ${CMAKE_CURRENT_SOURCE_DIR}/admit
     ${CMAKE_CURRENT_SOURCE_DIR}/finalize
-    ${CMAKE_CURRENT_SOURCE_DIR}/output
     ${CMAKE_CURRENT_SOURCE_DIR}/protocol
     ${CMAKE_CURRENT_SOURCE_DIR}/sidecar
     ${CMAKE_CURRENT_SOURCE_DIR}/storage
@@ -72,31 +71,31 @@ endif()
 
 rxtech_apply_warnings(rx_receiver_dpdk_ingress)
 
-add_library(rx_receiver_app_common
+add_library(rx_receiver_app
     app/cli_args.cpp
     app/run_app.cpp
 )
 
-target_include_directories(rx_receiver_app_common
+target_include_directories(rx_receiver_app
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/app
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/ingress/dpdk/internal
 )
 
-target_link_libraries(rx_receiver_app_common
+target_link_libraries(rx_receiver_app
     PUBLIC
     rx_receiver_core
     rx_receiver_dpdk_ingress
 )
 
-target_compile_definitions(rx_receiver_app_common PUBLIC RXTECH_HAS_DPDK_BACKEND=1)
-rxtech_apply_warnings(rx_receiver_app_common)
+target_compile_definitions(rx_receiver_app PUBLIC RXTECH_HAS_DPDK_BACKEND=1)
+rxtech_apply_warnings(rx_receiver_app)
 
 add_executable(rx_receiver_dpdk app/main_dpdk.cpp)
-target_link_libraries(rx_receiver_dpdk PRIVATE rx_receiver_app_common)
+target_link_libraries(rx_receiver_dpdk PRIVATE rx_receiver_app)
 rxtech_apply_warnings(rx_receiver_dpdk)
 
 add_executable(rxbench_dpdk app/main_dpdk.cpp)
-target_link_libraries(rxbench_dpdk PRIVATE rx_receiver_app_common)
+target_link_libraries(rxbench_dpdk PRIVATE rx_receiver_app)
 rxtech_apply_warnings(rxbench_dpdk)

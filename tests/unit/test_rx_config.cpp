@@ -97,12 +97,7 @@ int main()
         config.allowed_source_ipv4 != "172.20.11.222" || config.allowed_dest_port != 9999U ||
         config.log_level != "debug" || config.log_output != "file" || config.log_file_path != "logs/rx.log" ||
         config.protocol_udp_packet_size != 2048U || config.protocol_channels_per_prt != 3U ||
-        config.protocol_packets_per_channel != 9U ||
-        config.xdp_bind_mode != "copy" ||
-        config.xdp_rx_ring_size != 512U || config.xdp_tx_ring_size != 128U ||
-        config.xdp_fill_ring_size != 1024U || config.xdp_completion_ring_size != 512U ||
-        config.xdp_frame_size != 4096U || config.xdp_frame_count != 8192U ||
-        config.xdp_poll_timeout_ms != 0U)
+        config.protocol_packets_per_channel != 9U)
     {
         std::cerr << "config parsing regression in test_rx_config\n";
         return 1;

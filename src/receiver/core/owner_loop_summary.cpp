@@ -18,14 +18,10 @@ namespace rxtech
         summary.arp_request_packets = backend_stats.arp_request_packets;
         summary.arp_reply_packets = backend_stats.arp_reply_packets;
         summary.queue_id = backend_stats.queue_id;
-        summary.xdp_prog_id = backend_stats.xdp_prog_id;
-        summary.xsk_bind_flags = backend_stats.xsk_bind_flags;
         summary.umem_size = backend_stats.umem_size;
         summary.frame_size = backend_stats.frame_size;
         summary.fill_ring_size = backend_stats.fill_ring_size;
         summary.completion_ring_size = backend_stats.completion_ring_size;
-        summary.xdp_attach_mode = backend_stats.xdp_attach_mode;
-        summary.xsk_mode = backend_stats.xsk_mode;
         if (summary.rx_polls > 0U)
         {
             summary.empty_poll_ratio = static_cast<double>(summary.empty_polls) / static_cast<double>(summary.rx_polls);

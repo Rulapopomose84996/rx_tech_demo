@@ -251,62 +251,6 @@ namespace rxtech
                 }
                 config.max_burst = static_cast<std::uint32_t>(std::stoul(normalized_value));
             }
-            else if (normalized_key == "xdp_rx_ring_size")
-            {
-                if (should_skip_assignment("xdp_rx_ring_size", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.xdp_rx_ring_size = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "xdp_tx_ring_size")
-            {
-                if (should_skip_assignment("xdp_tx_ring_size", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.xdp_tx_ring_size = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "xdp_fill_ring_size")
-            {
-                if (should_skip_assignment("xdp_fill_ring_size", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.xdp_fill_ring_size = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "xdp_completion_ring_size")
-            {
-                if (should_skip_assignment("xdp_completion_ring_size", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.xdp_completion_ring_size = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "xdp_frame_size")
-            {
-                if (should_skip_assignment("xdp_frame_size", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.xdp_frame_size = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "xdp_frame_count")
-            {
-                if (should_skip_assignment("xdp_frame_count", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.xdp_frame_count = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "xdp_poll_timeout_ms")
-            {
-                if (should_skip_assignment("xdp_poll_timeout_ms", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.xdp_poll_timeout_ms = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
             else if (normalized_key == "duration_seconds" || normalized_key == "runtime.duration_seconds")
             {
                 if (should_skip_assignment("duration_seconds", section_key, section_assigned_keys))
@@ -394,14 +338,6 @@ namespace rxtech
                     return;
                 }
                 config.run_until_stopped = parse_bool(normalized_value);
-            }
-            else if (normalized_key == "xdp_bind_mode")
-            {
-                if (should_skip_assignment("xdp_bind_mode", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.xdp_bind_mode = normalized_value;
             }
             else if (normalized_key == "dpdk_port_id" || normalized_key == "dpdk.port_id")
             {
@@ -620,8 +556,6 @@ namespace rxtech
             base.allowed_source_ipv4 = overrides.allowed_source_ipv4;
         if (!overrides.dpdk_pci_addr.empty())
             base.dpdk_pci_addr = overrides.dpdk_pci_addr;
-        if (!overrides.xdp_bind_mode.empty())
-            base.xdp_bind_mode = overrides.xdp_bind_mode;
         if (!overrides.feedback_host.empty())
             base.feedback_host = overrides.feedback_host;
         if (!overrides.feedback_bind_host.empty())
@@ -639,24 +573,6 @@ namespace rxtech
             base.queue_id = overrides.queue_id;
         if (overrides.max_burst != defaults.max_burst)
             base.max_burst = overrides.max_burst;
-        if (overrides.xdp_rx_ring_size != defaults.xdp_rx_ring_size)
-            base.xdp_rx_ring_size = overrides.xdp_rx_ring_size;
-        if (overrides.xdp_tx_ring_size != defaults.xdp_tx_ring_size)
-            base.xdp_tx_ring_size = overrides.xdp_tx_ring_size;
-        if (overrides.xdp_fill_ring_size != defaults.xdp_fill_ring_size)
-            base.xdp_fill_ring_size = overrides.xdp_fill_ring_size;
-        if (overrides.xdp_completion_ring_size != defaults.xdp_completion_ring_size)
-        {
-            base.xdp_completion_ring_size = overrides.xdp_completion_ring_size;
-        }
-        if (overrides.xdp_frame_size != defaults.xdp_frame_size)
-            base.xdp_frame_size = overrides.xdp_frame_size;
-        if (overrides.xdp_frame_count != defaults.xdp_frame_count)
-            base.xdp_frame_count = overrides.xdp_frame_count;
-        if (overrides.xdp_poll_timeout_ms != defaults.xdp_poll_timeout_ms)
-        {
-            base.xdp_poll_timeout_ms = overrides.xdp_poll_timeout_ms;
-        }
         if (overrides.duration_seconds != 0U)
             base.duration_seconds = overrides.duration_seconds;
         if (overrides.packet_size_bytes != defaults.packet_size_bytes)

@@ -29,14 +29,10 @@ namespace rxtech
         std::uint64_t arp_request_packets = 0;
         std::uint64_t arp_reply_packets = 0;
         std::uint32_t queue_id = 0;
-        std::uint32_t xdp_prog_id = 0;
-        std::uint32_t xsk_bind_flags = 0;
         std::uint64_t umem_size = 0;
         std::uint32_t frame_size = 0;
         std::uint32_t fill_ring_size = 0;
         std::uint32_t completion_ring_size = 0;
-        std::string xdp_attach_mode = "pending";
-        std::string xsk_mode = "pending";
     };
 
     class IRxBackend

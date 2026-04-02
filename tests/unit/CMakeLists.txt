@@ -11,7 +11,7 @@ set_tests_properties(test_metrics PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DI
 rxtech_apply_warnings(test_metrics)
 
 add_executable(test_cli_args test_cli_args.cpp)
-target_link_libraries(test_cli_args PRIVATE rx_receiver_app_common)
+target_link_libraries(test_cli_args PRIVATE rx_receiver_app)
 target_include_directories(test_cli_args PRIVATE ${CMAKE_SOURCE_DIR}/src/receiver/app)
 add_test(NAME test_cli_args COMMAND test_cli_args)
 set_tests_properties(test_cli_args PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
@@ -22,6 +22,12 @@ target_link_libraries(test_rx_config PRIVATE rx_receiver_core)
 add_test(NAME test_rx_config COMMAND test_rx_config)
 set_tests_properties(test_rx_config PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(test_rx_config)
+
+add_executable(test_runtime_legacy_xdp_config test_runtime_legacy_xdp_config.cpp)
+target_link_libraries(test_runtime_legacy_xdp_config PRIVATE rx_receiver_core)
+add_test(NAME test_runtime_legacy_xdp_config COMMAND test_runtime_legacy_xdp_config)
+set_tests_properties(test_runtime_legacy_xdp_config PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+rxtech_apply_warnings(test_runtime_legacy_xdp_config)
 
 add_executable(test_merge_config test_merge_config.cpp)
 target_link_libraries(test_merge_config PRIVATE rx_receiver_core)

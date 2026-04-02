@@ -217,7 +217,6 @@ namespace rxtech
             std::cout << "protocol_udp_packet_size=" << config.protocol_udp_packet_size << std::endl;
             std::cout << "protocol_channels_per_prt=" << config.protocol_channels_per_prt << std::endl;
             std::cout << "protocol_packets_per_channel=" << config.protocol_packets_per_channel << std::endl;
-            std::cout << "xdp_bind_mode=" << config.xdp_bind_mode << std::endl;
             std::cout << "run_until_stopped=" << (config.run_until_stopped ? "true" : "false") << std::endl;
             std::cout << "status_interval_seconds=" << config.status_interval_seconds << std::endl;
             std::cout << "log_level=" << config.log_level << std::endl;
