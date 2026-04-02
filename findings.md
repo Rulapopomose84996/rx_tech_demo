@@ -1,60 +1,46 @@
 # Findings
 
-## Current Receiver Mainline
+## Current Mainline
 
-- 当前主线在 `src/receiver`，构建产物是：
-  - `rx_receiver_dpdk`
-  - `rxbench_dpdk`
-- `src/receiver/CMakeLists.txt` 当前只把 DPDK ingress 链接进主应用公共层。
-- `src/legacy` 仍保留旧 AF_XDP 代码和相关目标，但不应继续写成当前主线。
+- 当前产品化主线位于 `src/receiver`，主后端是 DPDK。
+- `src/legacy/af_xdp` 仍保留为兼容/历史参考路径，不再作为当前主线叙述。
+- 当前 Phase 3 已落地的核心能力是：配置重构、协议参数化、sidecar 简化、热路径骨架接入。
 
-## Runtime Flow
+## Phase 3 State
 
-- `app/main_dpdk.cpp` 通过 `run_app("dpdk", argc, argv)` 进入统一启动流程。
-- `app/common/app_main_common.cpp` 负责：
-  - 解析 CLI
-  - 加载并合并配置
-  - 创建 DPDK backend
-  - 创建 `MetricsCollector`
-  - 调用 `ReceiveRunner`
-- `ReceiveRunner` 在启动时直接打开落盘文件：
-  - `capture_packets.bin`
-  - `capture_index.csv`
-- 主循环不等待“暂停后统一保存”；通过校验的数据会在运行中实时写入上述文件。
+- Phase B 已完成：CLI 只保留 `--config`、`--dry-run`、`--help`，运行参数通过 section 化配置文件提供。
+- Phase A 已完成：capture index 简化为语义字段，sidecar 指标从端口/分片细节收敛到协议包统计。
+- Phase C 已完成：协议侧已引入 `ProtocolSpec`，解析/校验/序列解释统一基于当前协议参数工作。
+- Phase D 已完成：`storage`、`admit`、`output`、`finalize` 骨架已接入 owner loop。
 
-## Packet Pipeline
+## Runtime Facts
 
-- DPDK backend 从网卡批量取包，必要时自动应答 ARP。
-- `UdpPayloadAssembler` 负责从以太网帧中提取 IPv4/UDP payload，并可重组 IP 分片。
-- `SamplePacketParser` 当前解析的是 16 字节小端样本头，不是旧文档里的 `TPDX`/`DemoHeader` 模型：
-  - 控制表 magic: `0x55AAFF00`
-  - 数据包 magic: `0x55AAFF03`
-- `SamplePacketValidator` 当前校验重点是：
-  - 不接受 IP 分片状态下的业务包
-  - 包体长度必须符合 2048/2032 字节约束
-  - 数据包 `channel`、`packet_index`、`tail` 必须落在当前实现允许范围内
-- `ProtocolSequenceInterpreter` 当前对数据包的 PRT/通道/包序采用“按 CPI 内到达顺序推导”的实现，而不是完全信任包头中的对应字段。
+- 启动入口：`rx_receiver_dpdk` 和 `rxbench_dpdk`。
+- 当前主循环处理顺序是：收包 -> UDP payload 提取 -> 解析 -> 校验 -> 准入 -> slot 写入 -> 进度推进 -> finalizer -> 统计/落盘。
+- 当前 capture index 表头已经简化为：`cpi,channel,prt,packet_index,packet_kind,payload_len,valid`。
+- 当前配置里的协议默认值仍是：`udp_packet_size=2048`、`channels_per_prt=3`、`packets_per_channel=9`。
+- 第 9 个数据包仍要求只有前 `476 * 4` 字节是有效 IQ 数据，后续补零必须全为 0。
 
-## Recording And Output
+## Sender And Validation Tools
 
-- 当前默认输出目录仍是 `results`，可通过 `--output` 或配置文件覆盖。
-- 当前会持续写出两类落盘文件：
-  - `capture_packets.bin`：顺序拼接的已接收 UDP payload
-  - `capture_index.csv`：每包的 offset、length、时间戳、CPI、通道、PRT、packet index 等索引
-- 终端还会输出：
-  - 单行状态摘要
-  - 中文人类可读汇总
-  - `run_until_stopped=true` 时的周期性 `[status]` 快照
-
-## Filtering Rules
-
-- 当前支持三类前置过滤：
-  - `allowed_source_ipv4`
-  - `receiver_ipv4`
-  - `allowed_dest_port`
-- 被过滤掉的包计入 `filtered_packets`，不会进入解析成功统计，也不会写入落盘文件。
+- `tools/raw_eth_sender.py` 只适合做 ingress/过滤层面的原始 UDP 烟雾测试，不保证通过当前协议解析链路。
+- 新增 `tools/rxtech_protocol_sender.py`，按当前 Phase 3 协议格式发送控制表包和数据包，可直接用于真实接收解析联调。
 
 ## Validation Boundary
 
-- 当前仓库和项目规则都要求 Linux 服务器是唯一权威验证环境。
-- 本次会话只完成代码核对和文档同步，没有在 Linux 服务器上重新做构建、测试或链路验证。
+- Windows 仅用于阅读、编辑、提交代码和文档。
+- 权威构建与测试结果必须来自 Linux 服务器。
+- 本轮权威验证在 `ssh kds` 的隔离目录 `/home/devuser/WorkSpace/rx_tech_demo_phase3_infra_validation` 完成。
+
+## Verified Results
+
+- 服务器重新构建通过，`RXTECH_THIRD_PARTY_CACHE` 未使用告警已消失。
+- legacy AF_XDP 目标的 libbpf deprecation 告警已局部压制，不影响主线 DPDK 目标。
+- 服务器单元测试通过：11/11。
+- 服务器集成测试通过：1/1。
+- 新增 `tools/rxtech_protocol_sender.py` 已在服务器通过 `python3 -m py_compile` 语法检查。
+
+## Notes
+
+- `test_arp_responder` 之前在 Release 构建下被 `assert` 掩盖了真实失败，本轮已修正为真实检查，并修复了测试中的 IP 端序错误。
+- `CpiContextPool` 仍保持堆分配，这一点已经在之前的服务器联调中证明是必要的，不能回退到栈上分配。

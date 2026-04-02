@@ -1,111 +1,217 @@
 # rx_tech_demo
 
-`rx_tech_demo` 是一个 Linux-only 的雷达接收端演示工程。当前主线实现位于 `src/receiver`，主入口是基于 DPDK 的轻量接收链路，而不是旧的 AF_XDP benchmark 叙述。
+`rx_tech_demo` 是一个 Linux-only 的雷达接收端演示工程。当前主线位于 `src/receiver`，默认叙述和权威验证都以 DPDK 接收路径为准；`src/legacy/af_xdp` 仅保留为兼容/历史参考。
 
 ## 当前定位
 
-- 当前目标是把真实网卡收包、样本协议解析、轻量统计和旁路落盘串成一条稳定接收链。
-- 当前主线后端是 DPDK。
-- `src/legacy` 下的 AF_XDP 代码与脚本仅作为兼容/历史参考。
-- 当前实现已经支持：
-  - DPDK 收包
-  - IPv4/UDP payload 提取与 IP 分片重组
-  - 样本协议解析和校验
-  - 实时落盘到 `capture_packets.bin` / `capture_index.csv`
-  - 终端状态输出和中文汇总
+- 当前目标是把真实网卡收包、UDP payload 提取、协议解析、轻量统计和旁路落盘串成一条稳定接收链。
+- 当前已经落地的 Phase 3 重点包括：
+  - section 化配置和精简 CLI
+  - 协议参数化 (`ProtocolSpec`)
+  - sidecar 语义化指标
+  - 热路径骨架 (`storage` / `admit` / `output` / `finalize`)
+- 当前并不宣称已经完成完整业务接收模块；它仍是分阶段演进中的主线 demo。
 
-## 当前源码结构
+## 目录概览
 
 ```text
 src/
   receiver/
     app/
     core/
-    ingress/dpdk/
+    ingress/
     protocol/
     runtime/
     sidecar/
+    storage/
+    admit/
+    output/
+    finalize/
   legacy/
-    af_xdp/
+tests/
+tools/
+configs/
+scripts/
+docs/
 ```
 
-说明：
+## 当前运行链路
 
-- `src/receiver` 是当前产品化主线。
-- `src/receiver/ingress/dpdk` 是当前唯一主接收实现。
-- `src/receiver/core/owner_loop` 负责把收包、解析、统计、落盘串起来。
-- `src/receiver/protocol` 负责 UDP payload 组装、样本头解析、校验和协议序列解释。
-- `src/receiver/runtime` 负责配置加载、运行器和输出路径准备。
+主线运行顺序是：
 
-## 当前接收链路
+1. `rx_receiver_dpdk` / `rxbench_dpdk` 启动。
+2. 解析 CLI，只接受 `--config`、`--dry-run`、`--help`。
+3. 加载默认配置和 section 化配置文件。
+4. 初始化 DPDK backend。
+5. 批量收包，必要时应答 ARP。
+6. 提取 IPv4/UDP payload，并在需要时完成 IP 分片重组。
+7. 按当前协议头解析、校验、序列解释。
+8. 把有效包写入 `capture_packets.bin`，并把语义索引写入 `capture_index.csv`。
+9. 输出单行状态摘要和中文汇总。
 
-当前代码里的主线大致是：
+## 配置与 CLI
 
-1. `rx_receiver_dpdk` / `rxbench_dpdk` 启动
-2. 解析 CLI，加载并合并配置
-3. 初始化 DPDK backend
-4. 从网卡批量取包，必要时自动应答 ARP
-5. 从以太网帧中提取 IPv4/UDP payload，并按 IP 分片做重组
-6. 解析当前样本协议头：
-   - 控制表包 magic：`0x55AAFF00`
-   - 数据包 magic：`0x55AAFF03`
-7. 做轻量协议校验和顺序解释
-8. 把通过当前链路的 UDP payload 立即写入：
-   - `capture_packets.bin`
-   - `capture_index.csv`
-9. 输出单行统计与人类可读汇总
+当前 CLI 仅支持：
 
-## 输出文件
+- `--config FILE`
+- `--dry-run`
+- `--help`
 
-默认输出目录是 `results`，也可以通过配置文件或 `--output` 覆盖。
+推荐配置样例：
 
-当前主线会写出：
-
-- `capture_packets.bin`
-- `capture_index.csv`
-
-这两个文件是运行中实时写入的，不是“按暂停后一次性导出”。
-
-## 当前配置
-
-当前仓库里仍保留几份配置文件：
-
-- `configs/dpdk_receiver0_replay.conf`
 - `configs/dpdk_single_face.conf`
-- `configs/af_xdp_receiver0.conf`
-- `configs/af_xdp_single_face.conf`
+- `configs/dpdk_receiver0_replay.conf`
 
-其中应优先以 DPDK 配置作为当前主线参考。AF_XDP 配置只代表历史路径，不应再默认当作当前推荐入口。
+当前示例配置已经按 section 组织，常用 section 包括：
 
-## 服务器构建
+- `[capture]`
+- `[network]`
+- `[dpdk]`
+- `[runtime]`
+- `[protocol]`
+- `[log]`
+- `[feedback]`
 
-Linux server，执行目录：`/home/devuser/WorkSpace/rx_tech_demo`
+协议默认值：
+
+- `udp_packet_size = 2048`
+- `channels_per_prt = 3`
+- `packets_per_channel = 9`
+
+## 服务器构建与测试
+
+执行环境：Linux 服务器。
+
+项目规则要求：Windows 侧只做代码编辑和文档更新，权威构建与测试必须在 Linux 服务器完成。
+
+构建：
 
 ```bash
 cd /home/devuser/WorkSpace/rx_tech_demo
 bash ./scripts/build_server_shared_cache.sh
 ```
 
-## 服务器测试
-
-Linux server，执行目录：`/home/devuser/WorkSpace/rx_tech_demo/build`
+单元测试：
 
 ```bash
-cd /home/devuser/WorkSpace/rx_tech_demo/build
+cd /home/devuser/WorkSpace/rx_tech_demo/build/tests/unit
 ctest --output-on-failure
 ```
 
-## 当前可执行入口
+集成测试：
 
-当前主入口：
+```bash
+cd /home/devuser/WorkSpace/rx_tech_demo/build/tests/integration
+ctest --output-on-failure
+```
 
-- `rx_receiver_dpdk`
-- `rxbench_dpdk`
+## 当前已验证结果
 
-Legacy 入口仍可能存在于 `src/legacy`，但不作为当前主线说明和验证依据。
+本轮 Phase 3 收尾改动已在 Linux 服务器隔离目录完成复验：
+
+- 构建通过
+- unit tests 通过：11/11
+- integration tests 通过：1/1
+- 新增 sender 脚本通过 `python3 -m py_compile`
+
+## 输出文件
+
+启用 capture 时，接收端会持续写出：
+
+- `capture_packets.bin`
+- `capture_index.csv`
+
+当前 capture index 列为：
+
+```text
+cpi,channel,prt,packet_index,packet_kind,payload_len,valid
+```
+
+## 外部 Sender
+
+仓库里现在有两类 sender：
+
+- `tools/raw_eth_sender.py`
+  - 适合验证原始以太网/UDP 收包路径或过滤规则。
+  - 不保证符合当前协议解析要求。
+- `tools/rxtech_protocol_sender.py`
+  - 按当前 Phase 3 协议格式发控制表包和数据包。
+  - 适合做真实接收解析联调。
+
+### 1. 先在接收端服务器做 dry-run
+
+```bash
+cd /home/devuser/WorkSpace/rx_tech_demo
+./build/src/receiver/rx_receiver_dpdk --config configs/dpdk_single_face.conf --dry-run
+```
+
+重点确认：
+
+- `interface=receiver0`
+- `receiver_ipv4=172.20.11.100`
+- `allowed_source_ipv4=172.20.11.222`
+- `allowed_dest_port=9999`
+- `protocol_channels_per_prt=3`
+- `protocol_packets_per_channel=9`
+
+### 2. 启动接收端
+
+如果你要手工联调，建议先把配置里的 `[runtime]` 改成更适合观察的值，例如：
+
+```ini
+[runtime]
+duration_seconds = 30
+max_burst = 64
+cpu_cores = [16]
+```
+
+然后在服务器上启动：
+
+```bash
+cd /home/devuser/WorkSpace/rx_tech_demo
+./build/src/receiver/rx_receiver_dpdk --config configs/dpdk_single_face.conf
+```
+
+### 3. 在外部 Linux sender 主机上发送协议正确流量
+
+下面的命令会发送 2 个 CPI、每个 CPI 1 个 PRT、每个 PRT 3 个通道、每通道 9 个包，和当前实现默认协议一致：
+
+```bash
+cd /path/to/rx_tech_demo
+sudo python3 tools/rxtech_protocol_sender.py \
+  --iface sender0 \
+  --dst-mac 9c:47:82:e1:36:d0 \
+  --src-mac 9c:47:82:e1:36:dc \
+  --src-ip 172.20.11.222 \
+  --dst-ip 172.20.11.100 \
+  --src-port 30001 \
+  --dst-port 9999 \
+  --cpi-count 2 \
+  --prt-count 1 \
+  --channels-per-prt 3 \
+  --packets-per-channel 9
+```
+
+注意：
+
+- 这要求 sender 主机具备原始套接字权限，所以通常需要 `sudo`。
+- `--src-ip`、`--dst-ip`、`--dst-port` 必须和接收端配置匹配。
+- 第 9 个数据包会自动按当前协议要求写入 `476 * 4` 字节有效 IQ，并把剩余字节补零。
+
+### 4. 查看接收结果
+
+运行结束后检查：
+
+```bash
+cd /home/devuser/WorkSpace/rx_tech_demo
+ls -l results/dpdk_single_face
+head -n 5 results/dpdk_single_face/capture_index.csv
+```
+
+如果链路正常，终端摘要里的 `parsed_packets`、`data_packets`、`captured_packets` 应该增长，并且 `capture_index.csv` 会出现对应的 `cpi/channel/prt/packet_index` 记录。
 
 ## 验证边界
 
-- Windows 侧只用于读代码、改代码、改文档。
-- 权威构建、测试和联调验证必须在 Linux 服务器上完成。
-- 如果没有经过服务器验证，不应把本地观察、IDE 分析或文档推断写成“已验证事实”。
+- 不要把 Windows 构建、IDE 静态分析或 dry-run 当成权威验证。
+- 不要把 legacy AF_XDP 结果当成当前主线完成度证明。
+- 只有在 Linux 服务器上完成构建、测试和真实链路联调，才能宣称该层级已验证。
