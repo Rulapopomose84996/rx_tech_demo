@@ -94,7 +94,13 @@ namespace rxtech
 
         void print_usage(std::ostream &out, const char *program_name)
         {
-            out << "Usage: " << program_name << " --config FILE [--dry-run] [--help]" << std::endl;
+            out << "用法: " << program_name << " --config FILE [选项]" << std::endl;
+            out << "  --config FILE            指定配置文件" << std::endl;
+            out << "  --dry-run                只解析配置并打印生效参数" << std::endl;
+            out << "  --run-until-stopped      持续接收，直到收到 SIGINT 或 SIGTERM" << std::endl;
+            out << "  --duration SECONDS       覆盖配置中的 duration_seconds" << std::endl;
+            out << "  --status-interval SEC    覆盖配置中的 status_interval_seconds" << std::endl;
+            out << "  -h, --help               显示帮助" << std::endl;
         }
 
         std::string effective_capture_output_dir(const RxConfig &config)
@@ -110,6 +116,18 @@ namespace rxtech
                 effective = load_config_file(args.config_path);
             }
             effective.backend_name = backend_name;
+            if (args.run_until_stopped)
+            {
+                effective.run_until_stopped = true;
+            }
+            if (args.duration_seconds.has_value())
+            {
+                effective.duration_seconds = *args.duration_seconds;
+            }
+            if (args.status_interval_seconds.has_value())
+            {
+                effective.status_interval_seconds = *args.status_interval_seconds;
+            }
             return effective;
         }
 
@@ -238,26 +256,13 @@ namespace rxtech
                 runner.set_status_output(&std::cout);
             }
             const RunSummary summary = runner.run(context);
-            std::cout << "status=" << summary.run_status
-                      << " backend=" << summary.backend
-                      << " queue_id=" << summary.queue_id
-                      << " rx_packets=" << summary.rx_packets
-                      << " raw_rx_packets=" << summary.raw_rx_packets
-                      << " filtered_packets=" << summary.filtered_packets
-                      << " parsed_packets=" << summary.parsed_packets
-                      << " control_table_packets=" << summary.control_table_packets
-                      << " data_packets=" << summary.data_packets
-                      << " dropped_packets=" << summary.dropped_packets
-                      << " captured_packets=" << summary.captured_packets
-                      << " packet_count=" << summary.packet_count
-                      << " cpi_count=" << summary.cpi_count
-                      << " prt_count=" << summary.prt_count
-                      << " channel_count=" << summary.channel_count
-                      << " capture_index=" << summary.capture_index_path
-                      << std::endl;
             if (!summary.human_summary.empty())
             {
                 std::cout << summary.human_summary;
+            }
+            else
+            {
+                std::cout << "运行结果： " << (summary.run_status == "success" ? "成功" : "失败") << std::endl;
             }
             if (summary.run_status != "success")
             {

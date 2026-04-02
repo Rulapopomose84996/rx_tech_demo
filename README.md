@@ -40,22 +40,31 @@ docs/
 主线运行顺序是：
 
 1. `rx_receiver_dpdk` / `rxbench_dpdk` 启动。
-2. 解析 CLI，只接受 `--config`、`--dry-run`、`--help`。
+2. 解析 CLI，支持 `--config`、`--dry-run`、`--run-until-stopped`、`--duration`、`--status-interval`、`--help`。
 3. 加载默认配置和 section 化配置文件。
 4. 初始化 DPDK backend。
 5. 批量收包，必要时应答 ARP。
 6. 提取 IPv4/UDP payload，并在需要时完成 IP 分片重组。
 7. 按当前协议头解析、校验、序列解释。
 8. 把有效包写入 `capture_packets.bin`，并把语义索引写入 `capture_index.csv`。
-9. 输出单行状态摘要和中文汇总。
+9. 持续接收模式下按秒刷新中文状态面板，结束后输出中文汇总。
 
 ## 配置与 CLI
 
-当前 CLI 仅支持：
+当前 CLI 参数完整列表：
 
 - `--config FILE`
 - `--dry-run`
+- `--run-until-stopped`
+- `--duration SECONDS`
+- `--status-interval SECONDS`
 - `--help`
+
+覆盖规则：
+
+- `--run-until-stopped` 会覆盖配置里的 `run_until_stopped = true`
+- `--duration SECONDS` 会覆盖配置里的 `duration_seconds`
+- `--status-interval SECONDS` 会覆盖配置里的 `status_interval_seconds`
 
 推荐配置样例：
 
@@ -72,17 +81,38 @@ docs/
 - `[log]`
 - `[feedback]`
 
+`[runtime]` 常用键包括：
+
+- `duration_seconds`
+- `max_burst`
+- `cpu_cores`
+- `run_until_stopped`
+- `status_interval_seconds`
+
 协议默认值：
 
 - `udp_packet_size = 2048`
 - `channels_per_prt = 3`
 - `packets_per_channel = 9`
 
+持续接收模式的终端行为：
+
+- 状态输出不再滚动打印单行摘要，而是按周期重绘中文状态面板。
+- 状态面板会显示时间戳、运行时长、链路层统计、协议层统计和结果层统计。
+- 当没有业务协议流量时，面板会明确显示“当前未检测到链路流量”或“当前仅检测到 ARP 探测”，而不是把这种情况表现为错误。
+
 ## 服务器构建与测试
 
 执行环境：Linux 服务器。
 
 项目规则要求：Windows 侧只做代码编辑和文档更新，权威构建与测试必须在 Linux 服务器完成。
+
+进入服务器工作目录：
+
+```bash
+ssh kds
+cd /home/devuser/WorkSpace/rx_tech_demo
+```
 
 构建：
 
@@ -103,6 +133,13 @@ ctest --output-on-failure
 ```bash
 cd /home/devuser/WorkSpace/rx_tech_demo/build/tests/integration
 ctest --output-on-failure
+```
+
+查看命令行参数：
+
+```bash
+cd /home/devuser/WorkSpace/rx_tech_demo
+./build/src/receiver/rx_receiver_dpdk --help
 ```
 
 ## 当前已验证结果
@@ -127,16 +164,7 @@ ctest --output-on-failure
 cpi,channel,prt,packet_index,packet_kind,payload_len,valid
 ```
 
-## 外部 Sender
-
-仓库里现在有两类 sender：
-
-- `tools/raw_eth_sender.py`
-  - 适合验证原始以太网/UDP 收包路径或过滤规则。
-  - 不保证符合当前协议解析要求。
-- `tools/rxtech_protocol_sender.py`
-  - 按当前 Phase 3 协议格式发控制表包和数据包。
-  - 适合做真实接收解析联调。
+## 接收运行
 
 ### 1. 先在接收端服务器做 dry-run
 
@@ -154,7 +182,7 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 - `protocol_channels_per_prt=3`
 - `protocol_packets_per_channel=9`
 
-### 2. 启动接收端
+### 2. 固定时长接收
 
 如果你要手工联调，建议先把配置里的 `[runtime]` 改成更适合观察的值，例如：
 
@@ -163,40 +191,33 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 duration_seconds = 30
 max_burst = 64
 cpu_cores = [16]
+run_until_stopped = false
+status_interval_seconds = 1
 ```
 
 然后在服务器上启动：
 
 ```bash
 cd /home/devuser/WorkSpace/rx_tech_demo
-./build/src/receiver/rx_receiver_dpdk --config configs/dpdk_single_face.conf
+./build/src/receiver/rx_receiver_dpdk --config configs/dpdk_single_face.conf --duration 30
 ```
 
-### 3. 在外部 Linux sender 主机上发送协议正确流量
+### 3. 持续接收，直到手工停止
 
-下面的命令会发送 2 个 CPI、每个 CPI 1 个 PRT、每个 PRT 3 个通道、每通道 9 个包，和当前实现默认协议一致：
+如果需要持续等待外部雷达时序软件送流，可以直接开启持续接收模式：
 
 ```bash
-cd /path/to/rx_tech_demo
-sudo python3 tools/rxtech_protocol_sender.py \
-  --iface sender0 \
-  --dst-mac 9c:47:82:e1:36:d0 \
-  --src-mac 9c:47:82:e1:36:dc \
-  --src-ip 172.20.11.222 \
-  --dst-ip 172.20.11.100 \
-  --src-port 30001 \
-  --dst-port 9999 \
-  --cpi-count 2 \
-  --prt-count 1 \
-  --channels-per-prt 3 \
-  --packets-per-channel 9
+cd /home/devuser/WorkSpace/rx_tech_demo
+./build/src/receiver/rx_receiver_dpdk --config configs/dpdk_single_face.conf --run-until-stopped --status-interval 1
 ```
 
 注意：
 
-- 这要求 sender 主机具备原始套接字权限，所以通常需要 `sudo`。
-- `--src-ip`、`--dst-ip`、`--dst-port` 必须和接收端配置匹配。
-- 第 9 个数据包会自动按当前协议要求写入 `476 * 4` 字节有效 IQ，并把剩余字节补零。
+- 持续接收模式下，使用 `Ctrl+C` 停止。
+- 状态面板会按 `status_interval_seconds` 或 `--status-interval` 指定的周期重绘。
+- 无业务流量时，状态面板会显示“当前未检测到链路流量”或“当前仅检测到 ARP 探测”。
+- 外部 sender 由独立 Linux 软件负责模拟规定好的雷达时序；主线联调不要求在仓库内自建 sender 脚本。
+- 仓库中的 `tools/raw_eth_sender.py` 和 `tools/rxtech_protocol_sender.py` 仍保留为辅助工具，但不是当前 README 的主线操作步骤。
 
 ### 4. 查看接收结果
 
@@ -208,7 +229,7 @@ ls -l results/dpdk_single_face
 head -n 5 results/dpdk_single_face/capture_index.csv
 ```
 
-如果链路正常，终端摘要里的 `parsed_packets`、`data_packets`、`captured_packets` 应该增长，并且 `capture_index.csv` 会出现对应的 `cpi/channel/prt/packet_index` 记录。
+如果链路正常，状态面板和最终中文汇总里的 `解析有效包`、`数据包`、`已落盘` 应该增长，并且 `capture_index.csv` 会出现对应的 `cpi/channel/prt/packet_index` 记录。
 
 ## 验证边界
 

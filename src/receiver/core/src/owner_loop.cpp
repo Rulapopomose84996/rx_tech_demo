@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <ctime>
 #include <iomanip>
 #include <iostream>
 #include <map>
@@ -66,6 +67,8 @@ namespace rxtech
             summary.backend_errors += backend_stats.rx_errors;
             summary.rx_polls = backend_stats.rx_polls;
             summary.empty_polls = backend_stats.empty_polls;
+            summary.arp_request_packets = backend_stats.arp_request_packets;
+            summary.arp_reply_packets = backend_stats.arp_reply_packets;
             summary.queue_id = backend_stats.queue_id;
             summary.xdp_prog_id = backend_stats.xdp_prog_id;
             summary.xsk_bind_flags = backend_stats.xsk_bind_flags;
@@ -101,22 +104,71 @@ namespace rxtech
             const double aggregate_gbps =
                 (static_cast<double>(summary.rx_bytes) * 8.0) / static_cast<double>(elapsed_seconds) / 1'000'000'000.0;
 
-            out << "[status] elapsed=" << elapsed_seconds << "s"
-                << " rx_packets=" << summary.rx_packets
-                << " raw_rx_packets=" << summary.raw_rx_packets
-                << " filtered_packets=" << summary.filtered_packets
-                << " rx_bytes=" << summary.rx_bytes
-                << " parsed_packets=" << summary.parsed_packets
-                << " control_table_packets=" << summary.control_table_packets
-                << " data_packets=" << summary.data_packets
-                << " packet_count=" << summary.packet_count
-                << " cpi_count=" << summary.cpi_count
-                << " prt_count=" << summary.prt_count
-                << " channel_count=" << summary.channel_count
-                << " gbps=" << aggregate_gbps
-                << " drop_rate=" << calculate_drop_rate(summary)
-                << " empty_poll_ratio=" << summary.empty_poll_ratio
-                << '\n';
+            const auto format_wall_clock_timestamp = []()
+            {
+                const std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+                std::tm local_time{};
+#ifdef _WIN32
+                localtime_s(&local_time, &now);
+#else
+                localtime_r(&now, &local_time);
+#endif
+                char buffer[32] = {};
+                if (std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &local_time) == 0U)
+                {
+                    return std::string{};
+                }
+                return std::string(buffer);
+            };
+
+            const auto describe_link_state = [&summary]()
+            {
+                if (summary.parsed_packets > 0U || summary.control_table_packets > 0U || summary.data_packets > 0U)
+                {
+                    return std::string{"已检测到业务协议流量"};
+                }
+                if (summary.arp_request_packets > 0U && summary.raw_rx_packets == 0U)
+                {
+                    return std::string{"当前仅检测到 ARP 探测，尚未收到业务 UDP 流量"};
+                }
+                if (summary.filtered_packets > 0U || summary.raw_rx_packets > 0U)
+                {
+                    return std::string{"当前检测到非目标流量，已按过滤规则忽略"};
+                }
+                return std::string{"当前未检测到链路流量"};
+            };
+
+            std::ostringstream panel;
+            if (&out == &std::cout || &out == &std::cerr)
+            {
+                panel << "\x1b[2J\x1b[H";
+            }
+            panel << "================ 接收状态面板 ================\n";
+            panel << "时间戳: " << format_wall_clock_timestamp() << '\n';
+            panel << "运行时长: " << elapsed_seconds << " s\n";
+            panel << "当前判断: " << describe_link_state() << "\n\n";
+            panel << "链路层\n";
+            panel << "  原始收包: " << summary.raw_rx_packets << " 包 / " << summary.raw_rx_bytes << " 字节\n";
+            panel << "  ARP 请求: " << summary.arp_request_packets << " 包\n";
+            panel << "  ARP 应答: " << summary.arp_reply_packets << " 包\n";
+            panel << "  过滤流量: " << summary.filtered_packets << " 包\n";
+            panel << "  空轮询比: " << std::fixed << std::setprecision(4) << summary.empty_poll_ratio << "\n\n";
+            panel << "协议层\n";
+            panel << "  候选业务包: " << summary.rx_packets << " 包 / " << summary.rx_bytes << " 字节\n";
+            panel << "  解析有效: " << summary.parsed_packets << " 包\n";
+            panel << "  控制表包: " << summary.control_table_packets << " 包\n";
+            panel << "  数据包: " << summary.data_packets << " 包\n";
+            panel << "  协议丢弃: " << summary.dropped_packets << " 包\n\n";
+            panel << "结果层\n";
+            panel << "  CPI: " << summary.cpi_count << "\n";
+            panel << "  PRT: " << summary.prt_count << "\n";
+            panel << "  通道: " << summary.channel_count << "\n";
+            panel << "  已落盘: " << summary.packet_count << " 包 / " << summary.recorded_bytes << " 字节\n";
+            panel << "  平均吞吐: " << std::fixed << std::setprecision(6) << aggregate_gbps << " Gbps\n";
+            panel << "  丢包率: " << std::fixed << std::setprecision(6) << calculate_drop_rate(summary) << "\n";
+            panel << "=============================================\n";
+
+            out << panel.str();
             out.flush();
         }
 
@@ -194,6 +246,8 @@ namespace rxtech
             out << "后端类型： " << summary.backend << "\n";
             out << "接收队列： " << summary.queue_id << "\n";
             out << "原始收包： " << summary.raw_rx_packets << " 包，" << summary.raw_rx_bytes << " 字节\n";
+            out << "ARP 请求： " << summary.arp_request_packets << " 包\n";
+            out << "ARP 应答： " << summary.arp_reply_packets << " 包\n";
             out << "过滤丢弃： " << summary.filtered_packets << " 包\n";
             out << "候选业务包： " << summary.rx_packets << " 包，" << summary.rx_bytes << " 字节\n";
             out << "解析有效包： " << summary.parsed_packets << " 包\n";

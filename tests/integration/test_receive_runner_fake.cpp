@@ -349,11 +349,11 @@ int main()
         assert(summary.prt_count == 1U);
         assert(summary.channel_count == 1U);
         assert(summary.packet_count == summary.recorded_packets);
-        assert(status_stream.str().find("[status]") != std::string::npos);
-        assert(status_stream.str().find("packet_count=") != std::string::npos);
-        assert(status_stream.str().find("cpi_count=") != std::string::npos);
-        assert(status_stream.str().find("prt_count=") != std::string::npos);
-        assert(status_stream.str().find("channel_count=") != std::string::npos);
+        assert(status_stream.str().find("接收状态面板") != std::string::npos);
+        assert(status_stream.str().find("时间戳") != std::string::npos);
+        assert(status_stream.str().find("当前判断") != std::string::npos);
+        assert(status_stream.str().find("已落盘") != std::string::npos);
+        assert(status_stream.str().find("CPI") != std::string::npos);
     }
 
     {
