@@ -1,19 +1,19 @@
 add_library(rx_receiver_core
-    admit/src/cpi_admission.cpp
-    core/src/owner_loop.cpp
-    core/src/owner_loop_summary.cpp
-    core/src/status_panel.cpp
-    finalize/src/cpi_finalizer.cpp
-    protocol/src/protocol_sequence_interpreter.cpp
-    protocol/src/sample_packet_parser.cpp
-    protocol/src/sample_packet_validator.cpp
-    protocol/src/udp_payload_assembler.cpp
-    sidecar/src/metrics.cpp
-    storage/src/progress_tracker.cpp
-    storage/src/slot_writer.cpp
-    runtime/src/rx_config.cpp
-    runtime/src/raw_frame_recorder.cpp
-    runtime/src/receive_runner.cpp
+    admit/cpi_admission.cpp
+    core/owner_loop.cpp
+    core/owner_loop_summary.cpp
+    core/status_panel.cpp
+    finalize/cpi_finalizer.cpp
+    protocol/protocol_sequence_interpreter.cpp
+    protocol/sample_packet_parser.cpp
+    protocol/sample_packet_validator.cpp
+    protocol/udp_payload_assembler.cpp
+    sidecar/metrics.cpp
+    storage/progress_tracker.cpp
+    storage/slot_writer.cpp
+    runtime/rx_config.cpp
+    runtime/raw_frame_recorder.cpp
+    runtime/receive_runner.cpp
 )
 
 target_include_directories(rx_receiver_core
@@ -40,8 +40,8 @@ endif()
 rxtech_apply_warnings(rx_receiver_core)
 
 add_library(rx_receiver_dpdk_ingress
-    ingress/dpdk/src/arp_responder.cpp
-    ingress/dpdk/src/dpdk_backend.cpp
+    ingress/dpdk/arp_responder.cpp
+    ingress/dpdk/dpdk_backend.cpp
 )
 
 target_include_directories(rx_receiver_dpdk_ingress
