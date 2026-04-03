@@ -126,14 +126,24 @@ namespace rxtech
         }
 
         capture_sink.flush();
-        cpi_state_coordinator.release_active();
 
-        // Signal consumer thread to exit and join
+        // Shutdown contract:
+        // 1. recv loop stopped (above)
+        // 2. finalize any active/previous CPI
+        cpi_state_coordinator.finalize_active_for_shutdown(*context.metrics);
+
+        // 3-4. Signal consumer thread to exit and join
         consumer_stop.store(true, std::memory_order_release);
         consumer_thread.join();
 
-        // Drain any remaining recycle tokens
+        // 5. Drain recycle ring to empty
         cpi_state_coordinator.drain_recycle(*context.metrics);
+
+        // 6. Stop raw_frame_recorder (if running)
+        if (artifacts.raw_frame_recorder != nullptr)
+        {
+            artifacts.raw_frame_recorder->stop();
+        }
 
         const auto end_time = std::chrono::steady_clock::now();
         RunSummary summary = status_reporter.build_final_summary(context,

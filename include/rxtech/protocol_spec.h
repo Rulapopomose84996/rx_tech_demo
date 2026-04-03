@@ -22,6 +22,8 @@ namespace rxtech
         std::uint32_t control_table_size = 2048U;
         std::uint32_t expected_n_prt = 0U;
         std::uint64_t cpi_timeout_ns = 0U;
+        bool dynamic_prt_enabled = true;
+        std::uint32_t max_n_prt = 100U;
     };
 
     ProtocolSpec protocol_spec_from_config(const RxConfig &config);

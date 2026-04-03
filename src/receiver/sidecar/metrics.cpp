@@ -12,7 +12,9 @@ namespace rxtech
         ++burst_count_;
         burst_sum_ += burst_size;
         burst_max_ = std::max<std::uint64_t>(burst_max_, burst_size);
+#if defined(RXTECH_DEBUG_DIAGNOSTICS) && RXTECH_DEBUG_DIAGNOSTICS
         bursts_.push_back(burst_size);
+#endif
     }
 
     void MetricsCollector::on_valid_packet(PacketKind kind)
@@ -30,7 +32,11 @@ namespace rxtech
 
     void MetricsCollector::on_packet_latency_ns(std::uint64_t latency_ns)
     {
+#if defined(RXTECH_DEBUG_DIAGNOSTICS) && RXTECH_DEBUG_DIAGNOSTICS
         latencies_ns_.push_back(latency_ns);
+#else
+        (void)latency_ns;
+#endif
     }
 
     void MetricsCollector::on_ring_depth(std::size_t depth)
@@ -38,9 +44,14 @@ namespace rxtech
         ring_high_watermark_ = std::max<std::uint64_t>(ring_high_watermark_, depth);
     }
 
-    void MetricsCollector::on_reject(RejectReason)
+    void MetricsCollector::on_reject(RejectReason reason)
     {
         ++dropped_packets_;
+        const auto index = static_cast<std::size_t>(reason);
+        if (index < reject_counts_.size())
+        {
+            ++reject_counts_[index];
+        }
     }
 
     void MetricsCollector::on_drop()
@@ -56,6 +67,21 @@ namespace rxtech
     void MetricsCollector::on_pool_exhaustion()
     {
         ++pool_exhaustion_count_;
+    }
+
+    void MetricsCollector::on_output_backpressure()
+    {
+        ++output_backpressure_count_;
+    }
+
+    void MetricsCollector::on_late_packet_accepted()
+    {
+        ++late_packet_accepted_count_;
+    }
+
+    void MetricsCollector::on_late_packet_rejected()
+    {
+        ++late_packet_rejected_count_;
     }
 
     std::unique_ptr<IMetricsCollector> MetricsCollector::clone_empty() const
@@ -77,12 +103,19 @@ namespace rxtech
         dropped_packets_ += other_metrics->dropped_packets_;
         backend_errors_ += other_metrics->backend_errors_;
         pool_exhaustion_count_ += other_metrics->pool_exhaustion_count_;
+        output_backpressure_count_ += other_metrics->output_backpressure_count_;
+        late_packet_accepted_count_ += other_metrics->late_packet_accepted_count_;
+        late_packet_rejected_count_ += other_metrics->late_packet_rejected_count_;
         control_table_packets_ += other_metrics->control_table_packets_;
         data_packets_ += other_metrics->data_packets_;
         burst_count_ += other_metrics->burst_count_;
         burst_sum_ += other_metrics->burst_sum_;
         burst_max_ = std::max(burst_max_, other_metrics->burst_max_);
         ring_high_watermark_ = std::max(ring_high_watermark_, other_metrics->ring_high_watermark_);
+        for (std::size_t i = 0; i < reject_counts_.size(); ++i)
+        {
+            reject_counts_[i] += other_metrics->reject_counts_[i];
+        }
         bursts_.insert(bursts_.end(), other_metrics->bursts_.begin(), other_metrics->bursts_.end());
         latencies_ns_.insert(latencies_ns_.end(), other_metrics->latencies_ns_.begin(), other_metrics->latencies_ns_.end());
         return true;
@@ -103,9 +136,13 @@ namespace rxtech
         summary.dropped_packets = dropped_packets_;
         summary.backend_errors = backend_errors_;
         summary.pool_exhaustion_count = pool_exhaustion_count_;
+        summary.output_backpressure_count = output_backpressure_count_;
+        summary.late_packet_accepted_count = late_packet_accepted_count_;
+        summary.late_packet_rejected_count = late_packet_rejected_count_;
         summary.control_table_packets = control_table_packets_;
         summary.data_packets = data_packets_;
         summary.ring_high_watermark = ring_high_watermark_;
+        summary.reject_by_reason = reject_counts_;
 
         if (duration_seconds > 0U)
         {

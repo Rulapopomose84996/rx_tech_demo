@@ -81,6 +81,13 @@ namespace rxtech
         std::uint32_t pool_index = kInvalidPoolIndex;
     };
 
+    enum class BindSource : std::uint8_t
+    {
+        fixed,
+        provisional,
+        control
+    };
+
     struct BoundWaveSnapshotLite
     {
         std::uint16_t wave_cpi = 0;
@@ -90,6 +97,8 @@ namespace rxtech
         std::uint64_t timeout_ns = 0;
         std::uint64_t bind_tsc = 0;
         bool valid = false;
+        BindSource bind_source = BindSource::fixed;
+        bool conflict = false;
     };
 
     struct CpiContext

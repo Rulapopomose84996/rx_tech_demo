@@ -41,6 +41,10 @@ target_include_directories(rx_receiver_core
 
 target_compile_features(rx_receiver_core PUBLIC cxx_std_17)
 
+if(RXTECH_ENABLE_DEBUG_DIAGNOSTICS)
+    target_compile_definitions(rx_receiver_core PUBLIC RXTECH_DEBUG_DIAGNOSTICS=1)
+endif()
+
 if(UNIX AND NOT APPLE)
     target_link_libraries(rx_receiver_core PUBLIC pthread)
 endif()

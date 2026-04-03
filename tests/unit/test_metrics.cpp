@@ -15,6 +15,9 @@ int main()
     metrics.on_drop();
     metrics.on_error();
     metrics.on_pool_exhaustion();
+    metrics.on_output_backpressure();
+    metrics.on_late_packet_accepted();
+    metrics.on_late_packet_rejected();
     metrics.on_packet_latency_ns(1200U);
     metrics.on_packet_latency_ns(5200U);
     metrics.on_ring_depth(3U);
@@ -22,15 +25,21 @@ int main()
     const rxtech::RunSummary summary = metrics.finalize("socket", "rx_only", "smoke", 1U);
     assert(summary.rx_packets == 4U);
     assert(summary.rx_bytes == 512U);
-    assert(summary.batch_p99 == 4U);
     assert(summary.parsed_packets == 2U);
     assert(summary.control_table_packets == 1U);
     assert(summary.data_packets == 1U);
     assert(summary.dropped_packets == 2U);
     assert(summary.backend_errors == 1U);
     assert(summary.pool_exhaustion_count == 1U);
+    assert(summary.output_backpressure_count == 1U);
+    assert(summary.late_packet_accepted_count == 1U);
+    assert(summary.late_packet_rejected_count == 1U);
+    assert(summary.reject_by_reason[static_cast<std::size_t>(rxtech::RejectReason::invalid_len)] == 1U);
+#if defined(RXTECH_DEBUG_DIAGNOSTICS) && RXTECH_DEBUG_DIAGNOSTICS
+    assert(summary.batch_p99 == 4U);
     assert(summary.latency_p50_us > 0.0);
     assert(summary.latency_p99_us >= summary.latency_p50_us);
+#endif
 
     auto other = metrics.clone_empty();
     other->on_burst(2U, 256U);

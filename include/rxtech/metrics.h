@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <utility>
@@ -123,6 +124,9 @@ namespace rxtech
         std::uint64_t backend_errors = 0;
         std::uint64_t nic_drops = 0;
         std::uint64_t pool_exhaustion_count = 0;
+        std::uint64_t output_backpressure_count = 0;
+        std::uint64_t late_packet_accepted_count = 0;
+        std::uint64_t late_packet_rejected_count = 0;
         std::uint64_t ring_high_watermark = 0;
         std::uint64_t rx_polls = 0;
         std::uint64_t empty_polls = 0;
@@ -159,6 +163,7 @@ namespace rxtech
         std::vector<ProtocolCpiSummary> protocol_cpis;
         std::vector<ProtocolPrtChannelCoverageSummary> active_prt_channels;
         std::vector<StepSummary> steps;
+        std::array<std::uint64_t, 8> reject_by_reason{};
     };
 
     class IMetricsCollector
@@ -172,6 +177,9 @@ namespace rxtech
         virtual void on_drop() = 0;
         virtual void on_error() = 0;
         virtual void on_pool_exhaustion() = 0;
+        virtual void on_output_backpressure() = 0;
+        virtual void on_late_packet_accepted() = 0;
+        virtual void on_late_packet_rejected() = 0;
         virtual void on_packet_latency_ns(std::uint64_t latency_ns) = 0;
         virtual void on_ring_depth(std::size_t depth) = 0;
         virtual std::unique_ptr<IMetricsCollector> clone_empty() const = 0;
@@ -191,6 +199,9 @@ namespace rxtech
         void on_drop() override;
         void on_error() override;
         void on_pool_exhaustion() override;
+        void on_output_backpressure() override;
+        void on_late_packet_accepted() override;
+        void on_late_packet_rejected() override;
         void on_packet_latency_ns(std::uint64_t latency_ns) override;
         void on_ring_depth(std::size_t depth) override;
         std::unique_ptr<IMetricsCollector> clone_empty() const override;
@@ -207,12 +218,16 @@ namespace rxtech
         std::uint64_t dropped_packets_ = 0;
         std::uint64_t backend_errors_ = 0;
         std::uint64_t pool_exhaustion_count_ = 0;
+        std::uint64_t output_backpressure_count_ = 0;
+        std::uint64_t late_packet_accepted_count_ = 0;
+        std::uint64_t late_packet_rejected_count_ = 0;
         std::uint64_t control_table_packets_ = 0;
         std::uint64_t data_packets_ = 0;
         std::uint64_t burst_count_ = 0;
         std::uint64_t burst_sum_ = 0;
         std::uint64_t burst_max_ = 0;
         std::uint64_t ring_high_watermark_ = 0;
+        std::array<std::uint64_t, 8> reject_counts_{};
         std::vector<std::size_t> bursts_;
         std::vector<std::uint64_t> latencies_ns_;
     };

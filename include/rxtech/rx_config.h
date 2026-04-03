@@ -55,6 +55,9 @@ namespace rxtech
         bool raw_record_enabled = false;
         bool feedback_enabled = false;
         bool run_artifacts_prepared = false;
+        bool metrics_detail_enabled = false;
+        bool protocol_dynamic_prt_enabled = true;
+        std::uint32_t protocol_max_n_prt = 100U;
         std::string run_label;
         std::vector<int> cpu_cores;
     };

@@ -22,9 +22,9 @@ namespace rxtech
         : config_(config),
           spec_(spec),
           start_time_(start_time),
-          status_interval_(std::max<std::uint32_t>(1U, config.status_interval_seconds)),
+          status_interval_(config.status_interval_seconds == 0U ? std::chrono::seconds{0} : std::chrono::seconds{std::max<std::uint32_t>(1U, config.status_interval_seconds)}),
           feedback_interval_(std::max<std::uint32_t>(1U, config.feedback_interval_seconds)),
-          next_status_at_(start_time + status_interval_),
+          next_status_at_(config.status_interval_seconds == 0U ? std::chrono::steady_clock::time_point::max() : start_time + std::chrono::seconds{std::max<std::uint32_t>(1U, config.status_interval_seconds)}),
           next_feedback_at_(start_time + feedback_interval_),
           status_panel_(status_output)
     {

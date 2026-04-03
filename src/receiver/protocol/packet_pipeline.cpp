@@ -6,6 +6,11 @@
 #include <sstream>
 #include <string>
 
+#if defined(RXTECH_DEBUG_DIAGNOSTICS) && RXTECH_DEBUG_DIAGNOSTICS
+#include <chrono>
+#include <cstdio>
+#endif
+
 namespace rxtech
 {
     namespace
@@ -134,6 +139,9 @@ namespace rxtech
                                                       std::uint32_t &invalid_dumped,
                                                       const std::function<void(const ProcessedPacket &)> &on_packet)
     {
+#if defined(RXTECH_DEBUG_DIAGNOSTICS) && RXTECH_DEBUG_DIAGNOSTICS
+        const auto diag_start = std::chrono::steady_clock::now();
+#endif
         PacketProcessStats stats;
         const auto udp_frames = assembler_.push(packet);
         for (const auto &udp_frame : udp_frames)
@@ -152,6 +160,7 @@ namespace rxtech
             if (!validation.ok)
             {
                 metrics.on_reject(validation.reason);
+#if defined(RXTECH_DEBUG_DIAGNOSTICS) && RXTECH_DEBUG_DIAGNOSTICS
                 if (diagnostic_output != nullptr && invalid_dumped < 5U)
                 {
                     PacketDesc diagnostic_packet;
@@ -161,6 +170,7 @@ namespace rxtech
                     emit_invalid_packet_diagnostic(*diagnostic_output, diagnostic_packet, parsed, validation.reason);
                     ++invalid_dumped;
                 }
+#endif
                 continue;
             }
 
@@ -168,6 +178,7 @@ namespace rxtech
             if (!interpreted.valid)
             {
                 metrics.on_reject(interpreted.reject_reason);
+#if defined(RXTECH_DEBUG_DIAGNOSTICS) && RXTECH_DEBUG_DIAGNOSTICS
                 if (diagnostic_output != nullptr && invalid_dumped < 5U)
                 {
                     PacketDesc diagnostic_packet;
@@ -177,6 +188,7 @@ namespace rxtech
                     emit_invalid_packet_diagnostic(*diagnostic_output, diagnostic_packet, parsed, interpreted.reject_reason);
                     ++invalid_dumped;
                 }
+#endif
                 continue;
             }
 
@@ -194,6 +206,15 @@ namespace rxtech
             processed.source_ts_ns = packet.ts_ns;
             on_packet(processed);
         }
+#if defined(RXTECH_DEBUG_DIAGNOSTICS) && RXTECH_DEBUG_DIAGNOSTICS
+        const auto diag_end = std::chrono::steady_clock::now();
+        const auto diag_ns = static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(diag_end - diag_start).count());
+        if (diag_ns > 0U)
+        {
+            metrics.on_packet_latency_ns(diag_ns);
+        }
+#endif
         return stats;
     }
 

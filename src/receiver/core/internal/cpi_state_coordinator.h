@@ -52,6 +52,9 @@ namespace rxtech
         /// Drain recycle ring and release pool slots.
         void drain_recycle(IMetricsCollector &metrics);
 
+        /// Finalize active and previous CPI contexts for clean shutdown.
+        void finalize_active_for_shutdown(IMetricsCollector &metrics);
+
         void release_active();
 
     private:
@@ -60,6 +63,7 @@ namespace rxtech
                          std::string &run_status,
                          std::string &run_error);
         void finalize_active(std::uint32_t trigger, IMetricsCollector &metrics);
+        void finalize_previous(std::uint32_t trigger, IMetricsCollector &metrics);
         void bind_snapshot_to_active();
 
         CpiContextPool ctx_pool_;
@@ -75,6 +79,8 @@ namespace rxtech
         std::uint64_t next_output_id_ = 1U;
         std::uint32_t active_ctx_index_ = kInvalidPoolIndex;
         CpiContext *active_ctx_ = nullptr;
+        std::uint32_t previous_ctx_index_ = kInvalidPoolIndex;
+        CpiContext *previous_ctx_ = nullptr;
     };
 
 } // namespace rxtech

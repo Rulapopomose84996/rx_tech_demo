@@ -459,6 +459,22 @@ namespace rxtech
                 }
                 config.protocol_cpi_timeout_ns = std::stoull(normalized_value);
             }
+            else if (normalized_key == "protocol.dynamic_prt_enabled" || normalized_key == "protocol_dynamic_prt_enabled")
+            {
+                if (should_skip_assignment("protocol_dynamic_prt_enabled", section_key, section_assigned_keys))
+                {
+                    return;
+                }
+                config.protocol_dynamic_prt_enabled = parse_bool(normalized_value);
+            }
+            else if (normalized_key == "protocol.max_n_prt" || normalized_key == "protocol_max_n_prt")
+            {
+                if (should_skip_assignment("protocol_max_n_prt", section_key, section_assigned_keys))
+                {
+                    return;
+                }
+                config.protocol_max_n_prt = static_cast<std::uint32_t>(std::stoul(normalized_value));
+            }
         }
 
     } // namespace
@@ -639,6 +655,14 @@ namespace rxtech
         {
             base.protocol_cpi_timeout_ns = overrides.protocol_cpi_timeout_ns;
         }
+        if (overrides.protocol_dynamic_prt_enabled != defaults.protocol_dynamic_prt_enabled)
+        {
+            base.protocol_dynamic_prt_enabled = overrides.protocol_dynamic_prt_enabled;
+        }
+        if (overrides.protocol_max_n_prt != defaults.protocol_max_n_prt)
+        {
+            base.protocol_max_n_prt = overrides.protocol_max_n_prt;
+        }
         if (overrides.raw_record_ring_slots != defaults.raw_record_ring_slots)
             base.raw_record_ring_slots = overrides.raw_record_ring_slots;
         if (overrides.raw_record_writer_batch_size != defaults.raw_record_writer_batch_size)
@@ -670,6 +694,8 @@ namespace rxtech
         spec.control_table_size = spec.udp_packet_size;
         spec.expected_n_prt = config.protocol_expected_n_prt;
         spec.cpi_timeout_ns = config.protocol_cpi_timeout_ns;
+        spec.dynamic_prt_enabled = config.protocol_dynamic_prt_enabled;
+        spec.max_n_prt = config.protocol_max_n_prt;
         return spec;
     }
 
