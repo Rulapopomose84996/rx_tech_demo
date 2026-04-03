@@ -20,6 +20,8 @@ namespace rxtech
         std::uint32_t iq_per_full_packet = 508U;
         std::uint32_t iq_per_last_packet = 476U;
         std::uint32_t control_table_size = 2048U;
+        std::uint32_t expected_n_prt = 0U;
+        std::uint64_t cpi_timeout_ns = 0U;
     };
 
     ProtocolSpec protocol_spec_from_config(const RxConfig &config);

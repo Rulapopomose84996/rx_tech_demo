@@ -43,6 +43,8 @@ namespace rxtech
         std::uint32_t protocol_udp_packet_size = 2048;
         std::uint32_t protocol_channels_per_prt = 3;
         std::uint32_t protocol_packets_per_channel = 9;
+        std::uint32_t protocol_expected_n_prt = 0;
+        std::uint64_t protocol_cpi_timeout_ns = 0;
         std::uint32_t raw_record_ring_slots = 4096;
         std::uint32_t raw_record_writer_batch_size = 64;
         std::uint32_t raw_record_max_frame_bytes = 16384;

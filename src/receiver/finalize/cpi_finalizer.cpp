@@ -54,9 +54,12 @@ namespace rxtech
         output.view.slot_valid_bytes = ctx.slot_valid_bytes.data();
         output.view.prt_summary = ctx.prt_summary.data();
         output.view.n_prt = ctx.header.observed_n_prt > 0U ? ctx.header.observed_n_prt : ctx.header.expected_n_prt;
+        const std::uint32_t slots_per_prt =
+            static_cast<std::uint32_t>(ctx.header.channels_per_prt > 0U ? ctx.header.channels_per_prt : kCpiMaxChannelCount) *
+            static_cast<std::uint32_t>(ctx.header.packets_per_channel > 0U ? ctx.header.packets_per_channel : kCpiMaxPacketsPerChannel);
         output.view.slot_count = ctx.header.expected_slot_count > 0U
                                      ? ctx.header.expected_slot_count
-                                     : static_cast<std::uint32_t>(output.view.n_prt) * kCpiSlotsPerPrt;
+                                     : static_cast<std::uint32_t>(output.view.n_prt) * slots_per_prt;
 
         ctx.header.state = CpiState::SEALED;
         ctx.header.state = CpiState::TOMBSTONE;

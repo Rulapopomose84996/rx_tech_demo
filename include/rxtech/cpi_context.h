@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 
@@ -8,11 +9,11 @@ namespace rxtech
 {
 
     constexpr std::uint16_t kCpiPrtMax = 64U;
-    constexpr std::uint16_t kCpiChannelCount = 3U;
-    constexpr std::uint16_t kCpiPacketsPerChannel = 9U;
-    constexpr std::uint16_t kCpiSlotsPerPrt = kCpiChannelCount * kCpiPacketsPerChannel;
+    constexpr std::uint16_t kCpiMaxChannelCount = 4U;
+    constexpr std::uint16_t kCpiMaxPacketsPerChannel = 9U;
+    constexpr std::uint16_t kCpiMaxSlotsPerPrt = kCpiMaxChannelCount * kCpiMaxPacketsPerChannel;
     constexpr std::uint32_t kCpiSlotStride = 2048U;
-    constexpr std::uint32_t kCpiTotalSlots = static_cast<std::uint32_t>(kCpiPrtMax) * kCpiSlotsPerPrt;
+    constexpr std::uint32_t kCpiMaxTotalSlots = static_cast<std::uint32_t>(kCpiPrtMax) * kCpiMaxSlotsPerPrt;
     constexpr std::uint32_t kInvalidPoolIndex = std::numeric_limits<std::uint32_t>::max();
 
     enum class CpiState
@@ -52,8 +53,8 @@ namespace rxtech
 
     struct PrtSummary
     {
-        std::array<std::uint16_t, kCpiChannelCount> ch_pkt_bitmap{};
-        std::array<std::uint16_t, kCpiChannelCount> ch_recv_count{};
+        std::array<std::uint16_t, kCpiMaxChannelCount> ch_pkt_bitmap{};
+        std::array<std::uint16_t, kCpiMaxChannelCount> ch_recv_count{};
         std::uint16_t ready_channel_count = 0;
         std::uint16_t recv_packet_count = 0;
         std::uint32_t flags = PrtFlagNone;
@@ -65,6 +66,8 @@ namespace rxtech
         std::uint16_t wave_id = 0;
         std::uint16_t expected_n_prt = 0;
         std::uint16_t observed_n_prt = 0;
+        std::uint16_t channels_per_prt = 0;
+        std::uint16_t packets_per_channel = 0;
         std::uint32_t expected_slot_count = 0;
         std::uint32_t received_slot_count = 0;
         std::uint32_t duplicate_count = 0;
@@ -78,12 +81,24 @@ namespace rxtech
         std::uint32_t pool_index = kInvalidPoolIndex;
     };
 
+    struct BoundWaveSnapshotLite
+    {
+        std::uint16_t wave_cpi = 0;
+        std::uint16_t n_prt = 0;
+        std::uint16_t channel_count = 0;
+        std::uint16_t packets_per_channel = 0;
+        std::uint64_t timeout_ns = 0;
+        std::uint64_t bind_tsc = 0;
+        bool valid = false;
+    };
+
     struct CpiContext
     {
-        CpiHotHeader header{};
+        alignas(64) CpiHotHeader header{};
+        BoundWaveSnapshotLite bind{};
         std::array<PrtSummary, kCpiPrtMax> prt_summary{};
-        std::array<std::uint16_t, kCpiTotalSlots> slot_valid_bytes{};
-        std::array<std::uint8_t, kCpiTotalSlots * kCpiSlotStride> payload{};
+        std::array<std::uint16_t, kCpiMaxTotalSlots> slot_valid_bytes{};
+        alignas(2048) std::array<std::uint8_t, static_cast<std::size_t>(kCpiMaxTotalSlots) * kCpiSlotStride> payload{};
 
         void reset(std::uint16_t cpi_id = 0, std::uint32_t pool_index = kInvalidPoolIndex)
         {
@@ -91,6 +106,7 @@ namespace rxtech
             header.cpi_id = cpi_id;
             header.pool_index = pool_index;
             header.state = CpiState::ACTIVE;
+            bind = {};
             prt_summary.fill({});
             slot_valid_bytes.fill(0U);
             payload.fill(0U);
@@ -107,15 +123,17 @@ namespace rxtech
         }
     };
 
-    inline bool is_valid_slot_coord(std::uint16_t prt, std::uint16_t channel, std::uint16_t packet_index)
+    inline bool is_valid_slot_coord(std::uint16_t prt, std::uint16_t channel, std::uint16_t packet_index,
+                                    std::uint16_t channels_per_prt, std::uint16_t packets_per_channel)
     {
-        return prt < kCpiPrtMax && channel < kCpiChannelCount && packet_index >= 1U &&
-               packet_index <= kCpiPacketsPerChannel;
+        return prt < kCpiPrtMax && channel < channels_per_prt && channel < kCpiMaxChannelCount &&
+               packet_index >= 1U && packet_index <= packets_per_channel;
     }
 
-    inline std::uint32_t slot_index(std::uint16_t prt, std::uint16_t channel, std::uint16_t packet_index)
+    inline std::uint32_t slot_index(std::uint16_t prt, std::uint16_t channel, std::uint16_t packet_index,
+                                    std::uint16_t channels_per_prt, std::uint16_t packets_per_channel)
     {
-        return (static_cast<std::uint32_t>(prt) * kCpiChannelCount + channel) * kCpiPacketsPerChannel +
+        return (static_cast<std::uint32_t>(prt) * channels_per_prt + channel) * packets_per_channel +
                (packet_index - 1U);
     }
 
@@ -124,10 +142,14 @@ namespace rxtech
         return static_cast<std::uint16_t>(1U << (packet_index - 1U));
     }
 
-    inline void set_expected_prt_count(CpiContext &ctx, std::uint16_t count)
+    inline void set_expected_prt_count(CpiContext &ctx, std::uint16_t count,
+                                       std::uint16_t channels_per_prt, std::uint16_t packets_per_channel)
     {
         ctx.header.expected_n_prt = count;
-        ctx.header.expected_slot_count = count == 0U ? 0U : static_cast<std::uint32_t>(count) * kCpiSlotsPerPrt;
+        ctx.header.channels_per_prt = channels_per_prt;
+        ctx.header.packets_per_channel = packets_per_channel;
+        const auto slots_per_prt = static_cast<std::uint32_t>(channels_per_prt) * packets_per_channel;
+        ctx.header.expected_slot_count = count == 0U ? 0U : static_cast<std::uint32_t>(count) * slots_per_prt;
     }
 
 } // namespace rxtech

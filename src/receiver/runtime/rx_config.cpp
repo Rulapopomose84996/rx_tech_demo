@@ -443,6 +443,22 @@ namespace rxtech
                 }
                 config.protocol_packets_per_channel = static_cast<std::uint32_t>(std::stoul(normalized_value));
             }
+            else if (normalized_key == "protocol.expected_n_prt" || normalized_key == "protocol_expected_n_prt")
+            {
+                if (should_skip_assignment("protocol_expected_n_prt", section_key, section_assigned_keys))
+                {
+                    return;
+                }
+                config.protocol_expected_n_prt = static_cast<std::uint32_t>(std::stoul(normalized_value));
+            }
+            else if (normalized_key == "protocol.cpi_timeout_ns" || normalized_key == "protocol_cpi_timeout_ns")
+            {
+                if (should_skip_assignment("protocol_cpi_timeout_ns", section_key, section_assigned_keys))
+                {
+                    return;
+                }
+                config.protocol_cpi_timeout_ns = std::stoull(normalized_value);
+            }
         }
 
     } // namespace
@@ -615,6 +631,14 @@ namespace rxtech
         {
             base.protocol_packets_per_channel = overrides.protocol_packets_per_channel;
         }
+        if (overrides.protocol_expected_n_prt != defaults.protocol_expected_n_prt)
+        {
+            base.protocol_expected_n_prt = overrides.protocol_expected_n_prt;
+        }
+        if (overrides.protocol_cpi_timeout_ns != defaults.protocol_cpi_timeout_ns)
+        {
+            base.protocol_cpi_timeout_ns = overrides.protocol_cpi_timeout_ns;
+        }
         if (overrides.raw_record_ring_slots != defaults.raw_record_ring_slots)
             base.raw_record_ring_slots = overrides.raw_record_ring_slots;
         if (overrides.raw_record_writer_batch_size != defaults.raw_record_writer_batch_size)
@@ -635,11 +659,17 @@ namespace rxtech
     {
         ProtocolSpec spec;
         spec.udp_packet_size = config.protocol_udp_packet_size;
-        spec.channels_per_prt = config.protocol_channels_per_prt;
-        spec.packets_per_channel = config.protocol_packets_per_channel;
+        spec.channels_per_prt = config.protocol_channels_per_prt > 0U && config.protocol_channels_per_prt <= 4U
+                                    ? config.protocol_channels_per_prt
+                                    : 3U;
+        spec.packets_per_channel = config.protocol_packets_per_channel > 0U && config.protocol_packets_per_channel <= 9U
+                                       ? config.protocol_packets_per_channel
+                                       : 9U;
         spec.packet_data_size =
             spec.udp_packet_size > spec.packet_header_size ? (spec.udp_packet_size - spec.packet_header_size) : 0U;
         spec.control_table_size = spec.udp_packet_size;
+        spec.expected_n_prt = config.protocol_expected_n_prt;
+        spec.cpi_timeout_ns = config.protocol_cpi_timeout_ns;
         return spec;
     }
 

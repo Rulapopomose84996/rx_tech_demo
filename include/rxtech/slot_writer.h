@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include "rxtech/cpi_context.h"
+#include "rxtech/protocol_spec.h"
 #include "rxtech/sample_packet_parser.h"
 
 namespace rxtech
@@ -19,7 +20,13 @@ namespace rxtech
     class SlotWriter
     {
     public:
+        SlotWriter() = default;
+        explicit SlotWriter(const ProtocolSpec &spec) : spec_(spec) {}
+
         SlotWriteResult write(CpiContext &ctx, const ParsedPacketView &packet) const noexcept;
+
+    private:
+        ProtocolSpec spec_{};
     };
 
 } // namespace rxtech

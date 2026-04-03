@@ -8,6 +8,7 @@
 #include "data_order_tracker.h"
 #include "packet_pipeline.h"
 #include "rxtech/raw_frame_recorder.h"
+#include "rxtech/time_utils.h"
 #include "runtime_status_reporter.h"
 
 namespace rxtech
@@ -24,7 +25,7 @@ namespace rxtech
     {
         const ProtocolSpec spec = protocol_spec_from_config(context.config);
         PacketPipeline packet_pipeline(context.config, spec);
-        CpiStateCoordinator cpi_state_coordinator;
+        CpiStateCoordinator cpi_state_coordinator(spec);
         DataOrderTracker data_order_tracker(spec);
         CaptureSink capture_sink(artifacts);
 
@@ -62,6 +63,10 @@ namespace rxtech
                     [&](const ProcessedPacket &processed)
                     {
                         runtime_state.record_protocol_packet(processed.interpreted);
+                        if (processed.interpreted.kind == PacketKind::control_table)
+                        {
+                            cpi_state_coordinator.process_control_packet(processed.parsed);
+                        }
                         if (processed.interpreted.kind == PacketKind::data_packet)
                         {
                             data_order_tracker.observe(processed.interpreted);
@@ -92,6 +97,9 @@ namespace rxtech
                 context.metrics->on_burst(accepted_packets, burst_bytes);
             }
             context.backend->release_burst(burst);
+
+            // T-004: periodic timeout check on active CPI
+            cpi_state_coordinator.check_timeout(steady_clock_now_ns(), *context.metrics);
 
             status_reporter.emit_periodic(context,
                                           artifacts,

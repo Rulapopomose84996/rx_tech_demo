@@ -29,6 +29,7 @@ enum class RejectReason {
     invalid_len,            ///< 长度无效
     invalid_header,         ///< 头部无效
     invalid_channel,        ///< 通道无效
+    invalid_prt,            ///< PRT 超出合法范围
     invalid_packet_index,   ///< 包索引无效
     invalid_tail,           ///< 尾部无效
     invalid_field_combo     ///< 字段组合无效

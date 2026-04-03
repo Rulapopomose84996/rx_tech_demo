@@ -77,6 +77,8 @@ namespace rxtech
             return "invalid_header";
         case RejectReason::invalid_channel:
             return "invalid_channel";
+        case RejectReason::invalid_prt:
+            return "invalid_prt";
         case RejectReason::invalid_packet_index:
             return "invalid_packet_index";
         case RejectReason::invalid_tail:

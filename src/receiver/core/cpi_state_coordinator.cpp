@@ -1,7 +1,65 @@
 #include "internal/cpi_state_coordinator.h"
 
+#include "rxtech/time_utils.h"
+
 namespace rxtech
 {
+
+    void CpiStateCoordinator::process_control_packet(const ParsedPacketView &parsed)
+    {
+        if (!parsed.valid || parsed.kind != PacketKind::control_table)
+        {
+            return;
+        }
+        current_snapshot_.wave_cpi = parsed.cpi;
+        current_snapshot_.n_prt = static_cast<std::uint16_t>(spec_.expected_n_prt);
+        current_snapshot_.channel_count = static_cast<std::uint16_t>(spec_.channels_per_prt);
+        current_snapshot_.packets_per_channel = static_cast<std::uint16_t>(spec_.packets_per_channel);
+        current_snapshot_.timeout_ns = spec_.cpi_timeout_ns;
+        current_snapshot_.bind_tsc = steady_clock_now_ns();
+        current_snapshot_.valid = (spec_.expected_n_prt > 0U);
+    }
+
+    void CpiStateCoordinator::bind_snapshot_to_active()
+    {
+        if (active_ctx_ == nullptr)
+        {
+            return;
+        }
+        active_ctx_->bind = current_snapshot_;
+        if (current_snapshot_.valid && current_snapshot_.n_prt > 0U)
+        {
+            set_expected_prt_count(*active_ctx_, current_snapshot_.n_prt,
+                                   current_snapshot_.channel_count,
+                                   current_snapshot_.packets_per_channel);
+        }
+    }
+
+    bool CpiStateCoordinator::check_timeout(std::uint64_t now_ns, IMetricsCollector &metrics)
+    {
+        if (active_ctx_ == nullptr)
+        {
+            return false;
+        }
+        const std::uint64_t timeout_ns = active_ctx_->bind.timeout_ns;
+        if (timeout_ns == 0U)
+        {
+            return false;
+        }
+        const std::uint64_t anchor = active_ctx_->header.first_rx_tsc;
+        if (anchor == 0U)
+        {
+            return false;
+        }
+        if (now_ns > anchor && (now_ns - anchor) >= timeout_ns)
+        {
+            active_ctx_->header.trigger_bits |= TriggerTimeout;
+            finalize_active(TriggerTimeout);
+            metrics.on_error();
+            return true;
+        }
+        return false;
+    }
 
     bool CpiStateCoordinator::open_active(std::uint16_t cpi_id,
                                           IMetricsCollector &metrics,
@@ -19,6 +77,9 @@ namespace rxtech
             metrics.on_error();
             return false;
         }
+        active_ctx_->header.channels_per_prt = static_cast<std::uint16_t>(spec_.channels_per_prt);
+        active_ctx_->header.packets_per_channel = static_cast<std::uint16_t>(spec_.packets_per_channel);
+        bind_snapshot_to_active();
         return true;
     }
 
@@ -79,9 +140,10 @@ namespace rxtech
         }
 
         progress_tracker_.advance(*active_ctx_, packet.prt, packet.channel, parsed.tail == spec.magic_tail);
-        if ((active_ctx_->header.trigger_bits & TriggerFullReady) != 0U)
+        const std::uint32_t finalize_mask = TriggerFullReady | TriggerWaveEnd;
+        if ((active_ctx_->header.trigger_bits & finalize_mask) != 0U)
         {
-            finalize_active(TriggerFullReady);
+            finalize_active(active_ctx_->header.trigger_bits & finalize_mask);
         }
 
         result.accepted = true;

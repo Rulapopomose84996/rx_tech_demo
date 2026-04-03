@@ -34,6 +34,11 @@ PacketValidity PacketValidator::validate(const ParsedPacketView& packet) const n
         if (packet.tail != 0U && packet.tail != spec_.magic_tail) {
             return {false, RejectReason::invalid_tail};
         }
+        // V-008 / C-001: tail marker only allowed on last packet in channel
+        if (packet.tail == spec_.magic_tail &&
+            packet.packet_index != spec_.packets_per_channel) {
+            return {false, RejectReason::invalid_field_combo};
+        }
         return {true, RejectReason::none};
     }
 

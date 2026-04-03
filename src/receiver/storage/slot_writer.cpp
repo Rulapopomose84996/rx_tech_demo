@@ -13,10 +13,19 @@ namespace rxtech
             result.reason = RejectReason::invalid_field_combo;
             return result;
         }
-        if (!is_valid_slot_coord(packet.prt, packet.channel, packet.packet_index))
+        const auto ch_count = static_cast<std::uint16_t>(spec_.channels_per_prt);
+        const auto pkt_per_ch = static_cast<std::uint16_t>(spec_.packets_per_channel);
+        if (!is_valid_slot_coord(packet.prt, packet.channel, packet.packet_index, ch_count, pkt_per_ch))
         {
-            result.reason = packet.channel >= kCpiChannelCount ? RejectReason::invalid_channel
-                                                               : RejectReason::invalid_packet_index;
+            result.reason = packet.channel >= ch_count ? RejectReason::invalid_channel
+                                                       : RejectReason::invalid_packet_index;
+            return result;
+        }
+        // V-006: PRT range check against expected N_PRT (if known)
+        if (ctx.header.expected_n_prt > 0U &&
+            packet.prt >= ctx.header.expected_n_prt)
+        {
+            result.reason = RejectReason::invalid_prt;
             return result;
         }
         if (packet.payload_ptr == nullptr || packet.payload_len == 0U || packet.payload_len > kCpiSlotStride)
@@ -25,7 +34,7 @@ namespace rxtech
             return result;
         }
 
-        result.slot_index = slot_index(packet.prt, packet.channel, packet.packet_index);
+        result.slot_index = slot_index(packet.prt, packet.channel, packet.packet_index, ch_count, pkt_per_ch);
         PrtSummary &prt_summary = ctx.prt_summary[packet.prt];
         const std::uint16_t bit = packet_bit(packet.packet_index);
         std::uint16_t &bitmap = prt_summary.ch_pkt_bitmap[packet.channel];

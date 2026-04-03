@@ -70,6 +70,29 @@ int main()
     }
 
     packet.tail = 0U;
+
+    // V-008 / C-001: tail marker on non-last packet must be rejected
+    packet.tail = 0x55AAFF30U;
+    packet.packet_index = 5U; // not last (9)
+    const rxtech::PacketValidity tail_wrong_pos = validator.validate(packet);
+    if (tail_wrong_pos.ok || tail_wrong_pos.reason != rxtech::RejectReason::invalid_field_combo)
+    {
+        std::cerr << "expected tail on non-last packet to be rejected with invalid_field_combo, got ok="
+                  << tail_wrong_pos.ok << " reason=" << rxtech::reject_reason_name(tail_wrong_pos.reason) << '\n';
+        return 1;
+    }
+
+    // V-008: tail on last packet should be accepted
+    packet.packet_index = 9U;
+    const rxtech::PacketValidity tail_correct_pos = validator.validate(packet);
+    if (!tail_correct_pos.ok || tail_correct_pos.reason != rxtech::RejectReason::none)
+    {
+        std::cerr << "expected tail on last packet to be accepted, got ok=" << tail_correct_pos.ok
+                  << " reason=" << rxtech::reject_reason_name(tail_correct_pos.reason) << '\n';
+        return 1;
+    }
+    packet.tail = 0U;
+
     rxtech::UdpPayloadFrame control_table_frame;
     control_table_frame.udp_payload = std::vector<std::uint8_t>(
         {0x00, 0xFF, 0xAA, 0x55, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00});
