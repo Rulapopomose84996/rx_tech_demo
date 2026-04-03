@@ -93,6 +93,11 @@ namespace rxtech
         out << "PRT 数： " << summary.prt_count << "\n";
         out << "完整 PRT 数： " << summary.complete_prt_count << "\n";
         out << "通道数： " << summary.channel_count << "\n";
+        out << "接收顺序： " << summary.data_order_assessment << "\n";
+        if (!summary.data_order_first_mismatch.empty())
+        {
+            out << "首个顺序偏差： " << summary.data_order_first_mismatch << "\n";
+        }
         out << "最终包尾数量： " << summary.final_tail_packets << "\n";
         out << "已落盘包数： " << summary.packet_count << "\n";
         out << "抓包索引： " << summary.capture_index_path << "\n";
@@ -128,6 +133,18 @@ namespace rxtech
                 out << "  - CPI " << cpi.cpi
                     << "：数据包 " << cpi.data_packets
                     << " 包，PRT 数 " << cpi.prt_count << "\n";
+            }
+        }
+        if (summary.active_prt_available && !summary.active_prt_channels.empty())
+        {
+            out << "当前 PRT： CPI " << summary.active_cpi
+                << " / PRT " << summary.active_prt
+                << "（" << (summary.active_prt_complete ? "完整" : "接收中") << "）\n";
+            out << "当前 PRT 覆盖：\n";
+            for (const auto &channel : summary.active_prt_channels)
+            {
+                out << "  - 通道 " << channel.channel << "（" << protocol_channel_name(channel.channel) << "）："
+                    << channel.packet_count << '/' << summary.active_prt_packets_per_channel << " 包\n";
             }
         }
         out << "==================================\n";

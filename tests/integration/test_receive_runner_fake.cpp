@@ -320,6 +320,13 @@ int main()
         assert(summary.cpi_count == 1U);
         assert(summary.prt_count == 1U);
         assert(summary.channel_count == 1U);
+        assert(summary.active_prt_available);
+        assert(summary.active_prt_packets_per_channel == 9U);
+        assert(summary.active_prt_channel_count == 1U);
+        assert(summary.active_prt_channels.size() == 3U);
+        assert(summary.active_prt_channels[0].packet_count == 2U);
+        assert(summary.active_prt_channels[1].packet_count == 0U);
+        assert(summary.active_prt_channels[2].packet_count == 0U);
         assert(summary.complete_prt_count == 0U);
         assert(summary.final_tail_packets == 1U);
         assert(summary.packet_count == summary.recorded_packets);

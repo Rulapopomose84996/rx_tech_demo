@@ -38,6 +38,17 @@ int main()
     summary.cpi_count = 2U;
     summary.prt_count = 6U;
     summary.channel_count = 3U;
+    summary.data_order_assessment = "偏离按 PRT 推进顺序，当前捕获更像按通道分批到达";
+    summary.data_order_first_mismatch = "第 10 个数据包开始偏离，期望 CPI 2 / PRT 41 / CH 1 / PKT 1，实际 CPI 2 / PRT 42 / CH 0 / PKT 1";
+    summary.active_prt_available = true;
+    summary.active_cpi = 2U;
+    summary.active_prt = 41U;
+    summary.active_prt_packets_per_channel = 9U;
+    summary.active_prt_channel_count = 2U;
+    summary.active_prt_complete = false;
+    summary.active_prt_channels.push_back({0U, 9U, true});
+    summary.active_prt_channels.push_back({1U, 9U, true});
+    summary.active_prt_channels.push_back({2U, 0U, false});
     summary.packet_count = 9U;
     summary.empty_poll_ratio = 0.25;
 
@@ -46,6 +57,10 @@ int main()
     assert(human.find("后端类型： dpdk") != std::string::npos);
     assert(human.find("原始收包： 12 包，3456 字节") != std::string::npos);
     assert(human.find("原始帧已写： 5 帧，5000 字节") != std::string::npos);
+    assert(human.find("接收顺序： 偏离按 PRT 推进顺序，当前捕获更像按通道分批到达") != std::string::npos);
+    assert(human.find("首个顺序偏差： 第 10 个数据包开始偏离") != std::string::npos);
+    assert(human.find("当前 PRT： CPI 2 / PRT 41（接收中）") != std::string::npos);
+    assert(human.find("通道 2（方位差）：0/9 包") != std::string::npos);
 
     const std::vector<std::string> lines =
         rxtech::build_status_snapshot_lines_for_test(summary, std::chrono::seconds(2));
@@ -55,13 +70,21 @@ int main()
     bool saw_link_state = false;
     bool saw_result_section = false;
     bool saw_drop_rate = false;
-    for (const std::string& line : lines)
+    for (const std::string &line : lines)
     {
         if (line.find("链路判定") != std::string::npos && line.find("已检测到业务协议流量") != std::string::npos)
         {
             saw_link_state = true;
         }
         if (line.find("[结果层统计]") != std::string::npos)
+        {
+            saw_result_section = true;
+        }
+        if (line.find("接收顺序") != std::string::npos && line.find("按通道分批到达") != std::string::npos)
+        {
+            saw_result_section = true;
+        }
+        if (line.find("当前 PRT 包覆盖") != std::string::npos && line.find("方位差 0/9") != std::string::npos)
         {
             saw_result_section = true;
         }
@@ -74,5 +97,30 @@ int main()
     assert(saw_link_state);
     assert(saw_result_section);
     assert(saw_drop_rate);
+
+    rxtech::RunSummary pre_business_summary;
+    pre_business_summary.raw_rx_packets = 5U;
+    pre_business_summary.raw_rx_bytes = 300U;
+    pre_business_summary.filtered_packets = 2U;
+    pre_business_summary.empty_poll_ratio = 1.0;
+    const std::vector<std::string> pre_business_lines =
+        rxtech::build_status_snapshot_lines_for_test(pre_business_summary, std::chrono::seconds(1));
+
+    bool saw_pre_business_state = false;
+    bool saw_protocol_section = false;
+    for (const std::string &line : pre_business_lines)
+    {
+        if (line.find("链路判定") != std::string::npos && line.find("尚未检测到业务协议流量") != std::string::npos)
+        {
+            saw_pre_business_state = true;
+        }
+        if (line.find("[协议层统计]") != std::string::npos || line.find("[结果层统计]") != std::string::npos)
+        {
+            saw_protocol_section = true;
+        }
+    }
+
+    assert(saw_pre_business_state);
+    assert(!saw_protocol_section);
     return 0;
 }

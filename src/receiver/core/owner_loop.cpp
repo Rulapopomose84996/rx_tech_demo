@@ -39,6 +39,63 @@ namespace rxtech
     namespace
     {
 
+        struct DataOrderCursor
+        {
+            std::uint16_t cpi = 0;
+            std::uint16_t prt = 0;
+            std::uint16_t channel = 0;
+            std::uint16_t packet_index = 0;
+        };
+
+        DataOrderCursor build_next_expected_cursor(const InterpretedPacketView &packet,
+                                                   const ProtocolSpec &spec)
+        {
+            DataOrderCursor next;
+            next.cpi = packet.cpi;
+            next.prt = packet.prt;
+            next.channel = packet.channel;
+            next.packet_index = packet.packet_index;
+
+            if (next.packet_index < spec.packets_per_channel)
+            {
+                next.packet_index = static_cast<std::uint16_t>(next.packet_index + 1U);
+                return next;
+            }
+
+            next.packet_index = 1U;
+            if (next.channel + 1U < spec.channels_per_prt)
+            {
+                next.channel = static_cast<std::uint16_t>(next.channel + 1U);
+                return next;
+            }
+
+            next.channel = 0U;
+            next.prt = static_cast<std::uint16_t>(next.prt + 1U);
+            return next;
+        }
+
+        bool matches_expected_cursor(const InterpretedPacketView &packet,
+                                     const DataOrderCursor &expected)
+        {
+            return packet.cpi == expected.cpi &&
+                   packet.prt == expected.prt &&
+                   packet.channel == expected.channel &&
+                   packet.packet_index == expected.packet_index;
+        }
+
+        std::string format_order_point(std::uint16_t cpi,
+                                       std::uint16_t prt,
+                                       std::uint16_t channel,
+                                       std::uint16_t packet_index)
+        {
+            std::ostringstream out;
+            out << "CPI " << cpi
+                << " / PRT " << prt
+                << " / CH " << channel
+                << " / PKT " << packet_index;
+            return out.str();
+        }
+
         std::uint32_t parse_ipv4_be(const std::string &ipv4)
         {
             std::uint32_t octets[4] = {0U, 0U, 0U, 0U};
@@ -267,6 +324,16 @@ namespace rxtech
         std::map<std::uint64_t, ProtocolCpiStats> cpi_stats;
         std::map<std::pair<std::uint64_t, std::uint16_t>, ProtocolPrtCoverage> prt_coverage;
         std::uint64_t final_tail_packets = 0;
+        std::uint16_t latest_data_cpi = 0;
+        std::uint16_t latest_data_prt = 0;
+        bool latest_data_seen = false;
+        std::uint64_t data_order_checked_packets = 0;
+        bool data_order_initialized = false;
+        bool data_order_matches_expected = true;
+        bool data_order_channel_batched = false;
+        std::string data_order_first_mismatch;
+        DataOrderCursor expected_next_packet{};
+        InterpretedPacketView previous_data_packet{};
         CpiContextPool ctx_pool;
         RecentClosedRing closed_ring;
         CpiAdmission admission;
@@ -275,6 +342,76 @@ namespace rxtech
         CpiFinalizer finalizer;
         std::uint32_t active_ctx_index = kInvalidPoolIndex;
         CpiContext *active_ctx = nullptr;
+
+        const auto populate_active_prt_summary = [&](RunSummary &target)
+        {
+            if (!latest_data_seen)
+            {
+                return;
+            }
+
+            target.active_prt_available = true;
+            target.active_cpi = latest_data_cpi;
+            target.active_prt = latest_data_prt;
+            target.active_prt_packets_per_channel = spec.packets_per_channel;
+
+            const auto coverage_it = prt_coverage.find({static_cast<std::uint64_t>(latest_data_cpi), latest_data_prt});
+            if (coverage_it == prt_coverage.end())
+            {
+                return;
+            }
+
+            std::uint64_t observed_channels = 0;
+            bool complete = true;
+            target.active_prt_channels.reserve(spec.channels_per_prt);
+            for (std::uint16_t channel = 0; channel < spec.channels_per_prt; ++channel)
+            {
+                ProtocolPrtChannelCoverageSummary channel_summary;
+                channel_summary.channel = channel;
+
+                const auto channel_it = coverage_it->second.find(channel);
+                if (channel_it != coverage_it->second.end())
+                {
+                    channel_summary.packet_count = static_cast<std::uint64_t>(channel_it->second.size());
+                    if (channel_summary.packet_count > 0U)
+                    {
+                        ++observed_channels;
+                    }
+                }
+
+                channel_summary.complete = channel_summary.packet_count == spec.packets_per_channel;
+                if (!channel_summary.complete)
+                {
+                    complete = false;
+                }
+
+                target.active_prt_channels.push_back(channel_summary);
+            }
+
+            target.active_prt_channel_count = observed_channels;
+            target.active_prt_complete = complete && !target.active_prt_channels.empty();
+        };
+
+        const auto populate_data_order_summary = [&](RunSummary &target)
+        {
+            target.data_order_checked_packets = data_order_checked_packets;
+            if (data_order_checked_packets == 0U)
+            {
+                target.data_order_assessment = "无数据包";
+                return;
+            }
+
+            if (data_order_matches_expected)
+            {
+                target.data_order_assessment = "符合按 PRT 推进的和/差/差顺序";
+                return;
+            }
+
+            target.data_order_assessment = data_order_channel_batched
+                                               ? "偏离按 PRT 推进顺序，当前捕获更像按通道分批到达"
+                                               : "偏离按 PRT 推进顺序";
+            target.data_order_first_mismatch = data_order_first_mismatch;
+        };
 
         const auto release_active_ctx = [&]()
         {
@@ -391,6 +528,39 @@ namespace rxtech
                     unique_cpis.insert(protocol_packet.cpi);
                     if (protocol_packet.kind == PacketKind::data_packet)
                     {
+                        ++data_order_checked_packets;
+                        if (!data_order_initialized)
+                        {
+                            expected_next_packet = build_next_expected_cursor(protocol_packet, spec);
+                            data_order_initialized = true;
+                        }
+                        else if (data_order_matches_expected && !matches_expected_cursor(protocol_packet, expected_next_packet))
+                        {
+                            data_order_matches_expected = false;
+                            if (previous_data_packet.packet_index == spec.packets_per_channel &&
+                                protocol_packet.packet_index == 1U &&
+                                protocol_packet.channel == previous_data_packet.channel &&
+                                protocol_packet.prt == static_cast<std::uint16_t>(previous_data_packet.prt + 1U))
+                            {
+                                data_order_channel_batched = true;
+                            }
+
+                            std::ostringstream mismatch;
+                            mismatch << "第 " << data_order_checked_packets << " 个数据包开始偏离，期望 "
+                                     << format_order_point(expected_next_packet.cpi,
+                                                           expected_next_packet.prt,
+                                                           expected_next_packet.channel,
+                                                           expected_next_packet.packet_index)
+                                     << "，实际 "
+                                     << format_order_point(protocol_packet.cpi,
+                                                           protocol_packet.prt,
+                                                           protocol_packet.channel,
+                                                           protocol_packet.packet_index);
+                            data_order_first_mismatch = mismatch.str();
+                        }
+                        expected_next_packet = build_next_expected_cursor(protocol_packet, spec);
+                        previous_data_packet = protocol_packet;
+
                         if (active_ctx == nullptr && !open_active_ctx(protocol_packet.cpi))
                         {
                             continue;
@@ -439,6 +609,9 @@ namespace rxtech
                         stats.data_packets += 1U;
                         stats.prts.insert(protocol_packet.prt);
                         prt_coverage[{protocol_packet.cpi, protocol_packet.prt}][protocol_packet.channel].insert(protocol_packet.packet_index);
+                        latest_data_cpi = protocol_packet.cpi;
+                        latest_data_prt = protocol_packet.prt;
+                        latest_data_seen = true;
                         if (parsed.tail == spec.magic_tail)
                         {
                             ++final_tail_packets;
@@ -505,6 +678,8 @@ namespace rxtech
                 status_summary.cpi_count = static_cast<std::uint64_t>(unique_cpis.size());
                 status_summary.prt_count = static_cast<std::uint64_t>(unique_prts.size());
                 status_summary.channel_count = static_cast<std::uint64_t>(unique_channels.size());
+                populate_data_order_summary(status_summary);
+                populate_active_prt_summary(status_summary);
                 merge_backend_stats(status_summary, context.backend->stats());
                 apply_raw_record_stats(status_summary, artifacts.raw_frame_recorder);
                 if (status_output_ != nullptr && now >= next_status_at)
@@ -542,6 +717,8 @@ namespace rxtech
         summary.cpi_count = static_cast<std::uint64_t>(unique_cpis.size());
         summary.prt_count = static_cast<std::uint64_t>(unique_prts.size());
         summary.channel_count = static_cast<std::uint64_t>(unique_channels.size());
+        populate_data_order_summary(summary);
+        populate_active_prt_summary(summary);
         summary.final_tail_packets = final_tail_packets;
         for (const auto &entry : prt_coverage)
         {

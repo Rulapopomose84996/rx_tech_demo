@@ -25,6 +25,13 @@ namespace rxtech
         std::uint64_t prt_count = 0;
     };
 
+    struct ProtocolPrtChannelCoverageSummary
+    {
+        std::uint16_t channel = 0;
+        std::uint64_t packet_count = 0;
+        bool complete = false;
+    };
+
     struct StepSummary
     {
         std::size_t step_index = 0;
@@ -75,6 +82,8 @@ namespace rxtech
         std::string backend_status = "available";
         std::string backend_reason;
         std::string human_summary;
+        std::string data_order_assessment = "未评估";
+        std::string data_order_first_mismatch;
         std::string capture_packets_path;
         std::string capture_index_path;
         std::string raw_record_output_dir;
@@ -101,6 +110,10 @@ namespace rxtech
         std::uint64_t cpi_count = 0;
         std::uint64_t prt_count = 0;
         std::uint64_t channel_count = 0;
+        std::uint64_t data_order_checked_packets = 0;
+        std::uint64_t active_cpi = 0;
+        std::uint64_t active_prt = 0;
+        std::uint64_t active_prt_channel_count = 0;
         std::uint64_t complete_prt_count = 0;
         std::uint64_t final_tail_packets = 0;
         std::uint64_t control_table_packets = 0;
@@ -138,9 +151,13 @@ namespace rxtech
         std::uint64_t batch_p99 = 0;
         bool backend_available = true;
         bool cpu_metrics_available = false;
+        bool active_prt_available = false;
+        bool active_prt_complete = false;
         std::string cpu_metrics_status = "unavailable";
+        std::uint32_t active_prt_packets_per_channel = 0;
         std::vector<ProtocolChannelSummary> protocol_channels;
         std::vector<ProtocolCpiSummary> protocol_cpis;
+        std::vector<ProtocolPrtChannelCoverageSummary> active_prt_channels;
         std::vector<StepSummary> steps;
     };
 
