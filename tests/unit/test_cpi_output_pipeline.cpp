@@ -47,10 +47,12 @@ int main()
     std::vector<std::uint16_t> consumed_cpi_ids;
     std::atomic<bool> stop{false};
     rxtech::CpiConsumer consumer(output_ring, recycle_ring,
-                                  [&](const rxtech::CpiOutput &out) {
-                                      consumed_cpi_ids.push_back(out.cpi_id);
-                                  });
-    std::thread consumer_thread([&] { consumer.run(stop); });
+                                 [&](const rxtech::CpiOutput &out)
+                                 {
+                                     consumed_cpi_ids.push_back(out.cpi_id);
+                                 });
+    std::thread consumer_thread([&]
+                                { consumer.run(stop); });
 
     // Wait for consumer to process.
     while (consumer.processed_count() == 0)
@@ -106,10 +108,12 @@ int main()
 
         std::atomic<bool> stop2{false};
         rxtech::CpiConsumer consumer2(out2, rec2,
-                                       [&](const rxtech::CpiOutput &o) {
-                                           ids.push_back(o.cpi_id);
-                                       });
-        std::thread t([&] { consumer2.run(stop2); });
+                                      [&](const rxtech::CpiOutput &o)
+                                      {
+                                          ids.push_back(o.cpi_id);
+                                      });
+        std::thread t([&]
+                      { consumer2.run(stop2); });
 
         while (consumer2.processed_count() < kCount)
         {

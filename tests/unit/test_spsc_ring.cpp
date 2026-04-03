@@ -17,7 +17,7 @@ int main()
         assert(ring.capacity() == 3U);
         assert(ring.push(1));
         assert(ring.push(2));
-        assert(ring.push(3)); // 3rd push succeeds (usable capacity is 3)
+        assert(ring.push(3));  // 3rd push succeeds (usable capacity is 3)
         assert(!ring.push(4)); // 4th fails — ring is full
 
         int value = 0;
@@ -50,16 +50,17 @@ int main()
         std::uint64_t sum_produced = 0;
         std::uint64_t sum_consumed = 0;
 
-        std::thread producer([&] {
+        std::thread producer([&]
+                             {
             for (std::uint64_t i = 1; i <= kCount; ++i)
             {
                 while (!ring.push(i)) {}
                 sum_produced += i;
             }
-            done.store(true, std::memory_order_release);
-        });
+            done.store(true, std::memory_order_release); });
 
-        std::thread consumer([&] {
+        std::thread consumer([&]
+                             {
             std::uint64_t v = 0;
             std::uint64_t last = 0;
             while (!done.load(std::memory_order_acquire) || ring.size_approx() > 0)
@@ -77,8 +78,7 @@ int main()
                 assert(v == last + 1);
                 last = v;
                 sum_consumed += v;
-            }
-        });
+            } });
 
         producer.join();
         consumer.join();
