@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import socket
 import struct
 import sys
@@ -130,6 +131,125 @@ def try_parse_udp_payload(frame: bytes) -> Optional[dict]:
     return result
 
 
+def iter_csv_rows(data: bytes,
+                  header_size: int,
+                  start: int,
+                  limit: int,
+                  protocol_only: bool) -> Iterator[dict]:
+    emitted = 0
+    for record in iter_records(data, header_size):
+        if record.index < start:
+            continue
+        if emitted >= limit:
+            break
+
+        udp = try_parse_udp_payload(record.frame)
+        if protocol_only:
+            if udp is None or udp.get("payload_magic_le") not in (CONTROL_MAGIC, DATA_MAGIC):
+                continue
+
+        row = {
+            "record_index": record.index,
+            "timestamp_ns": record.timestamp_ns,
+            "queue_id": record.queue_id,
+            "frame_length": len(record.frame),
+            "ethertype": "",
+            "src_ip": "",
+            "dst_ip": "",
+            "src_port": "",
+            "dst_port": "",
+            "payload_length": "",
+            "payload_magic_le": "",
+            "protocol_kind": "",
+            "cpi": "",
+            "channel": "",
+            "prt": "",
+            "packet_index": "",
+            "tail_le": "",
+            "tail_is_final": "",
+        }
+
+        if len(record.frame) >= 14:
+            row["ethertype"] = f"0x{struct.unpack_from('>H', record.frame, 12)[0]:04X}"
+
+        if udp is not None:
+            row["src_ip"] = udp["src_ip"]
+            row["dst_ip"] = udp["dst_ip"]
+            row["src_port"] = udp["src_port"]
+            row["dst_port"] = udp["dst_port"]
+            row["payload_length"] = len(udp["payload"])
+
+            magic = udp.get("payload_magic_le")
+            if magic is not None:
+                row["payload_magic_le"] = f"0x{magic:08X}"
+            row["protocol_kind"] = udp.get("protocol_kind", "")
+            if "cpi" in udp:
+                row["cpi"] = udp["cpi"]
+            if "channel" in udp:
+                row["channel"] = udp["channel"]
+            if "prt" in udp:
+                row["prt"] = udp["prt"]
+            if "packet_index" in udp:
+                row["packet_index"] = udp["packet_index"]
+            if "tail" in udp:
+                row["tail_le"] = f"0x{udp['tail']:08X}"
+            if "tail_is_final" in udp:
+                row["tail_is_final"] = str(bool(udp["tail_is_final"])).lower()
+
+        yield row
+        emitted += 1
+
+
+def write_csv(data: bytes,
+              header_size: int,
+              start: int,
+              limit: int,
+              protocol_only: bool,
+              csv_out: str) -> int:
+    fieldnames = [
+        "record_index",
+        "timestamp_ns",
+        "queue_id",
+        "frame_length",
+        "ethertype",
+        "src_ip",
+        "dst_ip",
+        "src_port",
+        "dst_port",
+        "payload_length",
+        "payload_magic_le",
+        "protocol_kind",
+        "cpi",
+        "channel",
+        "prt",
+        "packet_index",
+        "tail_le",
+        "tail_is_final",
+    ]
+
+    if csv_out == "-":
+        stream = sys.stdout
+        close_stream = False
+    else:
+        stream = Path(csv_out).open("w", newline="", encoding="utf-8")
+        close_stream = True
+
+    try:
+        writer = csv.DictWriter(stream, fieldnames=fieldnames)
+        writer.writeheader()
+        count = 0
+        for row in iter_csv_rows(data, header_size, start, limit, protocol_only):
+            writer.writerow(row)
+            count += 1
+    finally:
+        if close_stream:
+            stream.close()
+
+    if csv_out != "-":
+        print(f"已导出 {count} 条记录到 {csv_out}")
+    return 0
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="解析 RawFrameRecorder 生成的 .rawbin 原始帧文件")
     parser.add_argument("rawbin", help="rawbin 文件路径")
@@ -137,6 +257,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--start", type=int, default=0, help="从第几条记录开始输出，默认 0")
     parser.add_argument("--hex-bytes", type=int, default=32, help="每条记录最多显示多少个十六进制字节，默认 32")
     parser.add_argument("--protocol-only", action="store_true", help="只输出 IPv4/UDP 且负载带 0x55AAFF00/03 魔数的记录")
+    parser.add_argument("--csv-out", help="导出 CSV 到指定路径；传 '-' 表示输出到标准输出")
     return parser
 
 
@@ -145,6 +266,9 @@ def main(argv: list[str]) -> int:
     rawbin_path = Path(args.rawbin)
     data = rawbin_path.read_bytes()
     file_header = parse_file_header(data)
+
+    if args.csv_out:
+        return write_csv(data, file_header.header_size, args.start, args.limit, args.protocol_only, args.csv_out)
 
     print("文件头")
     print(f"  path          : {rawbin_path}")
