@@ -397,7 +397,7 @@ int main()
         assert(status_stream.str().find("时间戳") != std::string::npos);
         assert(status_stream.str().find("链路判定") != std::string::npos);
         assert(status_stream.str().find("落盘记录") != std::string::npos);
-        assert(status_stream.str().find("CPI 数量") != std::string::npos);
+        assert(status_stream.str().find("全局 CPI 数") != std::string::npos);
     }
 
     {

@@ -68,25 +68,29 @@ int main()
     assert(lines.front().find("实时接收状态") != std::string::npos);
 
     bool saw_link_state = false;
+    bool saw_protocol_section = false;
     bool saw_result_section = false;
     bool saw_drop_rate = false;
+    bool saw_debug_lines = false;
     for (const std::string &line : lines)
     {
         if (line.find("链路判定") != std::string::npos && line.find("已检测到业务协议流量") != std::string::npos)
         {
             saw_link_state = true;
         }
+        if (line.find("[协议层统计]") != std::string::npos)
+        {
+            saw_protocol_section = true;
+        }
         if (line.find("[结果层统计]") != std::string::npos)
         {
             saw_result_section = true;
         }
-        if (line.find("接收顺序") != std::string::npos && line.find("按通道分批到达") != std::string::npos)
+        if (line.find("接收顺序") != std::string::npos ||
+            line.find("当前重组 PRT") != std::string::npos ||
+            line.find("首个顺序偏差") != std::string::npos)
         {
-            saw_result_section = true;
-        }
-        if (line.find("当前重组 PRT 包覆盖") != std::string::npos && line.find("方位差 0/9") != std::string::npos)
-        {
-            saw_result_section = true;
+            saw_debug_lines = true;
         }
         if (line.find("丢包率") != std::string::npos)
         {
@@ -95,8 +99,10 @@ int main()
     }
 
     assert(saw_link_state);
+    assert(saw_protocol_section);
     assert(saw_result_section);
     assert(saw_drop_rate);
+    assert(!saw_debug_lines);
 
     rxtech::RunSummary pre_business_summary;
     pre_business_summary.raw_rx_packets = 5U;
@@ -107,20 +113,26 @@ int main()
         rxtech::build_status_snapshot_lines_for_test(pre_business_summary, std::chrono::seconds(1));
 
     bool saw_pre_business_state = false;
-    bool saw_protocol_section = false;
+    bool saw_protocol_section_pre = false;
+    bool saw_result_section_pre = false;
     for (const std::string &line : pre_business_lines)
     {
         if (line.find("链路判定") != std::string::npos && line.find("尚未检测到业务协议流量") != std::string::npos)
         {
             saw_pre_business_state = true;
         }
-        if (line.find("[协议层统计]") != std::string::npos || line.find("[结果层统计]") != std::string::npos)
+        if (line.find("[协议层统计]") != std::string::npos)
         {
-            saw_protocol_section = true;
+            saw_protocol_section_pre = true;
+        }
+        if (line.find("[结果层统计]") != std::string::npos)
+        {
+            saw_result_section_pre = true;
         }
     }
 
     assert(saw_pre_business_state);
-    assert(!saw_protocol_section);
+    assert(saw_protocol_section_pre);
+    assert(saw_result_section_pre);
     return 0;
 }
