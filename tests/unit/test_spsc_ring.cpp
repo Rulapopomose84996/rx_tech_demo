@@ -13,15 +13,20 @@ int main()
     // Basic push/pop
     {
         rxtech::SpscRing<int> ring(2U);
+        // min_capacity=2 → internal=4 (next_pow2(3)) → usable=3
+        assert(ring.capacity() == 3U);
         assert(ring.push(1));
         assert(ring.push(2));
-        assert(!ring.push(3)); // full (capacity rounds to 2)
+        assert(ring.push(3)); // 3rd push succeeds (usable capacity is 3)
+        assert(!ring.push(4)); // 4th fails — ring is full
 
         int value = 0;
         assert(ring.pop(value));
         assert(value == 1);
         assert(ring.pop(value));
         assert(value == 2);
+        assert(ring.pop(value));
+        assert(value == 3);
         assert(!ring.pop(value)); // empty
     }
 

@@ -28,14 +28,17 @@ namespace rxtech
         /// Run the consumer loop (blocks until stop() is called).
         void run(const std::atomic<bool> &stop_flag);
 
-        /// How many CpiOutputs were processed.
-        std::uint64_t processed_count() const noexcept { return processed_count_; }
+        /// How many CpiOutputs were processed (thread-safe).
+        std::uint64_t processed_count() const noexcept
+        {
+            return processed_count_.load(std::memory_order_acquire);
+        }
 
     private:
         SpscRing<CpiOutput> &output_ring_;
         SpscRing<ReleaseToken> &recycle_ring_;
         CpiOutputHandler handler_;
-        std::uint64_t processed_count_ = 0;
+        std::atomic<std::uint64_t> processed_count_{0};
     };
 
 } // namespace rxtech

@@ -69,7 +69,8 @@ public:
         return (h - t) & mask_;
     }
 
-    std::size_t capacity() const noexcept { return capacity_; }
+    /// Usable capacity (one internal slot is reserved for full/empty distinction).
+    std::size_t capacity() const noexcept { return capacity_ - 1U; }
 
 private:
     struct Slot {

@@ -34,7 +34,7 @@ namespace rxtech
                 }
             }
 
-            ++processed_count_;
+            processed_count_.fetch_add(1U, std::memory_order_release);
         }
 
         // Drain remaining items before exit.
@@ -48,7 +48,7 @@ namespace rxtech
             token.output_id = output.output_id;
             token.ctx_pool_index = output.pool_index;
             recycle_ring_.push(token);
-            ++processed_count_;
+            processed_count_.fetch_add(1U, std::memory_order_release);
         }
     }
 
