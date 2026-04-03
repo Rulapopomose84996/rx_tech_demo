@@ -40,7 +40,8 @@ namespace rxtech
 
         std::atomic<bool> consumer_stop{false};
         CpiConsumer consumer(output_ring, recycle_ring, output_handler_);
-        std::thread consumer_thread([&] { consumer.run(consumer_stop); });
+        std::thread consumer_thread([&]
+                                    { consumer.run(consumer_stop); });
 
         const auto start_time = std::chrono::steady_clock::now();
         RuntimeStatusReporter status_reporter(context.config, spec, status_output_, start_time);
