@@ -1,14 +1,19 @@
 add_library(rx_receiver_core
     admit/cpi_admission.cpp
+    core/cpi_state_coordinator.cpp
     core/owner_loop.cpp
     core/owner_loop_summary.cpp
-    core/status_panel.cpp
     finalize/cpi_finalizer.cpp
+    output/capture_sink.cpp
+    protocol/data_order_tracker.cpp
+    protocol/packet_pipeline.cpp
     protocol/protocol_sequence_interpreter.cpp
     protocol/sample_packet_parser.cpp
     protocol/sample_packet_validator.cpp
     protocol/udp_payload_assembler.cpp
     sidecar/metrics.cpp
+    sidecar/runtime_status_reporter.cpp
+    sidecar/status_panel.cpp
     storage/progress_tracker.cpp
     storage/slot_writer.cpp
     runtime/rx_config.cpp
@@ -27,7 +32,10 @@ target_include_directories(rx_receiver_core
     ${CMAKE_CURRENT_SOURCE_DIR}/sidecar
     ${CMAKE_CURRENT_SOURCE_DIR}/storage
     ${CMAKE_CURRENT_SOURCE_DIR}/runtime
+    ${CMAKE_CURRENT_SOURCE_DIR}/output
     ${CMAKE_CURRENT_SOURCE_DIR}/core/internal
+    ${CMAKE_CURRENT_SOURCE_DIR}/output/internal
+    ${CMAKE_CURRENT_SOURCE_DIR}/sidecar/internal
 )
 
 target_compile_features(rx_receiver_core PUBLIC cxx_std_17)
