@@ -149,7 +149,13 @@ namespace rxtech
                                           std::string &run_status,
                                           std::string &run_error)
     {
-        release_active();
+        // Release only the active context, not the previous (dual-window).
+        if (active_ctx_index_ != kInvalidPoolIndex)
+        {
+            ctx_pool_.release(active_ctx_index_);
+            active_ctx_ = nullptr;
+            active_ctx_index_ = kInvalidPoolIndex;
+        }
         active_ctx_index_ = ctx_pool_.acquire(cpi_id);
         active_ctx_ = ctx_pool_.get(active_ctx_index_);
         if (active_ctx_ == nullptr)
