@@ -5,6 +5,7 @@ add_library(rx_receiver_core
     core/owner_loop_summary.cpp
     finalize/cpi_finalizer.cpp
     output/capture_sink.cpp
+    output/cpi_consumer.cpp
     protocol/data_order_tracker.cpp
     protocol/packet_pipeline.cpp
     protocol/protocol_sequence_interpreter.cpp

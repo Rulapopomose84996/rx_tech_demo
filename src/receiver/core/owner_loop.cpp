@@ -1,12 +1,15 @@
 ﻿#include "rxtech/owner_loop.h"
 
+#include <atomic>
 #include <chrono>
+#include <thread>
 
 #include "internal/cpi_state_coordinator.h"
 #include "internal/owner_loop_runtime_state.h"
 #include "capture_sink.h"
 #include "data_order_tracker.h"
 #include "packet_pipeline.h"
+#include "rxtech/cpi_consumer.h"
 #include "rxtech/raw_frame_recorder.h"
 #include "rxtech/time_utils.h"
 #include "runtime_status_reporter.h"
@@ -28,6 +31,16 @@ namespace rxtech
         CpiStateCoordinator cpi_state_coordinator(spec);
         DataOrderTracker data_order_tracker(spec);
         CaptureSink capture_sink(artifacts);
+
+        // CPI output pipeline: owner → output_ring → consumer → recycle_ring → owner
+        constexpr std::size_t kOutputRingCapacity = 8U;
+        SpscRing<CpiOutput> output_ring(kOutputRingCapacity);
+        SpscRing<ReleaseToken> recycle_ring(kOutputRingCapacity);
+        cpi_state_coordinator.attach_rings(&output_ring, &recycle_ring);
+
+        std::atomic<bool> consumer_stop{false};
+        CpiConsumer consumer(output_ring, recycle_ring, output_handler_);
+        std::thread consumer_thread([&] { consumer.run(consumer_stop); });
 
         const auto start_time = std::chrono::steady_clock::now();
         RuntimeStatusReporter status_reporter(context.config, spec, status_output_, start_time);
@@ -71,11 +84,11 @@ namespace rxtech
                         {
                             data_order_tracker.observe(processed.interpreted);
                             const CpiProcessResult cpi_result = cpi_state_coordinator.process_data_packet(processed.parsed,
-                                                                                                           processed.interpreted,
-                                                                                                           spec,
-                                                                                                           *context.metrics,
-                                                                                                           runtime_state.run_status,
-                                                                                                           runtime_state.run_error);
+                                                                                                          processed.interpreted,
+                                                                                                          spec,
+                                                                                                          *context.metrics,
+                                                                                                          runtime_state.run_status,
+                                                                                                          runtime_state.run_error);
                             if (!cpi_result.accepted)
                             {
                                 return;
@@ -101,6 +114,9 @@ namespace rxtech
             // T-004: periodic timeout check on active CPI
             cpi_state_coordinator.check_timeout(steady_clock_now_ns(), *context.metrics);
 
+            // Drain recycle tokens from consumer thread
+            cpi_state_coordinator.drain_recycle(*context.metrics);
+
             status_reporter.emit_periodic(context,
                                           artifacts,
                                           runtime_state,
@@ -109,6 +125,15 @@ namespace rxtech
         }
 
         capture_sink.flush();
+        cpi_state_coordinator.release_active();
+
+        // Signal consumer thread to exit and join
+        consumer_stop.store(true, std::memory_order_release);
+        consumer_thread.join();
+
+        // Drain any remaining recycle tokens
+        cpi_state_coordinator.drain_recycle(*context.metrics);
+
         const auto end_time = std::chrono::steady_clock::now();
         RunSummary summary = status_reporter.build_final_summary(context,
                                                                  artifacts,
@@ -116,7 +141,6 @@ namespace rxtech
                                                                  data_order_tracker,
                                                                  end_time);
         status_reporter.render_final(summary, end_time - start_time);
-        cpi_state_coordinator.release_active();
         return summary;
     }
 

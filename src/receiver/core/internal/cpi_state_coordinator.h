@@ -12,6 +12,7 @@
 #include "rxtech/progress_tracker.h"
 #include "rxtech/sample_packet_parser.h"
 #include "rxtech/slot_writer.h"
+#include "rxtech/spsc_ring.h"
 
 namespace rxtech
 {
@@ -28,6 +29,14 @@ namespace rxtech
         explicit CpiStateCoordinator(const ProtocolSpec &spec)
             : slot_writer_(spec), progress_tracker_(spec), spec_(spec) {}
 
+        /// Attach output and recycle rings for CPI pipeline.
+        void attach_rings(SpscRing<CpiOutput> *output_ring,
+                          SpscRing<ReleaseToken> *recycle_ring)
+        {
+            output_ring_ = output_ring;
+            recycle_ring_ = recycle_ring;
+        }
+
         void process_control_packet(const ParsedPacketView &parsed);
 
         /// Check if the active CPI has exceeded its timeout; finalize if so.
@@ -40,6 +49,9 @@ namespace rxtech
                                              std::string &run_status,
                                              std::string &run_error);
 
+        /// Drain recycle ring and release pool slots.
+        void drain_recycle(IMetricsCollector &metrics);
+
         void release_active();
 
     private:
@@ -47,7 +59,7 @@ namespace rxtech
                          IMetricsCollector &metrics,
                          std::string &run_status,
                          std::string &run_error);
-        void finalize_active(std::uint32_t trigger);
+        void finalize_active(std::uint32_t trigger, IMetricsCollector &metrics);
         void bind_snapshot_to_active();
 
         CpiContextPool ctx_pool_;
@@ -58,6 +70,9 @@ namespace rxtech
         CpiFinalizer finalizer_;
         ProtocolSpec spec_{};
         BoundWaveSnapshotLite current_snapshot_{};
+        SpscRing<CpiOutput> *output_ring_ = nullptr;
+        SpscRing<ReleaseToken> *recycle_ring_ = nullptr;
+        std::uint64_t next_output_id_ = 1U;
         std::uint32_t active_ctx_index_ = kInvalidPoolIndex;
         CpiContext *active_ctx_ = nullptr;
     };

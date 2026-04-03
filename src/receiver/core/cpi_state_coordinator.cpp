@@ -54,7 +54,7 @@ namespace rxtech
         if (now_ns > anchor && (now_ns - anchor) >= timeout_ns)
         {
             active_ctx_->header.trigger_bits |= TriggerTimeout;
-            finalize_active(TriggerTimeout);
+            finalize_active(TriggerTimeout, metrics);
             metrics.on_error();
             return true;
         }
@@ -83,7 +83,7 @@ namespace rxtech
         return true;
     }
 
-    void CpiStateCoordinator::finalize_active(std::uint32_t trigger)
+    void CpiStateCoordinator::finalize_active(std::uint32_t trigger, IMetricsCollector &metrics)
     {
         if (active_ctx_ == nullptr)
         {
@@ -93,8 +93,31 @@ namespace rxtech
         if (output.has_value())
         {
             closed_ring_.push(output->cpi_id, output->seal_tsc, output->decision);
+            if (output_ring_ != nullptr)
+            {
+                CpiOutput out = *output;
+                out.output_id = next_output_id_++;
+                if (!output_ring_->push(out))
+                {
+                    // SPSC full — backpressure: discard and release immediately
+                    metrics.on_pool_exhaustion();
+                    ctx_pool_.release(active_ctx_index_);
+                }
+                // else: pool slot stays occupied until consumer returns ReleaseToken
+            }
+            else
+            {
+                // No output ring attached — legacy path, release immediately
+                ctx_pool_.release(active_ctx_index_);
+            }
         }
-        release_active();
+        else
+        {
+            // Finalization declined — release pool slot
+            ctx_pool_.release(active_ctx_index_);
+        }
+        active_ctx_index_ = kInvalidPoolIndex;
+        active_ctx_ = nullptr;
     }
 
     CpiProcessResult CpiStateCoordinator::process_data_packet(const ParsedPacketView &parsed,
@@ -113,7 +136,7 @@ namespace rxtech
         AdmissionResult admission_result = admission_.judge(parsed, active_ctx_->header.cpi_id, closed_ring_);
         if (admission_result == AdmissionResult::TRIGGER_CPI_SWITCH)
         {
-            finalize_active(TriggerCpiSwitch);
+            finalize_active(TriggerCpiSwitch, metrics);
             if (!open_active(packet.cpi, metrics, run_status, run_error))
             {
                 return result;
@@ -143,11 +166,24 @@ namespace rxtech
         const std::uint32_t finalize_mask = TriggerFullReady | TriggerWaveEnd;
         if ((active_ctx_->header.trigger_bits & finalize_mask) != 0U)
         {
-            finalize_active(active_ctx_->header.trigger_bits & finalize_mask);
+            finalize_active(active_ctx_->header.trigger_bits & finalize_mask, metrics);
         }
 
         result.accepted = true;
         return result;
+    }
+
+    void CpiStateCoordinator::drain_recycle(IMetricsCollector & /*metrics*/)
+    {
+        if (recycle_ring_ == nullptr)
+        {
+            return;
+        }
+        ReleaseToken token;
+        while (recycle_ring_->pop(token))
+        {
+            ctx_pool_.release(token.ctx_pool_index);
+        }
     }
 
     void CpiStateCoordinator::release_active()

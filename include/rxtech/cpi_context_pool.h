@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -21,6 +22,7 @@ namespace rxtech
             {
                 pool_[index].reset(0U, static_cast<std::uint32_t>(index));
                 pool_[index].header.state = CpiState::RECYCLED;
+                in_use_[index].store(false, std::memory_order_relaxed);
             }
         }
 
@@ -28,9 +30,11 @@ namespace rxtech
         {
             for (std::size_t index = 0; index < in_use_.size(); ++index)
             {
-                if (!in_use_[index])
+                bool expected = false;
+                if (in_use_[index].compare_exchange_strong(expected, true,
+                                                           std::memory_order_acq_rel,
+                                                           std::memory_order_relaxed))
                 {
-                    in_use_[index] = true;
                     pool_[index].reset(cpi_id, static_cast<std::uint32_t>(index));
                     return static_cast<std::uint32_t>(index);
                 }
@@ -44,9 +48,9 @@ namespace rxtech
             {
                 return;
             }
-            in_use_[index] = false;
             pool_[index].reset(0U, index);
             pool_[index].header.state = CpiState::RECYCLED;
+            in_use_[index].store(false, std::memory_order_release);
         }
 
         CpiContext *get(std::uint32_t index)
@@ -61,7 +65,7 @@ namespace rxtech
 
     private:
         std::unique_ptr<CpiContext[]> pool_;
-        std::array<bool, kCpiContextPoolDepth> in_use_{};
+        std::array<std::atomic<bool>, kCpiContextPoolDepth> in_use_{};
     };
 
 } // namespace rxtech

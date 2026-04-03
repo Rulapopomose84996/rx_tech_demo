@@ -62,7 +62,6 @@ namespace rxtech
                                      : static_cast<std::uint32_t>(output.view.n_prt) * slots_per_prt;
 
         ctx.header.state = CpiState::SEALED;
-        ctx.header.state = CpiState::TOMBSTONE;
         return output;
     }
 

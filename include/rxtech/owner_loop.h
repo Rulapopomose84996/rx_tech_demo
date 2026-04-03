@@ -5,6 +5,7 @@
 #include <iosfwd>
 #include <string>
 
+#include "rxtech/cpi_consumer.h"
 #include "rxtech/receive_context.h"
 
 namespace rxtech {
@@ -27,12 +28,14 @@ struct CaptureArtifacts {
 class OwnerLoop {
 public:
     void set_status_output(std::ostream* output);
+    void set_output_handler(CpiOutputHandler handler) { output_handler_ = std::move(handler); }
     RunSummary run(ReceiveContext& context,
                    CaptureArtifacts& artifacts,
                    const std::function<bool()>& should_stop) const;
 
 private:
     std::ostream* status_output_ = nullptr;
+    CpiOutputHandler output_handler_;
 };
 
 }  // namespace rxtech

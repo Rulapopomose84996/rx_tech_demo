@@ -87,3 +87,9 @@ target_include_directories(test_arp_responder PRIVATE ${CMAKE_SOURCE_DIR}/src/re
 add_test(NAME test_arp_responder COMMAND test_arp_responder)
 set_tests_properties(test_arp_responder PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(test_arp_responder)
+
+add_executable(test_cpi_output_pipeline test_cpi_output_pipeline.cpp)
+target_link_libraries(test_cpi_output_pipeline PRIVATE rx_receiver_core)
+add_test(NAME test_cpi_output_pipeline COMMAND test_cpi_output_pipeline)
+set_tests_properties(test_cpi_output_pipeline PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+rxtech_apply_warnings(test_cpi_output_pipeline)
