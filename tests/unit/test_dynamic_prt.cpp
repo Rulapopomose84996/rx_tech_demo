@@ -17,6 +17,9 @@
 namespace
 {
 
+// Dummy payload buffer for slot writer (must be non-null and have valid length)
+static std::uint8_t g_dummy_payload[2048] = {};
+
 rxtech::ProtocolSpec make_spec(bool dynamic_prt, std::uint32_t expected_n_prt, std::uint32_t max_n_prt)
 {
     rxtech::ProtocolSpec spec;
@@ -49,6 +52,7 @@ rxtech::ParsedPacketView make_data(std::uint16_t cpi, std::uint16_t prt, std::ui
     pv.prt = prt;
     pv.channel = channel;
     pv.packet_index = packet_index;
+    pv.payload_ptr = g_dummy_payload;
     pv.payload_len = 2032U;
     return pv;
 }

@@ -41,6 +41,7 @@ namespace rxtech
             return (octets[0] << 24U) | (octets[1] << 16U) | (octets[2] << 8U) | octets[3];
         }
 
+#if defined(RXTECH_DEBUG_DIAGNOSTICS) && RXTECH_DEBUG_DIAGNOSTICS
         std::uint32_t read_u32_le_at(const std::uint8_t *data, std::size_t size, std::size_t offset)
         {
             if (data == nullptr || offset + 4U > size)
@@ -95,6 +96,7 @@ namespace rxtech
             out << "[invalid-sample] preview=" << hex_preview(packet.data, packet.len, 64U) << "\n";
             out.flush();
         }
+#endif
 
     } // namespace
 
@@ -141,6 +143,9 @@ namespace rxtech
     {
 #if defined(RXTECH_DEBUG_DIAGNOSTICS) && RXTECH_DEBUG_DIAGNOSTICS
         const auto diag_start = std::chrono::steady_clock::now();
+#else
+        (void)diagnostic_output;
+        (void)invalid_dumped;
 #endif
         PacketProcessStats stats;
         const auto udp_frames = assembler_.push(packet);
