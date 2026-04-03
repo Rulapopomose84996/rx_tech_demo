@@ -3,6 +3,7 @@
 #endif
 #include <cassert>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 #include "rxtech/cpi_context.h"
@@ -16,7 +17,8 @@ int main()
     spec.channels_per_prt = 3U;
     spec.packets_per_channel = 9U;
 
-    rxtech::CpiContext context;
+    auto context_ptr = std::make_unique<rxtech::CpiContext>();
+    rxtech::CpiContext &context = *context_ptr;
     context.reset(42U, 0U);
     context.header.channels_per_prt = static_cast<std::uint16_t>(spec.channels_per_prt);
     context.header.packets_per_channel = static_cast<std::uint16_t>(spec.packets_per_channel);
@@ -73,7 +75,8 @@ int main()
 
     // V-006: PRT out of range must be rejected when expected_n_prt is set
     {
-        rxtech::CpiContext ctx2;
+        auto ctx2_ptr = std::make_unique<rxtech::CpiContext>();
+        rxtech::CpiContext &ctx2 = *ctx2_ptr;
         ctx2.reset(99U, 0U);
         ctx2.header.channels_per_prt = static_cast<std::uint16_t>(spec.channels_per_prt);
         ctx2.header.packets_per_channel = static_cast<std::uint16_t>(spec.packets_per_channel);
@@ -104,7 +107,8 @@ int main()
 
     // T-005: TriggerWaveEnd when tail seen on last expected PRT
     {
-        rxtech::CpiContext ctx3;
+        auto ctx3_ptr = std::make_unique<rxtech::CpiContext>();
+        rxtech::CpiContext &ctx3 = *ctx3_ptr;
         ctx3.reset(200U, 0U);
         ctx3.header.channels_per_prt = static_cast<std::uint16_t>(spec.channels_per_prt);
         ctx3.header.packets_per_channel = static_cast<std::uint16_t>(spec.packets_per_channel);

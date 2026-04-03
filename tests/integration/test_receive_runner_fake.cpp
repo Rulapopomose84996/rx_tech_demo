@@ -221,12 +221,12 @@ namespace
             }
             served_ = true;
 
-            packet_storage_.push_back(make_udp_frame(make_data_packet(2U, 0U, 1U, 1U, true),
+            packet_storage_.push_back(make_udp_frame(make_data_packet(2U, 0U, 1U, 9U, true),
                                                      0xAC140BDEU,
                                                      0xAC140B64U,
                                                      30001U,
                                                      9999U));
-            packet_storage_.push_back(make_udp_frame(make_data_packet(2U, 0U, 1U, 1U, true),
+            packet_storage_.push_back(make_udp_frame(make_data_packet(2U, 0U, 1U, 9U, true),
                                                      0xAC140B63U,
                                                      0xAC140B64U,
                                                      30001U,
