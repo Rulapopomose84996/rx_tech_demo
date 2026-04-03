@@ -137,10 +137,10 @@ namespace rxtech
         }
         if (summary.active_prt_available && !summary.active_prt_channels.empty())
         {
-            out << "当前 PRT： CPI " << summary.active_cpi
+            out << "当前重组 PRT： CPI " << summary.active_cpi
                 << " / PRT " << summary.active_prt
                 << "（" << (summary.active_prt_complete ? "完整" : "接收中") << "）\n";
-            out << "当前 PRT 覆盖：\n";
+            out << "当前重组 PRT 覆盖：\n";
             for (const auto &channel : summary.active_prt_channels)
             {
                 out << "  - 通道 " << channel.channel << "（" << protocol_channel_name(channel.channel) << "）："

@@ -352,14 +352,53 @@ namespace rxtech
 
             target.active_prt_available = true;
             target.active_cpi = latest_data_cpi;
-            target.active_prt = latest_data_prt;
             target.active_prt_packets_per_channel = spec.packets_per_channel;
+            target.active_prt_channels.clear();
+            target.active_prt_channel_count = 0;
+            target.active_prt_complete = false;
 
-            const auto coverage_it = prt_coverage.find({static_cast<std::uint64_t>(latest_data_cpi), latest_data_prt});
-            if (coverage_it == prt_coverage.end())
+            auto selected_it = prt_coverage.end();
+            auto fallback_it = prt_coverage.end();
+            for (auto it = prt_coverage.begin(); it != prt_coverage.end(); ++it)
             {
+                if (it->first.first != static_cast<std::uint64_t>(latest_data_cpi))
+                {
+                    continue;
+                }
+
+                fallback_it = it;
+
+                bool complete = true;
+                for (std::uint16_t channel = 0; channel < spec.channels_per_prt; ++channel)
+                {
+                    const auto channel_it = it->second.find(channel);
+                    if (channel_it == it->second.end() ||
+                        channel_it->second.size() != static_cast<std::size_t>(spec.packets_per_channel))
+                    {
+                        complete = false;
+                        break;
+                    }
+                }
+
+                if (!complete)
+                {
+                    selected_it = it;
+                    break;
+                }
+            }
+
+            if (selected_it == prt_coverage.end())
+            {
+                selected_it = fallback_it;
+            }
+
+            if (selected_it == prt_coverage.end())
+            {
+                target.active_prt = latest_data_prt;
                 return;
             }
+
+            target.active_prt = selected_it->first.second;
 
             std::uint64_t observed_channels = 0;
             bool complete = true;
@@ -369,8 +408,8 @@ namespace rxtech
                 ProtocolPrtChannelCoverageSummary channel_summary;
                 channel_summary.channel = channel;
 
-                const auto channel_it = coverage_it->second.find(channel);
-                if (channel_it != coverage_it->second.end())
+                const auto channel_it = selected_it->second.find(channel);
+                if (channel_it != selected_it->second.end())
                 {
                     channel_summary.packet_count = static_cast<std::uint64_t>(channel_it->second.size());
                     if (channel_summary.packet_count > 0U)

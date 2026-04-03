@@ -59,7 +59,7 @@ int main()
     assert(human.find("原始帧已写： 5 帧，5000 字节") != std::string::npos);
     assert(human.find("接收顺序： 偏离按 PRT 推进顺序，当前捕获更像按通道分批到达") != std::string::npos);
     assert(human.find("首个顺序偏差： 第 10 个数据包开始偏离") != std::string::npos);
-    assert(human.find("当前 PRT： CPI 2 / PRT 41（接收中）") != std::string::npos);
+    assert(human.find("当前重组 PRT： CPI 2 / PRT 41（接收中）") != std::string::npos);
     assert(human.find("通道 2（方位差）：0/9 包") != std::string::npos);
 
     const std::vector<std::string> lines =
@@ -84,7 +84,7 @@ int main()
         {
             saw_result_section = true;
         }
-        if (line.find("当前 PRT 包覆盖") != std::string::npos && line.find("方位差 0/9") != std::string::npos)
+        if (line.find("当前重组 PRT 包覆盖") != std::string::npos && line.find("方位差 0/9") != std::string::npos)
         {
             saw_result_section = true;
         }

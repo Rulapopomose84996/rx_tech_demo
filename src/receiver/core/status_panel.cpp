@@ -156,15 +156,15 @@ namespace rxtech
                 lines.push_back(build_metric_line("接收顺序", summary.data_order_assessment));
                 if (summary.active_prt_available)
                 {
-                    lines.push_back(build_metric_line("当前 CPI/PRT",
+                    lines.push_back(build_metric_line("当前重组 CPI/PRT",
                                                       std::to_string(summary.active_cpi) + " / " +
                                                           std::to_string(summary.active_prt)));
-                    lines.push_back(build_metric_line("当前 PRT 状态",
+                    lines.push_back(build_metric_line("当前重组 PRT 状态",
                                                       summary.active_prt_complete ? "完整" : "接收中"));
-                    lines.push_back(build_metric_line("当前 PRT 通道覆盖",
+                    lines.push_back(build_metric_line("当前重组 PRT 通道覆盖",
                                                       std::to_string(summary.active_prt_channel_count) + " / " +
                                                           std::to_string(summary.active_prt_channels.size())));
-                    lines.push_back(build_metric_line("当前 PRT 包覆盖", build_active_prt_coverage(summary)));
+                    lines.push_back(build_metric_line("当前重组 PRT 包覆盖", build_active_prt_coverage(summary)));
                 }
                 if (!summary.data_order_first_mismatch.empty())
                 {
