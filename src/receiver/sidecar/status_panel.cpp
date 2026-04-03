@@ -1,4 +1,4 @@
-#include "status_panel.h"
+#include "internal/status_panel.h"
 
 #include <algorithm>
 #include <chrono>
@@ -49,45 +49,6 @@ namespace rxtech
             return "尚未检测到业务协议流量";
         }
 
-        const char *channel_name(std::uint16_t channel)
-        {
-            switch (channel)
-            {
-            case 0:
-                return "和路";
-            case 1:
-                return "俯仰差";
-            case 2:
-                return "方位差";
-            case 3:
-                return "辅助通道";
-            default:
-                return "未知通道";
-            }
-        }
-
-        std::string build_active_prt_coverage(const RunSummary &summary)
-        {
-            if (!summary.active_prt_available || summary.active_prt_channels.empty())
-            {
-                return "尚无业务数据";
-            }
-
-            std::ostringstream out;
-            bool first = true;
-            for (const auto &channel : summary.active_prt_channels)
-            {
-                if (!first)
-                {
-                    out << " | ";
-                }
-                first = false;
-                out << channel_name(channel.channel)
-                    << ' ' << channel.packet_count << '/' << summary.active_prt_packets_per_channel;
-            }
-            return out.str();
-        }
-
         std::string format_decimal(double value, int precision)
         {
             std::ostringstream out;
@@ -122,8 +83,7 @@ namespace rxtech
                 (static_cast<double>(summary.rx_bytes) * 8.0) / static_cast<double>(elapsed_seconds) / 1'000'000'000.0;
 
             std::vector<std::string> lines;
-            lines.reserve(27);
-            const bool business_traffic = has_business_traffic(summary);
+            lines.reserve(32);
             lines.push_back("================ 实时接收状态 ================");
             lines.push_back(build_metric_line("时间戳", format_wall_clock_timestamp()));
             lines.push_back(build_metric_line("运行时长", std::to_string(elapsed_seconds) + " s"));
@@ -137,43 +97,23 @@ namespace rxtech
             lines.push_back(build_metric_line("ARP 应答帧", std::to_string(summary.arp_reply_packets) + " 帧"));
             lines.push_back(build_metric_line("过滤报文", std::to_string(summary.filtered_packets) + " 报文"));
             lines.push_back(build_metric_line("空轮询占比", format_decimal(summary.empty_poll_ratio, 4)));
-            if (business_traffic)
-            {
-                lines.push_back("");
-                lines.push_back("[协议层统计]");
-                lines.push_back(build_metric_line("候选业务报文",
-                                                  std::to_string(summary.rx_packets) + " 报文 / " +
-                                                      std::to_string(summary.rx_bytes) + " 字节"));
-                lines.push_back(build_metric_line("协议有效报文", std::to_string(summary.parsed_packets) + " 报文"));
-                lines.push_back(build_metric_line("控制表报文", std::to_string(summary.control_table_packets) + " 报文"));
-                lines.push_back(build_metric_line("数据报文", std::to_string(summary.data_packets) + " 报文"));
-                lines.push_back(build_metric_line("协议丢弃报文", std::to_string(summary.dropped_packets) + " 报文"));
-                lines.push_back("");
-                lines.push_back("[结果层统计]");
-                lines.push_back(build_metric_line("全局 CPI 数", std::to_string(summary.cpi_count)));
-                lines.push_back(build_metric_line("全局 PRT 数", std::to_string(summary.prt_count)));
-                lines.push_back(build_metric_line("全局通道数", std::to_string(summary.channel_count)));
-                lines.push_back(build_metric_line("接收顺序", summary.data_order_assessment));
-                if (summary.active_prt_available)
-                {
-                    lines.push_back(build_metric_line("当前重组 CPI/PRT",
-                                                      std::to_string(summary.active_cpi) + " / " +
-                                                          std::to_string(summary.active_prt)));
-                    lines.push_back(build_metric_line("当前重组 PRT 状态",
-                                                      summary.active_prt_complete ? "完整" : "接收中"));
-                    lines.push_back(build_metric_line("当前重组 PRT 通道覆盖",
-                                                      std::to_string(summary.active_prt_channel_count) + " / " +
-                                                          std::to_string(summary.active_prt_channels.size())));
-                    lines.push_back(build_metric_line("当前重组 PRT 包覆盖", build_active_prt_coverage(summary)));
-                }
-                if (!summary.data_order_first_mismatch.empty())
-                {
-                    lines.push_back(build_metric_line("首个顺序偏差", summary.data_order_first_mismatch));
-                }
-                lines.push_back(build_metric_line("落盘记录",
-                                                  std::to_string(summary.packet_count) + " 报文 / " +
-                                                      std::to_string(summary.recorded_bytes) + " 字节"));
-            }
+            lines.push_back("");
+            lines.push_back("[协议层统计]");
+            lines.push_back(build_metric_line("候选业务报文",
+                                              std::to_string(summary.rx_packets) + " 报文 / " +
+                                                  std::to_string(summary.rx_bytes) + " 字节"));
+            lines.push_back(build_metric_line("协议有效报文", std::to_string(summary.parsed_packets) + " 报文"));
+            lines.push_back(build_metric_line("控制表报文", std::to_string(summary.control_table_packets) + " 报文"));
+            lines.push_back(build_metric_line("数据报文", std::to_string(summary.data_packets) + " 报文"));
+            lines.push_back(build_metric_line("协议丢弃报文", std::to_string(summary.dropped_packets) + " 报文"));
+            lines.push_back("");
+            lines.push_back("[结果层统计]");
+            lines.push_back(build_metric_line("全局 CPI 数", std::to_string(summary.cpi_count)));
+            lines.push_back(build_metric_line("全局 PRT 数", std::to_string(summary.prt_count)));
+            lines.push_back(build_metric_line("全局通道数", std::to_string(summary.channel_count)));
+            lines.push_back(build_metric_line("落盘记录",
+                                              std::to_string(summary.packet_count) + " 报文 / " +
+                                                  std::to_string(summary.recorded_bytes) + " 字节"));
             if (!summary.raw_record_output_dir.empty() || summary.raw_record_written_frames > 0U || summary.raw_record_dropped_frames > 0U)
             {
                 lines.push_back(build_metric_line("原始帧录制",

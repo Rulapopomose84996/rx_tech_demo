@@ -1,0 +1,412 @@
+% %%航迹解算输入
+function ChuanDiCanShu = MuBiao
+%fid=fopen('C:\RadarData\new\HangJiBaoWen\HangJi0306.xlsx','r');
+%canshu=fread(fid,'double');
+%%ControlFlag=ControlFlag';
+%fclose(fid);
+% FilePath='C:\RadarData\new\HangJiBaoWen\HangJi0306.xlsx';%表格绝对路径
+% canshu=importdata(FilePath);
+canshu = [1,11.5,500,3000,0,-50,0,10,0,0,0,0,0,0,0,0,0,0,0,0,0,150];%%%type period  Ym0  Rm0  P0 Vm0 εm0 βm0 tij1 tij2 tij3 Nmix1 Nmix2 Nmz a1 a2 Nmy1 Nmy2 Tsx Nsx q tall
+H0=canshu(3);
+Rmi0=canshu(4);
+Pi0=canshu(5);
+Vmi0=canshu(6);
+Emi0=canshu(7);
+Bmi0=canshu(8);
+Ts=canshu(2)*1e-3;
+Timax=canshu(22);
+pi = double(3.141592654);
+g=double(9.8);
+Emi0=asin(H0/Rmi0)*180/pi;
+%canshu = [0,0,0,0,0];%%%tij1 tij2 tij3 Nmix1 Nmix2 Nmz a1 a2 Nmy1 Nmy2 Tsx Nsx q tall
+list={'HL','HM','HS','VM'};
+val=1;%%%1、水平直线飞行航迹；2、水平机动飞行航迹；3、水平蛇形机动航迹；4、垂直机动飞行航迹
+  switch list{val}
+      case 'HL'
+          %获取航迹参数
+          tij1=canshu(9);
+          tij2=canshu(10);
+          tij3=canshu(11);
+          Nmix1=canshu(12);
+          Nmix2=canshu(13);
+          %---------------------------------------------------------------
+          n_max=floor(Timax/Ts);
+          %特征值计算
+          Ymi0=H0;
+          Znmi0=Pi0;
+          Xnmi0=(abs(Vmi0)/Vmi0)*sqrt(Rmi0^2-Ymi0^2-Znmi0^2);
+          if Xnmi0>=0
+              Bmi0p=asin(Znmi0/sqrt(Xnmi0^2+Znmi0^2));
+          elseif (Xnmi0<0)&&(Znmi0<0)
+              Bmi0p=-pi-asin(Znmi0/sqrt(Xnmi0^2+Znmi0^2));
+          elseif  (Xnmi0<0)&&(Znmi0>=0)
+              Bmi0p=pi-asin(Znmi0/sqrt(Xnmi0^2+Znmi0^2));
+          end
+          %----------------------------------------------------------------
+          Vi=abs(Vmi0);
+          ai1=Nmix1*g;
+          ai2=Nmix2*g;
+          Xmi1=Xnmi0-Vi*tij1;
+          Vi1=Vi+ai1*(tij2-tij1);
+          Vi2=Vi1+ai2*(tij3-tij2);
+
+          Xmi2=Xmi1-Vi*(tij2-tij1)-0.5*ai1*(tij2-tij1)^2;
+          Xmi3=Xmi2-Vi1*(tij3-tij2)-0.5*ai2*(tij3-tij2)^2;
+          for n=1:n_max
+              N(n)=n;
+              if n*Ts<=tij1
+                  Xnmi(n)=Xnmi0-Vi*n*Ts;
+                  Znmi(n)=Znmi0;
+                  Ynmi(n)=Ymi0;
+              elseif (tij1<n*Ts)&&(n*Ts<=tij2)
+                  Xnmi(n)=Xmi1-Vi*(n*Ts-tij1)-0.5*ai1*(n*Ts-tij1)^2;
+                  Znmi(n)=Znmi0;
+                  Ynmi(n)=Ymi0;
+              elseif (tij2<n*Ts)&&(n*Ts<=tij3)
+                  Xnmi(n)=Xmi2-Vi1*(n*Ts-tij2)-0.5*ai2*(n*Ts-tij2)^2;
+                  Znmi(n)=Znmi0;
+                  Ynmi(n)=Ymi0;
+              elseif(tij3<n*Ts)&&(n*Ts<=Timax)
+                  Xnmi(n)=Xmi3-Vi2*(n*Ts-tij3);
+                  Znmi(n)=Znmi0;
+                  Ynmi(n)=Ymi0;
+              end
+              if Xnmi(n)>=0          %计算 Bmip
+                  Bmip(n)=asin(Znmi(n)/sqrt(Xnmi(n)^2+Znmi(n)^2));
+              elseif (Xnmi(n)<0)&&(Znmi(n)<0)
+                  Bmip(n)=-pi-asin(Znmi(n)/sqrt(Xnmi(n)^2+Znmi(n)^2));
+              elseif(Xnmi(n)<0)&&(Znmi(n)>=0)
+                  Bmip(n)=pi-asin(Znmi(n)/sqrt(Xnmi(n)^2+Znmi(n)^2));
+              end
+              %                    BmiL1n(n)=(Bmi0+954.93*(Bmip(n)-Bmi0p))/954.93*180/pi;
+              BmiL1n(n)=(Bmi0*pi/180+(Bmip(n)-Bmi0p))*180/pi;
+              if BmiL1n(n)>=0
+                  BmiLn(n)=BmiL1n(n);
+              else
+                  BmiLn(n)=360+BmiL1n(n);
+              end
+              RmiLn(n)=sqrt(Xnmi(n)^2+Ynmi(n)^2+Znmi(n)^2);
+              EmiLn(n)=asin(Ynmi(n)/RmiLn(n))*180/pi;
+          end
+
+          for n=2:n_max
+              X_v(n)=(Xnmi(n)-Xnmi(n-1))/Ts;
+              Y_v(n)=(Ynmi(n)-Ynmi(n-1))/Ts;
+              Z_v(n)=(Znmi(n)-Znmi(n-1))/Ts;
+              v(n) = (Xnmi(n)*X_v(n)+Ynmi(n)*Y_v(n)+Znmi(n)*Z_v(n))/RmiLn(n);
+          end
+
+      case 'HM'
+          tij1=canshu(9);
+          tij2=canshu(10);
+          Nmiz=canshu(14);
+          n_max=floor(Timax/Ts);
+          %特征值计算
+          Ymi0=H0;
+          Znmi0=Pi0;
+          Xnmi0=abs(Vmi0)/Vmi0*(Rmi0^2-Ymi0^2-Znmi0^2)^0.5;
+          if Xnmi0>=0
+              Bmi0p=asin(Znmi0/(Xnmi0^2+Znmi0^2)^0.5);
+          elseif (Xnmi0<0)&&(Znmi0<0)
+              Bmi0p=-pi-asin(Znmi0/(Xnmi0^2+Znmi0^2)^0.5);
+          elseif(Xnmi0<0)&&(Znmi0>=0)
+              Bmi0p=pi-asin(Znmi0/(Xnmi0^2+Znmi0^2)^0.5);
+          end
+          %----------------------------------------------------------------
+          Vi=abs(Vmi0);
+          Pri=Vi^2/(Nmiz*g);
+          Wi=Nmiz*g/Vi;
+          PHi=Wi*(tij2-tij1);
+          Xmi1=Xnmi0-Vi*tij1;
+          Xmi2=Xmi1-Pri*sin(PHi);
+          Zmi1=Znmi0+Pri*(1-cos(PHi));
+          %----------------------------------------------------------------
+          for n=1:n_max
+              N(n)=n;
+              if n*Ts<=tij1
+                  Xnmi(n)=Xnmi0-Vi*n*Ts;
+                  Znmi(n)=Znmi0;
+                  Ynmi(n)=Ymi0;
+              elseif (tij1<n*Ts)&&(n*Ts<=tij2)
+                  PHip=Wi*(n*Ts-tij1);
+                  Xnmi(n)=Xmi1-Pri*sin(PHip);
+                  Znmi(n)=Znmi0+Pri*(1-cos(PHip));
+                  Ynmi(n)=Ymi0;
+%                  figure(1)
+%                  plot(Xnmi(n),Znmi(n),'g*');
+%                  title('航迹特征曲线');
+%                  xlabel('Xnmi');
+%                  ylabel('Znmi');
+%                  grid on;
+%                  hold on;
+              elseif(tij2<n*Ts)&&(n*Ts<=Timax)
+                  Xnmi(n)=Xmi2-Vi*cos(PHi)*(n*Ts-tij2);
+                  Znmi(n)=Zmi1+Vi*sin(PHi)*(n*Ts-tij2);
+                  Ynmi(n)=Ymi0;
+%                  figure(1)
+%                  plot(Xnmi(n),Znmi(n),'c*');
+%                  title('航迹特征曲线');
+%                  xlabel('Xnmi');
+%                  ylabel('Znmi');
+%                  grid on;
+%                  hold on;
+              end
+              if Xnmi(n)>=0          %计算 Bmip
+                  Bmip(n)=asin(Znmi(n)/(Xnmi(n)^2+Znmi(n)^2)^0.5);
+              elseif (Xnmi(n)<0)&&(Znmi(n)<0)
+                  Bmip(n)=-pi-asin(Znmi(n)/(Xnmi(n)^2+Znmi(n)^2)^0.5);
+              elseif(Xnmi(n)<0)&&(Znmi(n)>=0)
+                  Bmip(n)=pi-asin(Znmi(n)/(Xnmi(n)^2+Znmi(n)^2)^0.5);
+              end
+              %                    BmiL1n(n)=(Bmi0+954.93*(Bmip(n)-Bmi0p))/954.93*180/pi;
+              BmiL1n(n)=(Bmi0*pi/180+(Bmip(n)-Bmi0p))*180/pi;
+              if BmiL1n(n)>=0
+                  BmiLn(n)=BmiL1n(n);
+              else
+                  BmiLn(n)=360+BmiL1n(n);
+              end
+              RmiLn(n)=(Xnmi(n)^2+Ynmi(n)^2+Znmi(n)^2)^0.5;
+              EmiLn(n)=asin(Ynmi(n)/RmiLn(n))*180/pi;
+%              if n~=n_max
+%                  set(handles.HJ_zhuangtai,'String','状态：running');
+%              else
+%                  set(handles.HJ_zhuangtai,'String','状态：Ok!');
+%              end
+          end
+          for n=2:n_max
+              X_v(n)=(Xnmi(n)-Xnmi(n-1))/Ts;
+              Y_v(n)=(Ynmi(n)-Ynmi(n-1))/Ts;
+              Z_v(n)=(Znmi(n)-Znmi(n-1))/Ts;
+              v(n) = (Xnmi(n)*X_v(n)+Ynmi(n)*Y_v(n)+Znmi(n)*Z_v(n))/RmiLn(n);
+          end
+      case 'HS'
+          %----获取航迹参数
+          tij1=canshu(9);
+          Tisx=canshu(19);
+          Nisx=canshu(20);
+          qi=canshu(21);
+          %----------------------------------------------------------------------
+          n_max=floor(Timax/Ts);
+          %特征值计算
+          Ymi0=H0;
+          Znmi0=Pi0;
+          Xnmi0=abs(Vmi0)/Vmi0*(Rmi0^2-Ymi0^2-Znmi0^2)^0.5;
+          if Xnmi0>=0
+              Bmi0p=asin(Znmi0/(Xnmi0^2+Znmi0^2)^0.5);
+          elseif (Xnmi0<0)&&(Znmi0<0)
+              Bmi0p=-pi-asin(Znmi0/(Xnmi0^2+Znmi0^2)^0.5);
+          elseif  (Xnmi0<0)&&(Znmi0>=0)
+              Bmi0p=pi-asin(Znmi0/(Xnmi0^2+Znmi0^2)^0.5);
+          end
+          %----------------------------------------------------------------
+          Vi=abs(Vmi0);
+          Wi=Nisx*g/Vi;
+          PHimax=Wi*Tisx/4;
+          Pri=Vi^2/(Nisx*g);
+          Xmi1=Xnmi0-Vi*tij1;
+          Xi00=Xmi1-((2*Pri)^2-(Pri+Pri*cos(PHimax))^2)^0.5;
+          PHi0=asin((Xmi1-Xi00)/(2* Pri));
+          ti1=PHi0/Wi;
+          ti2=(PHimax+PHi0)/Wi;
+          Ymi=Ymi0;
+          for n=1:n_max
+
+              N(n)=n;
+              if n*Ts<=tij1
+                  Xnmi(n)=Xnmi0-Vi*n*Ts;
+                  Znmi(n)=Znmi0;
+                  Ynmi(n)=Ymi0;
+
+              elseif (tij1<n*Ts)&&(n*Ts<=tij1+ti1)
+                  PHi(n)=Wi*(n*Ts-tij1);
+                  Xnmi(n)=Xmi1-Pri*sin(PHi(n));
+                  Znmi(n)=Znmi0+Pri*(1-cos(PHi(n)));
+                  Ynmi(n)=Ymi0;
+
+              elseif (tij1+ti1<n*Ts)&&(n*Ts<=tij1+ti1+ti2)
+                  PHi(n)=PHi0-Wi*(n*Ts-(tij1+ti1));
+                  Xnmi(n)=Xi00+Pri*sin(PHi(n));
+                  Znmi(n)=Znmi0+Pri*(cos(PHi(n))-cos(PHimax));
+                  Ynmi(n)=Ymi0;
+
+              elseif (tij1+ti1+ti2<n*Ts)&&(n*Ts<=tij1+ti1+ti2+qi*Tisx/2)  %蛇形重复飞行段
+                  j=floor(2*(n*Ts-tij1-ti1-ti2)/Tisx);
+                  PHimaxp=(-1)^j*PHimax;
+                  Wip=(-1)^j*(Wi);
+                  %           PHip=(-1)^j*PHi;
+                  Prip=(-1)^j*Pri;
+                  Xi0j=Xi00-2*(j+1)*Prip*sin(PHimaxp);
+                  PHi(n)=PHimaxp-Wip*(n*Ts-(tij1+ti1+ti2+j*Tisx/2));
+                  Xnmi(n)=Xi0j+Prip*sin(PHi(n));
+                  Znmi(n)=Znmi0-Prip*(cos(PHi(n))-cos(PHimaxp));
+                  Ynmi(n)=Ymi0;
+
+              elseif (tij1+ti1+ti2+qi*Tisx/2<n*Ts)&&(n*Ts<=tij1+ti1+2*ti2+qi*Tisx/2)
+                  PHi(n)=PHimax-Wi*(n*Ts-(tij1+ti1+ti2+qi*Tisx/2));
+                  Xi0k=Xi00-2*Pri*(qi+1)*sin(PHimax);
+                  Xnmi(n)=Xi0k+Pri*sin(PHi(n));
+                  Znmi(n)=Znmi0-Pri*(cos(PHi(n))-cos(PHimax));
+                  Ynmi(n)=Ymi0;
+
+              elseif (tij1+ti1+2*ti2+qi*Tisx/2<n*Ts)&&(n*Ts<=tij1+2*ti1+2*ti2+qi*Tisx/2)
+                  PHi(n)=PHi0-Wi*(n*Ts-(tij1+ti1+2*ti2+qi*Tisx/2));
+                  Xi0k=Xi00-2*Pri*(qi+1)*sin(PHimax);
+                  Xnmi(n)=Xi0k-Pri*(2*sin(PHi0)-sin(PHi(n)));
+                  Znmi(n)=Znmi0-Pri*(1-cos(PHi(n)));
+                  Ynmi(n)=Ymi;
+
+              elseif  (tij1+2*ti1+2*ti2+qi*Tisx/2<n*Ts)&&(n*Ts<=Timax)
+                  Xi0k=Xi00-2*Pri*(qi+1)*sin(PHimax);
+                  Xnmi(n)=Xi0k-2*Pri*sin(PHi0)-Vi*(n*Ts-(tij1+2*ti1+2*ti2+qi*Tisx/2));
+                  Znmi(n)=Znmi0;
+                  Ynmi(n)=Ymi0;
+
+              end
+              if Xnmi(n)>=0          %计算 Bmip
+                  Bmip(n)=asin(Znmi(n)/(Xnmi(n)^2+Znmi(n)^2)^0.5);
+              elseif (Xnmi(n)<0)&&(Znmi(n)<0)
+                  Bmip(n)=-pi-asin(Znmi(n)/(Xnmi(n)^2+Znmi(n)^2)^0.5);
+              elseif (Xnmi(n)<0)&&(Znmi(n)>=0)
+                  Bmip(n)=pi-asin(Znmi(n)/(Xnmi(n)^2+Znmi(n)^2)^0.5);
+              end
+              %           BmiL1n(n)=(Bmi0+954.93*(Bmip(n)-Bmi0p))/954.93*180/pi;  %Bmi0=???
+              BmiL1n(n)=(Bmi0*pi/180+(Bmip(n)-Bmi0p))*180/pi;
+              if BmiL1n(n)>=0        %计算BmiLn;
+                  BmiLn(n)=BmiL1n(n);
+              else
+                  BmiLn(n)=360+BmiL1n(n);
+              end
+              RmiLn(n)=(Xnmi(n)^2+Ynmi(n)^2+Znmi(n)^2)^0.5;
+              EmiLn(n)=asin(Ynmi(n)/RmiLn(n))*180/pi;
+
+          end
+          for n=2:n_max
+              X_v(n)=(Xnmi(n)-Xnmi(n-1))/Ts;
+              Y_v(n)=(Ynmi(n)-Ynmi(n-1))/Ts;
+              Z_v(n)=(Znmi(n)-Znmi(n-1))/Ts;
+              v(n) = (Xnmi(n)*X_v(n)+Ynmi(n)*Y_v(n)+Znmi(n)*Z_v(n))/RmiLn(n);
+          end
+
+
+      case 'VM'
+          %----获取航迹参数
+          tij1=canshu(9);
+          tij2=canshu(10);
+          Nmiy1=canshu(17);
+          Nmiy2=canshu(18);
+          ai1=canshu(15);
+          ai2=canshu(16);
+          %-----------------------------------------------------------------------------------
+          n_max=floor(Timax/Ts);
+          %特征值计算
+          Ymi0=H0;
+          Znmi0=Pi0;
+          Xnmi0=abs(Vmi0)/Vmi0*(Rmi0^2-Ymi0^2-Znmi0^2)^0.5;
+          if Xnmi0>=0
+              Bmi0p=asin(Znmi0/(Xnmi0^2+Znmi0^2)^0.5);
+          elseif (Xnmi0<0)&&(Znmi0<0)
+              Bmi0p=-pi-asin(Znmi0/(Xnmi0^2+Znmi0^2)^0.5);
+          elseif(Xnmi0<0)&&(Znmi0>=0)
+              Bmi0p=pi-asin(Znmi0/(Xnmi0^2+Znmi0^2)^0.5);
+          end
+          %----------------------------------------------------------------
+          Vi=abs(Vmi0);
+          PHi1=ai1*pi/180;
+          Pri1=Vi^2/(Nmiy1*g);
+          Wi1=Nmiy1*g/Vi;
+          ti1=PHi1/Wi1;
+          if (ti1+tij1>tij2)
+              ti1=tij2-tij1;
+              PHi1=Wi1*ti1;
+          end
+          Xmi1=Xnmi0-Vi*tij1;
+          Pri2=Vi^2/(Nmiy2*g);
+          Wi2=Nmiy2*g/Vi;
+          Ymi2=Ymi0+Pri1*(1-cos(PHi1));
+          Xmi2=Xmi1-Pri1*sin(PHi1);
+          ti2=tij2-(tij1+ti1);
+          PHi2=ai2*pi/180;
+          Ymi3=Ymi2+Vi*ti2*sin(PHi1);
+          Xmi3=Xmi2-Vi*ti2*cos(PHi1);
+          ti3=(PHi2-PHi1)/Wi2;
+          Ymi4=Ymi3+Pri2*(cos(PHi1)-cos(PHi2));
+          Xmi4=Xmi3+Pri2*(sin(PHi1)-sin(PHi2));
+          for n=1:n_max
+              N(n)=n;
+              if n*Ts<=tij1
+                  Xnmi(n)=Xnmi0-Vi*n*Ts;
+                  Znmi(n)=Znmi0;
+                  Ynmi(n)=Ymi0;
+
+              elseif (tij1<n*Ts)&&(n*Ts<=tij1+ti1)
+                  PHip=Wi1*(n*Ts-tij1);
+                  Xnmi(n)=Xmi1-Pri1*sin(PHip);
+                  Znmi(n)=Znmi0;
+                  Ynmi(n)=Ymi0+Pri1*(1-cos(PHip));
+
+              elseif (tij1+ti1<n*Ts)&&(n*Ts<=tij2)
+                  Xnmi(n)=Xmi2-Vi*(n*Ts-tij1-ti1)*cos(PHi1);
+                  Znmi(n)=Znmi0;
+                  Ynmi(n)=Ymi2+Vi*(n*Ts-tij1-ti1)*sin(PHi1);
+
+              elseif (tij2<n*Ts)&&(n*Ts<=tij2+ti3)
+                  PHip=PHi1+Wi2*(n*Ts-tij2);
+                  Xnmi(n)=Xmi3+Pri2*(sin(PHi1)-sin(PHip));
+                  Znmi(n)=Znmi0;
+                  Ynmi(n)=Ymi3+Pri2*(cos(PHi1)-cos(PHip));
+
+              elseif  (tij2+ti3<n*Ts)&&(n*Ts<=Timax)
+                  Xnmi(n)=Xmi4-Vi*(n*Ts-tij2-ti3)*cos(PHi2);
+                  Znmi(n)=Znmi0;
+                  Ynmi(n)=Ymi4+Vi*(n*Ts-tij2-ti3)*sin(PHi2);
+
+              end
+              if Xnmi(n)>=0          %计算 Bmip
+                  Bmip(n)=asin(Znmi(n)/(Xnmi(n)^2+Znmi(n)^2)^0.5);
+              elseif (Xnmi(n)<0)&&(Znmi(n)<0)
+                  Bmip(n)=-pi-asin(Znmi(n)/(Xnmi(n)^2+Znmi(n)^2)^0.5);
+              elseif(Xnmi(n)<0)&&(Znmi(n)>=0)
+                  Bmip(n)=pi-asin(Znmi(n)/(Xnmi(n)^2+Znmi(n)^2)^0.5);
+              end
+              %                    BmiL1n(n)=(Bmi0+954.93*(Bmip(n)-Bmi0p))/954.93*180/pi;
+              BmiL1n(n)=(Bmi0*pi/180+(Bmip(n)-Bmi0p))*180/pi;
+              if BmiL1n(n)>=0
+                  BmiLn(n)=BmiL1n(n);
+              else
+                  BmiLn(n)=360+BmiL1n(n);
+              end
+              RmiLn(n)=(Xnmi(n)^2+Ynmi(n)^2+Znmi(n)^2)^0.5;
+              EmiLn(n)=asin(Ynmi(n)/RmiLn(n))*180/pi;
+
+          end
+          for n=2:n_max
+              X_v(n)=(Xnmi(n)-Xnmi(n-1))/Ts;
+              Y_v(n)=(Ynmi(n)-Ynmi(n-1))/Ts;
+              Z_v(n)=(Znmi(n)-Znmi(n-1))/Ts;
+              v(n) = (Xnmi(n)*X_v(n)+Ynmi(n)*Y_v(n)+Znmi(n)*Z_v(n))/RmiLn(n);
+          end
+
+  end
+     X_v(1)=(Xnmi(1)-Xnmi0)/Ts;
+     Y_v(1)=(Ynmi(1)-Ymi0)/Ts;
+     Z_v(1)=(Znmi(1)-Znmi0)/Ts;
+     v(1) = (Xnmi0*X_v(1)+Ymi0*Y_v(1)+Znmi0*Z_v(1))/Rmi0;
+     N=[0,N]';
+     NTs=N*Ts;
+     Xnmi=[Xnmi0,Xnmi]';
+     Ynmi=[Ymi0,Ynmi]';
+     Znmi=[Znmi0,Znmi]';
+     RmiLn=[Rmi0,RmiLn]';
+     EmiLn=[Emi0,EmiLn]';
+     BmiLn=[Bmi0,BmiLn]';
+
+     X_v=[X_v(1) X_v]';
+     Y_v=[Y_v(1) Y_v]';
+     Z_v=[Z_v(1) Z_v]';
+     v = [-Vmi0 v]';%-----------添加初始拍数据
+
+%      ChuanDiCanShu=[N,NTs,Xnmi,Ynmi,Znmi,RmiLn,EmiLn,BmiLn,X_v,Y_v,Z_v];
+
+ChuanDiCanShu=[N,NTs,Xnmi,Ynmi,Znmi,X_v,Y_v,Z_v,RmiLn,BmiLn,EmiLn,v];
+% break;
+end

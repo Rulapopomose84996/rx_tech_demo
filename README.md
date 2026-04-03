@@ -5,12 +5,14 @@
 ## 当前定位
 
 - 当前目标是把真实网卡收包、UDP payload 提取、协议解析、轻量统计和旁路落盘串成一条稳定接收链。
-- 当前并不宣称已经完成完整业务接收模块；它仍是分阶段演进中的主线 demo。
-- 当前代码已经完成一次结构收口：
+- 当前并不宣称已经完成完整业务接收模块；它仍是分阶段演进中的主线 demo（Phase 3）。
+- 当前代码已经完成 Phase 3 架构重构：
   - 公共头统一到 `include/rxtech`
   - `src/receiver` 模块实现文件已收平到模块根目录
   - `app` 入口层已收平
-  - `output` 已并入 `finalize`
+  - **新增模块化设计**：引入 PacketPipeline、CpiStateCoordinator、DataOrderTracker、CaptureSink、RuntimeStatusReporter 等独立组件
+  - **职责分离**：数据处理流水线、状态管理、监控报告等逻辑已拆分为独立模块
+  - **主循环精简**：OwnerLoop 从臃肿的 1000+ 行缩减至约 120 行，仅保留流程控制逻辑
 
 ## 目录概览
 
@@ -19,18 +21,34 @@ include/
   rxtech/
 src/
   receiver/
-    app/
-    core/
+    app/                      # 应用入口：CLI 解析、启动装配
+    core/                     # 核心协调器：OwnerLoop、CPI 状态协调
       internal/
+        cpi_state_coordinator.h       # CPI 状态协调器（新增）
+        owner_loop_runtime_state.h    # 运行时状态管理（新增）
+        owner_loop_summary.h          # 循环摘要逻辑
     ingress/
-      dpdk/
+      dpdk/                   # DPDK 后端：收包、ARP 应答
         internal/
-    protocol/
-    runtime/
-    sidecar/
-    storage/
-    admit/
-    finalize/
+    protocol/                 # 协议处理模块（新增流水线设计）
+      packet_pipeline.cpp/h           # 包处理流水线（新增）
+      data_order_tracker.cpp/h        # 数据顺序追踪器（新增）
+      udp_payload_assembler.cpp       # UDP payload 组装
+      sample_packet_parser.cpp        # 包解析器
+      sample_packet_validator.cpp     # 包校验器
+      protocol_sequence_interpreter.cpp # 序列解释器
+    runtime/                  # 运行时管理
+    sidecar/                  # 监控模块（新增）
+      internal/
+        runtime_status_reporter.h/cpp # 运行时状态报告器（新增）
+        status_panel.h/cpp            # 状态面板写入器（新增）
+      metrics.cpp                     # 指标收集
+    storage/                  # 存储管理：CPI 上下文池、Slot 写入
+    admit/                    # CPI 准入控制
+    finalize/                 # CPI finalize 判定
+    output/                   # 输出模块（新增）
+      internal/
+        capture_sink.h/cpp            # 捕获数据沉（新增）
 tests/
 tools/
 configs/
@@ -46,12 +64,23 @@ docs/
 2. 解析 CLI，支持 `--config`、`--dry-run`、`--run-until-stopped`、`--duration`、`--status-interval`、`--help`。
 3. 加载默认配置和 section 化配置文件。
 4. 初始化 DPDK backend。
-5. 批量收包，必要时应答 ARP。
-6. 提取 IPv4/UDP payload，并在需要时完成 IP 分片重组。
-7. 按当前协议头解析、校验、序列解释。
-8. 把有效包写入 `capture_packets.bin`，并把语义索引写入 `capture_index.csv`。
-9. 持续接收模式下按秒刷新中文状态面板：未见业务协议流量时只保留链路层单面板；见到业务协议流量后切换到包含协议层与结果层的扩展面板。
-10. 结果层除全局 CPI / PRT / 通道计数外，还会显示“当前 PRT 覆盖”，用于区分“当前 PRT 仍在接收中”与“解析顺序异常”。
+5. **创建模块化组件**：PacketPipeline、CpiStateCoordinator、DataOrderTracker、CaptureSink、RuntimeStatusReporter
+6. 批量收包，必要时应答 ARP。
+7. **通过 PacketPipeline 处理每个数据包**：
+   - UdpPayloadAssembler：提取 IPv4/UDP payload，完成 IP 分片重组
+   - PacketParser：按当前协议头解析
+   - PacketValidator：校验 channel / packet_index / tail / payload 长度
+   - ProtocolSequenceInterpreter：序列解释
+8. **数据包包过滤和指标收集**
+9. **对于业务协议包**：
+   - DataOrderTracker：监控数据顺序完整性
+   - CpiStateCoordinator：CPI 准入决策和状态管理
+   - CaptureSink：格式化输出到 capture 文件
+10. **周期性状态报告**：RuntimeStatusReporter 按秒刷新中文状态面板
+11. 把有效包写入 `capture_packets.bin`，并把语义索引写入 `capture_index.csv`。
+12. 持续接收模式下按秒刷新中文状态面板：未见业务协议流量时只保留链路层单面板；见到业务协议流量后切换到包含协议层与结果层的扩展面板。
+13. 结果层除全局 CPI / PRT / 通道计数外，还会显示"当前 PRT 覆盖"，用于区分"当前 PRT 仍在接收中"与"解析顺序异常"。
+14. 程序结束时，RuntimeStatusReporter 构建最终 RunSummary 并渲染人类可读的总结报告
 
 ## 配置与 CLI
 
@@ -153,12 +182,18 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 
 ## 当前已验证结果
 
-最近一轮结构重构与命名收口已在 Linux 服务器隔离目录完成复验：
+最近一轮 Phase 3 架构重构与模块化改造已在 Linux 服务器隔离目录完成复验：
 
 - 验证目录：`/home/devuser/WorkSpace/rx_tech_demo_codex_validate_20260403`
 - 构建通过
 - unit tests 通过：14/14
 - integration tests 通过：1/1
+- **架构改进验证**：
+  - OwnerLoop 代码量从 1000+ 行缩减至约 120 行
+  - 新增 5 个独立模块：PacketPipeline、CpiStateCoordinator、DataOrderTracker、CaptureSink、RuntimeStatusReporter
+  - 数据处理流水线职责清晰，单一职责原则得到贯彻
+  - 状态管理从核心循环解耦，迁移到 CpiStateCoordinator
+  - 监控报告逻辑独立为 Sidecar 模块，不侵入热路径
 
 ## 运行产物目录约定
 

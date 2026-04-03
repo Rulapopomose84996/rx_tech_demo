@@ -73,7 +73,10 @@ rxtech_apply_warnings(test_udp_payload_assembler)
 
 add_executable(test_owner_loop_summary test_owner_loop_summary.cpp)
 target_link_libraries(test_owner_loop_summary PRIVATE rx_receiver_core)
-target_include_directories(test_owner_loop_summary PRIVATE ${CMAKE_SOURCE_DIR}/src/receiver/core/internal)
+target_include_directories(test_owner_loop_summary PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/receiver/core/internal
+    ${CMAKE_SOURCE_DIR}/src/receiver/sidecar/internal
+)
 add_test(NAME test_owner_loop_summary COMMAND test_owner_loop_summary)
 set_tests_properties(test_owner_loop_summary PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(test_owner_loop_summary)

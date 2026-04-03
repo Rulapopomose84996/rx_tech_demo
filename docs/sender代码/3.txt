@@ -1,0 +1,25 @@
+function C = RadarCart2RadarPolar2(P)
+Xnmi = P(1);
+Ynmi= P(2);
+Znmi= P(3);
+d2r = pi/180.0;            % 从°至rad的转换关系
+r2d = 180/pi;
+%%%直角坐标系转极坐标系
+if Xnmi>= 0          %计算 Bmip
+    Bmip=asin(Znmi/(Xnmi^2+Znmi^2)^0.5);
+elseif (Xnmi<0)&&(Znmi<0)
+    Bmip=-pi-asin(Znmi/(Xnmi^2+Znmi^2)^0.5);
+elseif(Xnmi<0)&&(Znmi>=0)
+    Bmip=pi-asin(Znmi/(Xnmi^2+Znmi^2)^0.5);
+end
+%                    BmiL1n(n)=(Bmi0+954.93*(Bmip(n)-Bmi0p))/954.93*180/pi;
+BmiL1n=(Bmip)*180/pi;
+if BmiL1n>=0
+    BmiLn=BmiL1n;
+else
+    BmiLn=360+BmiL1n;
+end
+RmiLn=(Xnmi^2+Ynmi^2+Znmi^2)^0.5;
+EmiLn=asin(Ynmi/RmiLn)*180/pi;
+C = [RmiLn;BmiLn*d2r;EmiLn*d2r];
+end

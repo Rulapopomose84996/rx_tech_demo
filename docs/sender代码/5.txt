@@ -1,0 +1,50 @@
+function DD=ZM2DD(ZM_R,ZM_B,ZM_E,PHJ,TX_FY,FYJ,HGJ,h)
+ZM_z = ZM_R*sind(ZM_B);
+ZM_y = ZM_R*sind(ZM_E)-h;
+ZM_x = ZM_R*sqrt(1-sind(ZM_E)^2-sind(ZM_B)^2);
+%阵面直角转随动直角
+ZM_x1=ZM_x*cosd(TX_FY)-ZM_y*sind(TX_FY);
+ZM_y1=ZM_y*cosd(TX_FY)+ZM_x*sind(TX_FY);
+ZM_z1 = ZM_z;
+%加入机械误差
+% ZM_x1=ZM_x1+X_WUCHA;
+% ZM_y1=ZM_y1+Y_WUCHA;
+%引入姿态角
+%横滚角
+ZM_X=ZM_x1;
+ZM_Y=cosd(-HGJ)*ZM_y1+sind(-HGJ)*ZM_z1;
+ZM_Z=-sind(-HGJ)*ZM_y1+cosd(-HGJ)*ZM_z1;
+%俯仰角
+ZM_X1=cosd(-FYJ)*ZM_X+sind(-FYJ)*ZM_Y;
+ZM_Y1=-sind(-FYJ)*ZM_X+cosd(-FYJ)*ZM_Y;
+ZM_Z1=ZM_Z;
+%偏航角
+X2=cosd(PHJ)*ZM_X1-sind(PHJ)*ZM_Z1;
+Y2=ZM_Y1;
+Z2=sind(PHJ)*ZM_X1+cosd(PHJ)*ZM_Z1;
+%平台直转平台极
+Rdd=sqrt(X2^2+Y2^2+Z2^2);
+Edd = asin(Y2/Rdd)*180.0/pi;
+Bdd = atan(Z2/X2)*180.0/pi;
+% if(Z2>0)
+%     if(abs(X2)<NEARBYZERO)
+%         Bdd = 90
+%     elseif(X2>0)
+%         Bdd=atan(Z2/X2)*180.0/pi
+%     else
+%         Bdd=(atan(Z2/X2)+pi)*180.0/pi
+%     end
+% else
+%
+%     if abs(X2)<NEARBYZERO
+%         Bdd =270
+%     elseif(X2>0.0)
+%         Bdd =(atan(Z2/X2)+2*pi)*180.0/pi
+%     else
+%         Bdd =(atan(Z2/X2)+pi)*180.0/pi
+%     end
+% end
+d2r = pi/180.0;            % 从°至rad的转换关系
+DD = [Rdd;Bdd*d2r;Edd*d2r];
+end
+

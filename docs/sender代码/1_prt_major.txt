@@ -1,0 +1,183 @@
+clc;
+clear all;
+d2r = pi/180.0;            % 从°至rad的转换关系
+r2d = 180/pi;
+
+%%%%目标位置
+Motion = MuBiao;
+B = 25e6;
+fs = 50e6;
+tao1 = 0.2e-6;
+tao2 = 4e-6;
+tao3 = 20e-6;
+d1 = round(5e-6*fs);
+d2 = round(25e-6*fs);
+PRT = 115e-6;
+N = 50;
+R1 = 300;
+R2 = 1000;
+R3 = 5000;
+dR1 = round(R1/(3e8/fs/2));
+dR2 = round(R2/(3e8/fs/2))+d1;
+dR3 = d2;
+TargetNum = 1;
+
+for CurSimFrame = 1:1:2000
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % 1. 先发送控制表
+    %    保持和原脚本一致：只发送一次 DF2，内容不变
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    T = zeros(4,1);
+    T(1) = CurSimFrame;
+    S3 = zeros(508*2,1);
+    S = [T;S3];
+    if ~isempty(S)
+        runanalysis('DF2');
+    end
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % 2. 生成当前 CPI 对应的三路数据
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    TargetPosP = Motion(CurSimFrame,9:11)';%%%%阵面极坐标系 单位°
+    TargetPosP(2) = TargetPosP(2)*d2r;
+    TargetPosP(3) = TargetPosP(3)*d2r;
+    TargetPosC = ZM2DD(TargetPosP(1),TargetPosP(2)*r2d,TargetPosP(3)*r2d,0,26,0,0,0);%阵面转大地
+    TargetPos = RadarPolar2RadarCart1(TargetPosC);%%%大地直角坐标系
+    TargetVel = Motion((CurSimFrame-1)*TargetNum+1:CurSimFrame*TargetNum,6:8)';%%%%直角坐标系
+    TargetVelP = Motion((CurSimFrame-1)*TargetNum+1:CurSimFrame*TargetNum,12)';%%%%极坐标系
+    VmiLn = TargetVelP;
+    TarPos = RadarCart2RadarPolar2(TargetPos);
+    BeamPos = DD2ZM(TarPos(1),TarPos(2)*r2d+0.05,TarPos(3)*r2d+0.05,0,26*r2d,0,0,0);
+    BeamPos(1) = 1;%%%阵面波束
+
+    %%%航迹解算，波束始终与目标偏0.05°
+    [Ah,AE,AB,dElmin,dBlmin] = HangJiJieSuan(2,BeamPos(3),BeamPos(2),TarPos(3),TarPos(2),TarPos(1),VmiLn,26,0);
+    runanalysis('Design1 Analysis');
+    using('Design1 Analysis_Design1_Data');
+
+    data   = S11;  % 和路
+    data_E = S10;  % 俯仰差
+    data_B = S19;  % 方位差
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % 3. 发送顺序改为按 PRT 交织发送
+    %
+    %    原顺序：
+    %      和路全部 PRT -> 俯仰差全部 PRT -> 方位差全部 PRT
+    %
+    %    新顺序：
+    %      PRT1: 和路 9包 -> 俯仰差 9包 -> 方位差 9包
+    %      PRT2: 和路 9包 -> 俯仰差 9包 -> 方位差 9包
+    %      ...
+    %
+    %    这样只改变发送顺序，不改变每个包的字段和值。
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    for b_i = 1:N
+        %==============================================================
+        % 通道 0：和路
+        %==============================================================
+        s1 = data(round((b_i-1)*PRT*fs+1):round((b_i-1)*PRT*fs+round(4.8e-6*fs)));
+        s2 = data(round((b_i-1)*PRT*fs+round(5e-6*fs))+1:round((b_i-1)*PRT*fs+round(21e-6*fs)));
+        s3 = data(round((b_i-1)*PRT*fs+round(25e-6*fs))+1:round((b_i-1)*PRT*fs+round(95e-6*fs)));
+        data_j = [s1;s2;s3];
+        data_I = real(data_j);
+        data_Q = imag(data_j);
+        data_f = [data_I,data_Q];
+        S2 = reshape(data_f.',1,9080)';
+        S2 = S2./max(S2)*32768;
+
+        for i1 = 1:9
+            T = ones(4,1);
+            T(1) = CurSimFrame;
+            T(2) = 0;
+            T(3) = b_i;
+            T(4) = i1;
+            S = [];
+            S3 = zeros(508*2,1);
+
+            if i1*508 < 4540
+                S3 = S2((i1-1)*508*2+1:(i1-1)*508*2+508*2);
+            else
+                S3(1:476*2) = S2((i1-1)*508*2+1:9080);
+            end
+
+            S3 = int16(S3);
+            S = [T;S3];
+            if ~isempty(S)
+                runanalysis('DF1');
+            end
+        end
+
+        %==============================================================
+        % 通道 1：俯仰差
+        %==============================================================
+        s1_E = data_E(round((b_i-1)*PRT*fs+1):round((b_i-1)*PRT*fs+round(4.8e-6*fs)));
+        s2_E = data_E(round((b_i-1)*PRT*fs+round(5e-6*fs))+1:round((b_i-1)*PRT*fs+round(21e-6*fs)));
+        s3_E = data_E(round((b_i-1)*PRT*fs+round(25e-6*fs))+1:round((b_i-1)*PRT*fs+round(95e-6*fs)));
+        data_j = [s1_E;s2_E;s3_E];
+        data_I = real(data_j);
+        data_Q = imag(data_j);
+        data_f = [data_I,data_Q];
+        S2 = reshape(data_f.',1,9080)';
+        S2 = S2./max(S2)*32768;
+
+        for i1 = 1:9
+            T = ones(4,1);
+            T(1) = CurSimFrame;
+            T(2) = 1;
+            T(3) = b_i;
+            T(4) = i1;
+            S = [];
+            S3 = zeros(508*2,1);
+
+            if i1*508 < 4540
+                S3 = S2((i1-1)*508*2+1:(i1-1)*508*2+508*2);
+            else
+                S3(1:476*2) = S2((i1-1)*508*2+1:9080);
+            end
+
+            S3 = int16(S3);
+            S = [T;S3];
+            if ~isempty(S)
+                runanalysis('DF1');
+            end
+        end
+
+        %==============================================================
+        % 通道 2：方位差
+        %==============================================================
+        s1_B = data_B(round((b_i-1)*PRT*fs+1):round((b_i-1)*PRT*fs+round(4.8e-6*fs)));
+        s2_B = data_B(round((b_i-1)*PRT*fs+round(5e-6*fs))+1:round((b_i-1)*PRT*fs+round(21e-6*fs)));
+        s3_B = data_B(round((b_i-1)*PRT*fs+round(25e-6*fs))+1:round((b_i-1)*PRT*fs+round(95e-6*fs)));
+        data_j = [s1_B;s2_B;s3_B];
+        data_I = real(data_j);
+        data_Q = imag(data_j);
+        data_f = [data_I,data_Q];
+        S2 = reshape(data_f.',1,9080)';
+        S2 = S2./max(S2)*32768;
+
+        for i1 = 1:9
+            T = ones(4,1);
+            T(1) = CurSimFrame;
+            T(2) = 2;
+            T(3) = b_i;
+            T(4) = i1;
+            S = [];
+            S3 = zeros(508*2,1);
+
+            if i1*508 < 4540
+                S3 = S2((i1-1)*508*2+1:(i1-1)*508*2+508*2);
+            else
+                S3(1:476*2) = S2((i1-1)*508*2+1:9080);
+            end
+
+            S3 = int16(S3);
+            S = [T;S3];
+            if ~isempty(S)
+                runanalysis('DF1');
+            end
+        end
+    end
+
+    pause(10);
+end
