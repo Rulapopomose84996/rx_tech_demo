@@ -1,0 +1,137 @@
+function  [Ah,AE,AB,dElmin,dBlmin]= HangJiJieSuan(Beam_mode,EzTin,BzTin,EmiLn,BmiLn,RmiLn,VmiLn,ET,BT)
+%%%扫描波束选择
+switch Beam_mode
+    case 1
+        th0 = 20;
+        K1 = 7.9733;
+        K2 = 0.1;
+        th1 = th0;
+    case 2
+        th0 = 3.2;
+        K1 = 49.833;
+        K2 = 0.625;
+        th1 = th0/2;
+    case 3
+        th0 = 1.6;
+        K1 = 99.666;
+        K2 = 1.25;
+        th1 = th0/2;
+    case 4
+        th0 = 0.8;
+        K1 = 199.332;
+        K2 = 2.5;
+        th1 = th0/2;
+end
+%%%输入波束指向已经是阵面极坐标
+%%%输入目标位置也是雷达极坐标%%将波束指向转为雷达极坐标
+% % % %%%波束指向坐标转换（阵面转大地）
+d2r = pi/180.0;            % 从°至rad的转换关系
+r2d = 180/pi;
+% a = sqrt(1-(sind(EzTin))^2-(sind(BzTin))^2);
+% EdTin = asind(a*sind(ET)+sind(EzTin)*cosd(ET));%%大地俯仰，度
+% BdTin = atand((a*cosd(ET)*sind(BT)-sind(EzTin)*sind(ET)*sind(BT)+sind(BzTin)*cosd(BT))/...
+%     (a*cosd(ET)*cosd(BT)-sind(EzTin)*sind(ET)*cosd(BT)-sind(BzTin)*sind(BT)));
+% Rzmin = RmiLn;
+%%%波束指向在大地
+
+beam_AP(1) = 1;
+beam_AP(2) = BzTin;
+beam_AP(3) = EzTin;
+% beam_RP = AntePolar2RadarPolar(beam_AP,BT,ET);
+%%%将目标位置从雷达极坐标转为阵面极坐标
+target_RP(1) = RmiLn;
+target_RP(2) = BmiLn;
+target_RP(3) = EmiLn;
+% target_AP = RadarPolar2AntePolar(target_RP,BT,ET);
+target_AP = DD2ZM(target_RP(1),target_RP(2)*r2d,target_RP(3)*r2d,0,ET*r2d,0,0,0);
+
+
+%%%指向与目标复合
+EdTin = beam_AP(3);
+BdTin = beam_AP(2);
+EmiLn = target_AP(3);
+BmiLn = target_AP(2);
+Rzmin = target_AP(1);
+% if abs(EmiLn-EdTin)<=0.8*MPARParam.BeamWidthAz && abs(BmiLn-BdTin)<=0.8*MPARParam.BeamWidthAz && abs(RmiLn-RmiLn)<=300
+% if abs(EmiLn*r2d-EdTin*r2d)<=0.5*MPARParam.BeamWidthAz*r2d && abs(BmiLn*r2d-BdTin*r2d)<=0.5*MPARParam.BeamWidthAz*r2d
+%     target_Flag(n+1) = 1;
+    %%%%发现目标安排确认
+%     BzTin = BzTin;
+%     EzTin = EzTin;
+    %目标位置坐标转换（大地转阵面）
+%     Ezmin = asind(sind(EmiLn)*cosd(ET)-cosd(EmiLn)*sind(ET)*cosd(BmiLn-BT));
+%     Bzmin = asind(cosd(EmiLn)*sind(BmiLn-BT));
+%     Rzmin = RmiLn;
+%%%目标为雷达极坐标，将雷达极坐标转为阵面极坐标
+% target_RP(1) = RmiLn;
+% target_RP(2) = BmiLn;
+% target_RP(3) = EmiLn;
+% target_AP = RadarPolar2AntePolar(target_RP,BT,ET);
+Ezmin = target_AP(3);
+Bzmin = target_AP(2);
+Rzmin = target_AP(1);
+
+    %%%目标偏差角计算
+    dElmin = (Ezmin-EzTin)*r2d;
+    dBlmin = (Bzmin-BzTin)*r2d;
+    %%目标拟合
+    E = dElmin;
+    B = dBlmin;
+    if abs(E)>=abs(B)
+        th = E;
+    else
+        th = B;
+    end
+    U = 0.08;
+
+    if abs(th)<=th1
+        Ah = U*(sin(K1*th)/(K1*th));
+    elseif th == 0
+        Ah = U;
+    else
+        Ah = 0;
+    end
+    if abs(E)<=th1
+        AE = Ah*K2*E;
+    elseif E == 0
+        AE = 0.0001;
+    else
+        AE = Ah;
+    end
+    if E>=0
+        pE = 0;
+    else
+        pE = pi;
+    end
+    if abs(B)<=th1
+        AB = Ah*K2*B;
+    elseif B == 0
+        AB = 0.0001;
+    else
+        AB = Ah;
+    end
+    if B>=0
+        pB = 0;
+    else
+        pB = pi;
+    end
+
+    %%目标多普勒计算
+    f = 0;
+    n1 = 0;
+    V = VmiLn;
+    fd = f+(9.9+n1*0.01)*V*1000*20/3;
+
+% else
+%     Ah = 0;
+%     AE = 0;
+%     AB = 0;
+%     pE = 0;
+%     pB = 0;
+%     fd = 0;
+%     dElmin = [];
+%     dBlmin = [];
+% %     n = n+1;
+%     return;
+% end
+end

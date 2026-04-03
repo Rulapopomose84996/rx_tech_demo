@@ -1,0 +1,9 @@
+function Coord = RadarPolar2RadarCart1(S)
+Coord = zeros(3,1);
+R = S(1);
+B = S(2);
+E = S(3);
+Coord(1) = R*cos(E)*cos(B);
+Coord(2) = R*sin(E);
+Coord(3) = R*cos(E)*sin(B);
+end
