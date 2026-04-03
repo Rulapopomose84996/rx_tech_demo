@@ -73,6 +73,128 @@ namespace rxtech
         }
     }
 
+    void populate_data_order_summary(RunSummary &target,
+                                     std::uint64_t checked_packets,
+                                     bool matches_expected,
+                                     bool channel_batched,
+                                     const std::string &first_mismatch)
+    {
+        target.data_order_checked_packets = checked_packets;
+        if (checked_packets == 0U)
+        {
+            target.data_order_assessment = "无数据包";
+            target.data_order_first_mismatch.clear();
+            return;
+        }
+
+        if (matches_expected)
+        {
+            target.data_order_assessment = "符合按 PRT 推进的和/差/差顺序";
+            target.data_order_first_mismatch.clear();
+            return;
+        }
+
+        target.data_order_assessment = channel_batched
+                                           ? "偏离按 PRT 推进顺序，当前捕获更像按通道分批到达"
+                                           : "偏离按 PRT 推进顺序";
+        target.data_order_first_mismatch = first_mismatch;
+    }
+
+    void populate_active_prt_summary(RunSummary &target,
+                                     const ProtocolSpec &spec,
+                                     bool latest_data_seen,
+                                     std::uint16_t latest_data_cpi,
+                                     std::uint16_t latest_data_prt,
+                                     const CpiPrtCoverageMap &prt_coverage)
+    {
+        target.active_prt_available = false;
+        target.active_prt_channels.clear();
+        target.active_prt_channel_count = 0;
+        target.active_prt_complete = false;
+
+        if (!latest_data_seen)
+        {
+            return;
+        }
+
+        target.active_prt_available = true;
+        target.active_cpi = latest_data_cpi;
+        target.active_prt_packets_per_channel = spec.packets_per_channel;
+
+        auto selected_it = prt_coverage.end();
+        auto fallback_it = prt_coverage.end();
+        for (auto it = prt_coverage.begin(); it != prt_coverage.end(); ++it)
+        {
+            if (it->first.first != static_cast<std::uint64_t>(latest_data_cpi))
+            {
+                continue;
+            }
+
+            fallback_it = it;
+
+            bool complete = true;
+            for (std::uint16_t channel = 0; channel < spec.channels_per_prt; ++channel)
+            {
+                const auto channel_it = it->second.find(channel);
+                if (channel_it == it->second.end() ||
+                    channel_it->second.size() != static_cast<std::size_t>(spec.packets_per_channel))
+                {
+                    complete = false;
+                    break;
+                }
+            }
+
+            if (!complete)
+            {
+                selected_it = it;
+                break;
+            }
+        }
+
+        if (selected_it == prt_coverage.end())
+        {
+            selected_it = fallback_it;
+        }
+
+        if (selected_it == prt_coverage.end())
+        {
+            target.active_prt = latest_data_prt;
+            return;
+        }
+
+        target.active_prt = selected_it->first.second;
+
+        std::uint64_t observed_channels = 0;
+        bool complete = true;
+        target.active_prt_channels.reserve(spec.channels_per_prt);
+        for (std::uint16_t channel = 0; channel < spec.channels_per_prt; ++channel)
+        {
+            ProtocolPrtChannelCoverageSummary channel_summary;
+            channel_summary.channel = channel;
+
+            const auto channel_it = selected_it->second.find(channel);
+            if (channel_it != selected_it->second.end())
+            {
+                channel_summary.packet_count = static_cast<std::uint64_t>(channel_it->second.size());
+                if (channel_summary.packet_count > 0U)
+                {
+                    ++observed_channels;
+                }
+            }
+
+            channel_summary.complete = channel_summary.packet_count == spec.packets_per_channel;
+            if (!channel_summary.complete)
+            {
+                complete = false;
+            }
+
+            target.active_prt_channels.push_back(channel_summary);
+        }
+
+        target.active_prt_channel_count = observed_channels;
+        target.active_prt_complete = complete && !target.active_prt_channels.empty();
+    }
+
     std::string build_run_human_summary(const RunSummary &summary)
     {
         std::ostringstream out;
