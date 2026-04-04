@@ -2,10 +2,14 @@
 
 #include <array>
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "rxtech/rx_backend.h"
 
 namespace rxtech {
+
+std::vector<std::string> build_dpdk_eal_args(const RxConfig& config);
 
 class DpdkIngress final : public IRxBackend {
 public:

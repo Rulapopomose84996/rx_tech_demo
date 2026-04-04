@@ -20,6 +20,35 @@
 namespace rxtech
 {
 
+    std::vector<std::string> build_dpdk_eal_args(const RxConfig &config)
+    {
+        std::vector<std::string> eal_args;
+        eal_args.emplace_back("rxbench_dpdk");
+        if (!config.cpu_cores.empty())
+        {
+            std::string core_list;
+            for (std::size_t index = 0; index < config.cpu_cores.size(); ++index)
+            {
+                if (index != 0U)
+                {
+                    core_list += ",";
+                }
+                core_list += std::to_string(config.cpu_cores[index]);
+            }
+            eal_args.emplace_back("-l");
+            eal_args.emplace_back(core_list);
+        }
+        eal_args.emplace_back("-n");
+        eal_args.emplace_back("4");
+        eal_args.emplace_back("--in-memory");
+        if (!config.dpdk_pci_addr.empty())
+        {
+            eal_args.emplace_back("-w");
+            eal_args.emplace_back(config.dpdk_pci_addr);
+        }
+        return eal_args;
+    }
+
     namespace
     {
 
@@ -193,30 +222,7 @@ namespace rxtech
         impl_->arp_request_packets = 0;
         impl_->arp_reply_packets = 0;
 
-        std::vector<std::string> eal_args;
-        eal_args.emplace_back("rxbench_dpdk");
-        if (!config.cpu_cores.empty())
-        {
-            std::string core_list;
-            for (std::size_t index = 0; index < config.cpu_cores.size(); ++index)
-            {
-                if (index != 0U)
-                {
-                    core_list += ",";
-                }
-                core_list += std::to_string(config.cpu_cores[index]);
-            }
-            eal_args.emplace_back("-l");
-            eal_args.emplace_back(core_list);
-        }
-        eal_args.emplace_back("-n");
-        eal_args.emplace_back("4");
-        eal_args.emplace_back("--in-memory");
-        if (!config.dpdk_pci_addr.empty())
-        {
-            eal_args.emplace_back("-a");
-            eal_args.emplace_back(config.dpdk_pci_addr);
-        }
+        std::vector<std::string> eal_args = build_dpdk_eal_args(config);
 
         std::vector<char *> argv;
         argv.reserve(eal_args.size());
