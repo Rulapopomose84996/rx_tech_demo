@@ -1,4 +1,5 @@
-﻿#include <chrono>
+#include <array>
+#include <chrono>
 #include <cstdio>
 #include <exception>
 #include <fstream>
@@ -19,7 +20,6 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // Build FrameConfig from CLI
     rxtech::replay::FrameConfig fcfg;
     {
         unsigned a{}, b{}, c{}, d{};
@@ -30,9 +30,28 @@ int main(int argc, char **argv)
             fcfg.src_ipv4_be = (a << 24U) | (b << 16U) | (c << 8U) | d;
         fcfg.dst_port = cfg.dest_port;
         fcfg.src_port = cfg.src_port;
+
+        std::array<std::uint8_t, 6> parsed_mac{};
+        if (!cfg.src_mac.empty())
+        {
+            if (!rxtech::replay::parse_mac_address(cfg.src_mac, parsed_mac))
+            {
+                std::fprintf(stderr, "Invalid --src-mac: %s\n", cfg.src_mac.c_str());
+                return 1;
+            }
+            fcfg.src_mac = parsed_mac;
+        }
+        if (!cfg.dst_mac.empty())
+        {
+            if (!rxtech::replay::parse_mac_address(cfg.dst_mac, parsed_mac))
+            {
+                std::fprintf(stderr, "Invalid --dst-mac: %s\n", cfg.dst_mac.c_str());
+                return 1;
+            }
+            fcfg.dst_mac = parsed_mac;
+        }
     }
 
-    // Load replay entries
     std::vector<rxtech::replay::ReplayEntry> entries;
     try
     {
@@ -50,10 +69,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // Open AF_PACKET sender
     rxtech::replay::AfPacketSender sender(cfg.interface);
-
-    // PPS controller
     rxtech::replay::PpsController rate(cfg.pps);
 
     const std::uint64_t total_entries = entries.size();
@@ -77,7 +93,6 @@ int main(int argc, char **argv)
         std::uint16_t seq = 0;
         for (const auto &entry : entries)
         {
-            // Read payload
             std::ifstream f(entry.bin_file, std::ios::binary);
             if (!f.is_open())
             {
@@ -95,7 +110,6 @@ int main(int argc, char **argv)
                 return 1;
             }
 
-            // Build and send frame
             const auto frame = rxtech::replay::build_eth_frame(
                 payload.data(), entry.length, fcfg, seq++);
 
