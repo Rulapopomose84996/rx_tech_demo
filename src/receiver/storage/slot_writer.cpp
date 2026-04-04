@@ -23,7 +23,7 @@ namespace rxtech
         }
         // V-006: PRT range check against expected N_PRT (if known)
         if (ctx.header.expected_n_prt > 0U &&
-            packet.prt >= ctx.header.expected_n_prt)
+            packet.prt > ctx.header.expected_n_prt)
         {
             result.reason = RejectReason::invalid_prt;
             return result;
@@ -35,7 +35,7 @@ namespace rxtech
         }
 
         result.slot_index = slot_index(packet.prt, packet.channel, packet.packet_index, ch_count, pkt_per_ch);
-        PrtSummary &prt_summary = ctx.prt_summary[packet.prt];
+        PrtSummary &prt_summary = ctx.prt_summary[packet.prt - 1U];
         const std::uint16_t bit = packet_bit(packet.packet_index);
         std::uint16_t &bitmap = prt_summary.ch_pkt_bitmap[packet.channel];
         if ((bitmap & bit) != 0U)
@@ -59,9 +59,9 @@ namespace rxtech
             }
             ctx.header.last_rx_tsc = packet.rx_tsc;
         }
-        if (packet.prt + 1U > ctx.header.observed_n_prt)
+        if (packet.prt > ctx.header.observed_n_prt)
         {
-            ctx.header.observed_n_prt = static_cast<std::uint16_t>(packet.prt + 1U);
+            ctx.header.observed_n_prt = packet.prt;
         }
         result.first_write = true;
         return result;

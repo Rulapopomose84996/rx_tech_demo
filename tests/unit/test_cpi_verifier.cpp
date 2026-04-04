@@ -35,6 +35,12 @@ namespace
         return s;
     }
 
+    struct OwnedOutput
+    {
+        std::unique_ptr<rxtech::CpiContext> ctx;
+        rxtech::CpiOutput output;
+    };
+
     // Write all packets for one PRT (all channels, all packet indices).
     void fill_prt(rxtech::CpiContext &ctx,
                   const rxtech::ProtocolSpec &spec,
@@ -67,12 +73,13 @@ namespace
     }
 
     // Build a fully populated CpiContext with n_prt complete PRTs.
-    rxtech::CpiOutput make_complete_output(const rxtech::ProtocolSpec &spec,
-                                           std::uint16_t cpi_id,
-                                           std::uint16_t n_prt)
+    OwnedOutput make_complete_output(const rxtech::ProtocolSpec &spec,
+                                     std::uint16_t cpi_id,
+                                     std::uint16_t n_prt)
     {
-        auto ctx_ptr = std::make_unique<rxtech::CpiContext>();
-        rxtech::CpiContext &ctx = *ctx_ptr;
+        OwnedOutput owned;
+        owned.ctx = std::make_unique<rxtech::CpiContext>();
+        rxtech::CpiContext &ctx = *owned.ctx;
         ctx.reset(cpi_id, 0U);
         ctx.header.channels_per_prt = static_cast<std::uint16_t>(spec.channels_per_prt);
         ctx.header.packets_per_channel = static_cast<std::uint16_t>(spec.packets_per_channel);
@@ -91,7 +98,8 @@ namespace
         rxtech::CpiFinalizer finalizer;
         const auto maybe = finalizer.try_finalize(ctx, rxtech::TriggerFullReady);
         assert(maybe.has_value());
-        return *maybe;
+        owned.output = *maybe;
+        return owned;
     }
 
 } // namespace
@@ -103,8 +111,8 @@ int main()
 
     // ── Test 1: complete CPI, normal pass ─────────────────────────────────────
     {
-        const auto output = make_complete_output(spec, 1U, 2U);
-        const auto result = verifier.verify(output, spec);
+        const auto owned = make_complete_output(spec, 1U, 2U);
+        const auto result = verifier.verify(owned.output, spec);
         assert(result.passed);
         assert(result.error_flags == rxtech::CpiVerifyError::kNone);
         assert(result.reason_text.empty());
@@ -115,11 +123,11 @@ int main()
     // ── Test 2: missing packets ─────────────────────────────────────────────
     {
         // Use a complete output then manually inflate missing_slot_count.
-        rxtech::CpiOutput output = make_complete_output(spec, 2U, 1U);
-        output.missing_slot_count = 5U;
+        auto owned = make_complete_output(spec, 2U, 1U);
+        owned.output.missing_slot_count = 5U;
         // decision stays COMPLETE_OK
 
-        const auto result = verifier.verify(output, spec);
+        const auto result = verifier.verify(owned.output, spec);
         assert(!result.passed);
         assert(rxtech::has_error(result.error_flags, rxtech::CpiVerifyError::kMissingPacket));
         assert(result.missing_slot_count == 5U);
@@ -127,10 +135,10 @@ int main()
 
     // ── Test 3: duplicate packets ────────────────────────────────────────────
     {
-        rxtech::CpiOutput output = make_complete_output(spec, 3U, 1U);
-        output.duplicate_count = 2U;
+        auto owned = make_complete_output(spec, 3U, 1U);
+        owned.output.duplicate_count = 2U;
 
-        const auto result = verifier.verify(output, spec);
+        const auto result = verifier.verify(owned.output, spec);
         assert(!result.passed);
         assert(rxtech::has_error(result.error_flags, rxtech::CpiVerifyError::kDuplicatePacket));
         assert(result.duplicate_count == 2U);
@@ -138,11 +146,6 @@ int main()
 
     // ── Test 4: channel coverage error ──────────────────────────────────────
     {
-        rxtech::CpiOutput output = make_complete_output(spec, 4U, 2U);
-        // Corrupt prt_summary[0] to simulate a missing channel
-        // Note: prt_summary is a pointer into the CpiContext which is destroyed.
-        // We cannot safely mutate it post-finalization.  Instead build a context
-        // manually that results in a partial PRT.
         auto ctx_ptr = std::make_unique<rxtech::CpiContext>();
         rxtech::CpiContext &ctx = *ctx_ptr;
         ctx.reset(4U, 0U);
@@ -198,10 +201,10 @@ int main()
         ctx.header.expected_n_prt = 3U;
         ctx.header.expected_slot_count = 3U * 3U * 9U;
         ctx.header.state = rxtech::CpiState::ACTIVE;
-        ctx.header.observed_n_prt = 2U; // only 2 observed
 
         fill_prt(ctx, spec, 1U);
         fill_prt(ctx, spec, 2U);
+        ctx.header.observed_n_prt = 0U; // force verifier to use expected_n_prt=3
 
         rxtech::CpiFinalizer finalizer;
         const auto maybe = finalizer.try_finalize(ctx, rxtech::TriggerCpiSwitch);

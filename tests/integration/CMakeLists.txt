@@ -20,7 +20,7 @@ if(UNIX AND NOT CMAKE_CROSSCOMPILING)
         test_file_replay_pipeline.cpp
     )
     target_link_libraries(rxtech_integration_file_replay_tests
-        PRIVATE rx_receiver_core rx_receiver_filereplay pthread
+        PRIVATE rx_receiver_core rx_receiver_filereplay nlohmann_json pthread
     )
     add_test(NAME rxtech_integration_file_replay_tests COMMAND rxtech_integration_file_replay_tests)
     set_tests_properties(rxtech_integration_file_replay_tests PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

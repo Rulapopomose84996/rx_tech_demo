@@ -9,6 +9,7 @@
 
 // Linux-specific headers required by AF_PACKET
 #if defined(__linux__)
+#include <linux/if_ether.h>
 #include <linux/if_packet.h>
 #include <netinet/in.h>
 #include <sys/ioctl.h>

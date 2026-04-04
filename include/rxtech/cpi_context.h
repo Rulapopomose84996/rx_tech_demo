@@ -135,14 +135,15 @@ namespace rxtech
     inline bool is_valid_slot_coord(std::uint16_t prt, std::uint16_t channel, std::uint16_t packet_index,
                                     std::uint16_t channels_per_prt, std::uint16_t packets_per_channel)
     {
-        return prt < kCpiPrtMax && channel < channels_per_prt && channel < kCpiMaxChannelCount &&
+        return prt >= 1U && prt <= kCpiPrtMax &&
+               channel < channels_per_prt && channel < kCpiMaxChannelCount &&
                packet_index >= 1U && packet_index <= packets_per_channel;
     }
 
     inline std::uint32_t slot_index(std::uint16_t prt, std::uint16_t channel, std::uint16_t packet_index,
                                     std::uint16_t channels_per_prt, std::uint16_t packets_per_channel)
     {
-        return (static_cast<std::uint32_t>(prt) * channels_per_prt + channel) * packets_per_channel +
+        return (static_cast<std::uint32_t>(prt - 1U) * channels_per_prt + channel) * packets_per_channel +
                (packet_index - 1U);
     }
 

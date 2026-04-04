@@ -5,6 +5,7 @@
 #include <functional>
 
 #include "rxtech/cpi_finalizer.h"
+#include "rxtech/cpi_consumer.h"
 #include "rxtech/spsc_ring.h"
 
 namespace rxtech

@@ -1,6 +1,9 @@
 ﻿#include "manifest_loader.h"
 
 #include <algorithm>
+#if defined(__linux__) || defined(__APPLE__)
+#include <dirent.h>
+#endif
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -59,10 +62,8 @@ namespace rxtech::replay
         // List JSON files in a directory that match a suffix.
         std::vector<std::string> glob_suffix(const std::string &dir, const std::string &suffix)
         {
-            // On Linux we can use opendir; on Windows (code-reading only) we skip.
 #if defined(__linux__) || defined(__APPLE__)
             std::vector<std::string> result;
-#include <dirent.h>
             DIR *d = opendir(dir.c_str());
             if (!d)
                 return result;

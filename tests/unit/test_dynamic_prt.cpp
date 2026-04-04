@@ -91,8 +91,8 @@ int main()
         coord.process_control_packet(make_control(1U, 20U));
 
         // Send data packet → open_active triggers
-        auto parsed = make_data(1U, 0U, 0U, 1U);
-        auto interpreted = make_interpreted_data(1U, 0U, 0U, 1U);
+        auto parsed = make_data(1U, 1U, 0U, 1U);
+        auto interpreted = make_interpreted_data(1U, 1U, 0U, 1U);
         auto result = coord.process_data_packet(parsed, interpreted, spec, metrics, status, error);
         assert(result.accepted);
 
@@ -167,8 +167,8 @@ int main()
         // Control packet with n_prt=50 — should be ignored when dynamic=false
         coord.process_control_packet(make_control(1U, 50U));
 
-        auto parsed = make_data(1U, 0U, 0U, 1U);
-        auto interpreted = make_interpreted_data(1U, 0U, 0U, 1U);
+        auto parsed = make_data(1U, 1U, 0U, 1U);
+        auto interpreted = make_interpreted_data(1U, 1U, 0U, 1U);
         auto result = coord.process_data_packet(parsed, interpreted, spec, metrics, status, error);
         assert(result.accepted);
 
@@ -209,18 +209,18 @@ int main()
         std::string error;
 
         // Open CPI 1 with some data
-        auto parsed1 = make_data(1U, 0U, 0U, 1U);
-        auto interp1 = make_interpreted_data(1U, 0U, 0U, 1U);
+        auto parsed1 = make_data(1U, 1U, 0U, 1U);
+        auto interp1 = make_interpreted_data(1U, 1U, 0U, 1U);
         coord.process_data_packet(parsed1, interp1, spec, metrics, status, error);
 
         // Switch to CPI 2 — CPI 1 becomes previous
-        auto parsed2 = make_data(2U, 0U, 0U, 1U);
-        auto interp2 = make_interpreted_data(2U, 0U, 0U, 1U);
+        auto parsed2 = make_data(2U, 1U, 0U, 1U);
+        auto interp2 = make_interpreted_data(2U, 1U, 0U, 1U);
         coord.process_data_packet(parsed2, interp2, spec, metrics, status, error);
 
         // Late packet for CPI 1 — should be accepted via previous window
-        auto late = make_data(1U, 0U, 1U, 1U);
-        auto late_interp = make_interpreted_data(1U, 0U, 1U, 1U);
+        auto late = make_data(1U, 1U, 1U, 1U);
+        auto late_interp = make_interpreted_data(1U, 1U, 1U, 1U);
         auto late_result = coord.process_data_packet(late, late_interp, spec, metrics, status, error);
         assert(late_result.accepted);
 

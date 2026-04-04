@@ -7,12 +7,12 @@ namespace rxtech
     {
         const auto ch_count = static_cast<std::uint16_t>(spec_.channels_per_prt);
         const auto pkt_per_ch = static_cast<std::uint16_t>(spec_.packets_per_channel);
-        if (prt >= kCpiPrtMax || channel >= ch_count || channel >= kCpiMaxChannelCount)
+        if (prt == 0U || prt > kCpiPrtMax || channel >= ch_count || channel >= kCpiMaxChannelCount)
         {
             return;
         }
 
-        PrtSummary &summary = ctx.prt_summary[prt];
+        PrtSummary &summary = ctx.prt_summary[prt - 1U];
         if (summary.ch_recv_count[channel] == pkt_per_ch)
         {
             ++summary.ready_channel_count;
@@ -28,7 +28,7 @@ namespace rxtech
             ctx.header.trigger_bits |= TriggerTailObserved;
             // T-005: tail on last expected PRT → wave end
             if (ctx.header.expected_n_prt > 0U &&
-                prt + 1U >= ctx.header.expected_n_prt)
+                prt >= ctx.header.expected_n_prt)
             {
                 ctx.header.trigger_bits |= TriggerWaveEnd;
             }
