@@ -17,58 +17,58 @@
 namespace
 {
 
-// Dummy payload buffer for slot writer (must be non-null and have valid length)
-static std::uint8_t g_dummy_payload[2048] = {};
+    // Dummy payload buffer for slot writer (must be non-null and have valid length)
+    static std::uint8_t g_dummy_payload[2048] = {};
 
-rxtech::ProtocolSpec make_spec(bool dynamic_prt, std::uint32_t expected_n_prt, std::uint32_t max_n_prt)
-{
-    rxtech::ProtocolSpec spec;
-    spec.channels_per_prt = 3U;
-    spec.packets_per_channel = 9U;
-    spec.dynamic_prt_enabled = dynamic_prt;
-    spec.expected_n_prt = expected_n_prt;
-    spec.max_n_prt = max_n_prt;
-    spec.cpi_timeout_ns = 0U;
-    return spec;
-}
+    rxtech::ProtocolSpec make_spec(bool dynamic_prt, std::uint32_t expected_n_prt, std::uint32_t max_n_prt)
+    {
+        rxtech::ProtocolSpec spec;
+        spec.channels_per_prt = 3U;
+        spec.packets_per_channel = 9U;
+        spec.dynamic_prt_enabled = dynamic_prt;
+        spec.expected_n_prt = expected_n_prt;
+        spec.max_n_prt = max_n_prt;
+        spec.cpi_timeout_ns = 0U;
+        return spec;
+    }
 
-rxtech::ParsedPacketView make_control(std::uint16_t cpi, std::uint16_t n_prt_in_control)
-{
-    rxtech::ParsedPacketView pv;
-    pv.valid = true;
-    pv.kind = rxtech::PacketKind::control_table;
-    pv.cpi = cpi;
-    // n_prt from control packet is carried in the prt field
-    pv.prt = n_prt_in_control;
-    return pv;
-}
+    rxtech::ParsedPacketView make_control(std::uint16_t cpi, std::uint16_t n_prt_in_control)
+    {
+        rxtech::ParsedPacketView pv;
+        pv.valid = true;
+        pv.kind = rxtech::PacketKind::control_table;
+        pv.cpi = cpi;
+        // n_prt from control packet is carried in the prt field
+        pv.prt = n_prt_in_control;
+        return pv;
+    }
 
-rxtech::ParsedPacketView make_data(std::uint16_t cpi, std::uint16_t prt, std::uint16_t channel, std::uint16_t packet_index)
-{
-    rxtech::ParsedPacketView pv;
-    pv.valid = true;
-    pv.kind = rxtech::PacketKind::data_packet;
-    pv.cpi = cpi;
-    pv.prt = prt;
-    pv.channel = channel;
-    pv.packet_index = packet_index;
-    pv.payload_ptr = g_dummy_payload;
-    pv.payload_len = 2032U;
-    return pv;
-}
+    rxtech::ParsedPacketView make_data(std::uint16_t cpi, std::uint16_t prt, std::uint16_t channel, std::uint16_t packet_index)
+    {
+        rxtech::ParsedPacketView pv;
+        pv.valid = true;
+        pv.kind = rxtech::PacketKind::data_packet;
+        pv.cpi = cpi;
+        pv.prt = prt;
+        pv.channel = channel;
+        pv.packet_index = packet_index;
+        pv.payload_ptr = g_dummy_payload;
+        pv.payload_len = 2032U;
+        return pv;
+    }
 
-rxtech::InterpretedPacketView make_interpreted_data(std::uint16_t cpi, std::uint16_t prt, std::uint16_t channel, std::uint16_t packet_index)
-{
-    rxtech::InterpretedPacketView iv;
-    iv.valid = true;
-    iv.kind = rxtech::PacketKind::data_packet;
-    iv.cpi = cpi;
-    iv.prt = prt;
-    iv.channel = channel;
-    iv.packet_index = packet_index;
-    iv.iq_count = 508U;
-    return iv;
-}
+    rxtech::InterpretedPacketView make_interpreted_data(std::uint16_t cpi, std::uint16_t prt, std::uint16_t channel, std::uint16_t packet_index)
+    {
+        rxtech::InterpretedPacketView iv;
+        iv.valid = true;
+        iv.kind = rxtech::PacketKind::data_packet;
+        iv.cpi = cpi;
+        iv.prt = prt;
+        iv.channel = channel;
+        iv.packet_index = packet_index;
+        iv.iq_count = 508U;
+        return iv;
+    }
 
 } // namespace
 
