@@ -107,3 +107,9 @@ target_include_directories(test_dynamic_prt PRIVATE ${CMAKE_SOURCE_DIR}/src/rece
 add_test(NAME test_dynamic_prt COMMAND test_dynamic_prt)
 set_tests_properties(test_dynamic_prt PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(test_dynamic_prt)
+
+add_executable(test_cpi_verifier test_cpi_verifier.cpp)
+target_link_libraries(test_cpi_verifier PRIVATE rx_receiver_core)
+add_test(NAME test_cpi_verifier COMMAND test_cpi_verifier)
+set_tests_properties(test_cpi_verifier PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+rxtech_apply_warnings(test_cpi_verifier)

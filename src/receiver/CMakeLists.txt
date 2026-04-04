@@ -6,6 +6,7 @@ add_library(rx_receiver_core
     finalize/cpi_finalizer.cpp
     output/capture_sink.cpp
     output/cpi_consumer.cpp
+    output/slow_consumer.cpp
     protocol/data_order_tracker.cpp
     protocol/packet_pipeline.cpp
     protocol/protocol_sequence_interpreter.cpp
@@ -20,6 +21,7 @@ add_library(rx_receiver_core
     runtime/rx_config.cpp
     runtime/raw_frame_recorder.cpp
     runtime/receive_runner.cpp
+    verify/cpi_verifier.cpp
 )
 
 target_include_directories(rx_receiver_core
@@ -37,6 +39,7 @@ target_include_directories(rx_receiver_core
     ${CMAKE_CURRENT_SOURCE_DIR}/core/internal
     ${CMAKE_CURRENT_SOURCE_DIR}/output/internal
     ${CMAKE_CURRENT_SOURCE_DIR}/sidecar/internal
+    ${CMAKE_CURRENT_SOURCE_DIR}/verify
 )
 
 target_compile_features(rx_receiver_core PUBLIC cxx_std_17)
@@ -112,3 +115,27 @@ rxtech_apply_warnings(rx_receiver_dpdk)
 add_executable(rxbench_dpdk app/main_dpdk.cpp)
 target_link_libraries(rxbench_dpdk PRIVATE rx_receiver_app)
 rxtech_apply_warnings(rxbench_dpdk)
+
+if(UNIX AND NOT CMAKE_CROSSCOMPILING)
+    add_library(rx_receiver_filereplay
+        ingress/filereplay/file_replay_backend.cpp
+    )
+    target_include_directories(rx_receiver_filereplay
+        PUBLIC
+        ${CMAKE_SOURCE_DIR}/include
+        PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/ingress/filereplay
+        ${CMAKE_SOURCE_DIR}/src/replay_sender
+    )
+    target_link_libraries(rx_receiver_filereplay
+        PUBLIC rx_receiver_core
+        PRIVATE nlohmann_json replay_sender_lib
+    )
+    target_compile_features(rx_receiver_filereplay PUBLIC cxx_std_17)
+
+    if(UNIX AND NOT APPLE)
+        target_link_libraries(rx_receiver_filereplay PUBLIC pthread)
+    endif()
+
+    rxtech_apply_warnings(rx_receiver_filereplay)
+endif()

@@ -14,6 +14,10 @@ include(cmake/dependencies.cmake)
 
 add_subdirectory(src/receiver)
 
+if(UNIX AND NOT CMAKE_CROSSCOMPILING)
+    add_subdirectory(src/replay_sender)
+endif()
+
 if(BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
