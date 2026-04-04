@@ -34,6 +34,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CACHE_ROOT="${CACHE_ROOT:-/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo}"
 ARCHIVES_DIR="${CACHE_ROOT}/archives"
 BUILD_ROOT="${CACHE_ROOT}/build/native-aarch64"
@@ -44,6 +45,7 @@ DPDK_SOURCE_DIR="${BUILD_ROOT}/dpdk-stable-${DPDK_VERSION}"
 DPDK_BUILD_DIR="${BUILD_ROOT}/dpdk-${DPDK_VERSION}-build"
 MESON_VERSION="${MESON_VERSION:-0.57.2}"
 HUGEPAGES_512M="${HUGEPAGES_512M:-2}"
+HUGEPAGE_NODE="${HUGEPAGE_NODE:-1}"
 USER_SITE="$(python3 - <<'PY'
 import site
 print(site.getusersitepackages())
@@ -85,9 +87,10 @@ ninja -C "${DPDK_BUILD_DIR}"
 printf '%s\n' /usr/local/lib64 > /etc/ld.so.conf.d/rxtech_dpdk.conf
 ln -sf /usr/local/lib64/pkgconfig/libdpdk.pc /usr/lib64/pkgconfig/libdpdk.pc
 ldconfig
-echo ${HUGEPAGES_512M} > /sys/kernel/mm/hugepages/hugepages-524288kB/nr_hugepages
-rm -f /dev/hugepages/rtemap_* 2>/dev/null || true
 "
+
+HUGEPAGES_512M="${HUGEPAGES_512M}" HUGEPAGE_NODE="${HUGEPAGE_NODE}" \
+  "${SCRIPT_DIR}/install_dpdk_hugepages_service.sh"
 
 echo "[cache]"
 find "${CACHE_ROOT}" -maxdepth 3 | sort
