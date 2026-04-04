@@ -1,6 +1,36 @@
 #!/usr/bin/env bash
-# Purpose: install and prepare the shared-cache DPDK toolchain on the Linux server.
-# Environment: run on the Linux server with package/network permissions as needed.
+# ============================================
+# DPDK 环境安装与配置脚本
+# ============================================
+# 用途：在 Linux 服务器上安装和配置共享缓存的 DPDK 工具链
+#
+# 功能说明：
+#   - 下载并编译指定版本的 DPDK 库
+#   - 安装 meson 构建工具
+#   - 配置 hugepage 内存（默认 512MB 页面 2 个）
+#   - 安装 DPDK 运行时库和工具
+#   - 配置系统动态链接库路径
+#
+# 使用方法:
+#   ./setup_dpdk.sh
+#
+# 环境要求:
+#   - 必须在 Linux 服务器上运行
+#   - 需要网络访问权限下载 DPDK 源码
+#   - 需要 sudo 权限进行系统配置
+#
+# 配置变量:
+#   CACHE_ROOT      - 缓存根目录 (默认: /home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo)
+#   DPDK_VERSION    - DPDK 版本号 (默认: 19.11.14)
+#   HUGEPAGES_512M  - 512MB hugepage 数量 (默认: 2)
+#
+# 运行后效果:
+#   - DPDK 库文件安装到 /usr/local/lib64
+#   - pkg-config 配置文件链接到系统路径
+#   - hugepage 内存配置生效
+#   - 可使用 dpdk-devbind.py, dpdk-testpmd 等工具
+# ============================================
+
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

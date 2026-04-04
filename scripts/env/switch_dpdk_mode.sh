@@ -1,7 +1,38 @@
 #!/usr/bin/env bash
-# Purpose: switch a whitelisted X710 port between normal Linux NIC mode and DPDK vfio-pci mode.
-# Environment: run on the Linux server; this script performs live driver rebinds and will remove the target port
-#              from the Linux network stack when switching to DPDK mode.
+# ============================================
+# DPDK 模式切换脚本
+# ============================================
+# 用途：在普通 Linux 内核网卡模式和 DPDK vfio-pci 模式之间切换指定的网卡端口
+#
+# 使用方法:
+#   ./switch_dpdk_mode.sh <目标模式> <网络接口名>
+#
+# 参数说明:
+#   目标模式      - linux 或 dpdk
+#                 - linux: 切换到普通 Linux 内核模式 (使用 i40e 驱动)
+#                 - dpdk:  切换到 DPDK 模式 (使用 vfio-pci 驱动)
+#
+#   网络接口名    - 当前仅支持：receiver0
+#
+# 使用示例:
+#   # 将 receiver0 切换到 DPDK 模式
+#   ./switch_dpdk_mode.sh dpdk receiver0
+#
+#   # 将 receiver0 切换回 Linux 模式
+#   ./switch_dpdk_mode.sh linux receiver0
+#
+# 运行环境:
+#   - 必须在 Linux 服务器上运行
+#   - 需要安装 dpdk-devbind.py 工具
+#   - 需要 sudo 权限
+#
+# 注意事项:
+#   - 切换到 DPDK 模式后，网卡将从 Linux 网络栈中消失 (这是正常现象)
+#   - 切换回 Linux 模式后，网卡会重新出现在网络栈中
+#   - 建议在切换到 DPDK 模式前先设置好巨型帧 MTU(如需要)
+#     例如：sudo ip link set receiver0 mtu 9000
+# ============================================
+
 set -euo pipefail
 
 if [ "$#" -ne 2 ]; then
