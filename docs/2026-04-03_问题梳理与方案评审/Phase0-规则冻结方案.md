@@ -5,7 +5,7 @@
 当前代码已经完成了主循环模块化：`OwnerLoop` 在运行时直接创建 `PacketPipeline / CpiStateCoordinator / DataOrderTracker / CaptureSink / RuntimeStatusReporter`，并且在收包循环内同步执行 `raw_frame_recorder->submit(packet)`、`packet_pipeline.process_packet(...)`、`check_timeout(...)`、`drain_recycle(...)`、`emit_periodic(...)` 等动作，这说明“模块已经拆开”，但“热路径边界”还没有完全冻结 。
 协议侧目前已经是 assembler → parser → validator → interpreter 的顺序，invalid 诊断最多打印 5 次，但 `accepted_bytes / accepted_packets` 是在通过 packet filter 后、协议校验前就累计的，这意味着当前统计口径还偏“链路层通过数”，不是“业务有效数” 。
 CPI 状态侧当前仍是**单 active_ctx** 模型，而且 `process_control_packet()` 还把 `n_prt` 固定绑定为 `spec_.expected_n_prt`，没有从控制包动态解析；当 output ring 满时，目前是记作 `pool_exhaustion` 并立即释放 ctx，这也说明“背压”和“池耗尽”还没分开定义 。
-配置与协议规格层当前只有 `expected_n_prt / cpi_timeout_ns / raw_record_enabled / feedback_enabled / status_interval_seconds` 这些基础项，没有 `dynamic_prt_enabled`、`max_n_prt` 或统一的 debug/profile 档位配置  。
+配置与协议规格层当前只有 `expected_n_prt / cpi_timeout_ns / raw_record_enabled / status_interval_seconds` 这些基础项，没有 `dynamic_prt_enabled`、`max_n_prt` 或统一的 debug/profile 档位配置  。
 指标接口目前只有 `on_reject / on_drop / on_error / on_pool_exhaustion` 等通用钩子，`MetricsCollector` 内部仍用 `std::vector` 全量存储 burst 和 latency 样本并在 `finalize()` 时排序，`on_reject(RejectReason)` 也还没有做按 reason 分类聚合  。
 
 基于这些现状，Phase 0 不应该直接开始做双缓冲、巨帧调参或解释层微优化；更合适的做法是先冻结三件事：
@@ -56,7 +56,6 @@ CPI 状态侧当前仍是**单 active_ctx** 模型，而且 `process_control_pac
 保留运行期开关，但不允许每包做重操作：
 
 * `RuntimeStatusReporter.emit_periodic(...)`
-* feedback 发送
 * RejectReason 周期性摘要
 * raw_frame recorder 状态汇总
 * 低频运行摘要组装
@@ -119,7 +118,6 @@ Phase 0 直接冻结为：
 
 * `status_interval_seconds = 0` 表示禁用周期状态输出
 * `raw_record_enabled = false` 作为生产默认
-* `feedback_enabled = false` 作为生产默认
 
 ### 新增最小字段
 
@@ -141,7 +139,7 @@ Phase 0 直接冻结为：
 
 * 生产模式下：主循环只保留核心路径和低开销计数
 * 调试重输出全部可关闭
-* raw record / feedback / periodic status 都是明确的旁路功能
+* raw record / periodic status 都是明确的旁路功能
 * 后续改 dynamic PRT、双缓冲、零拷贝时，不需要再回头重切热路径边界
 
 ---
