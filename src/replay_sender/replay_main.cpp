@@ -36,7 +36,7 @@ int main(int argc, char **argv)
         {
             if (!rxtech::replay::parse_mac_address(cfg.src_mac, parsed_mac))
             {
-                std::fprintf(stderr, "Invalid --src-mac: %s\n", cfg.src_mac.c_str());
+                std::fprintf(stderr, "--src-mac 格式无效: %s\n", cfg.src_mac.c_str());
                 return 1;
             }
             fcfg.src_mac = parsed_mac;
@@ -45,7 +45,7 @@ int main(int argc, char **argv)
         {
             if (!rxtech::replay::parse_mac_address(cfg.dst_mac, parsed_mac))
             {
-                std::fprintf(stderr, "Invalid --dst-mac: %s\n", cfg.dst_mac.c_str());
+                std::fprintf(stderr, "--dst-mac 格式无效: %s\n", cfg.dst_mac.c_str());
                 return 1;
             }
             fcfg.dst_mac = parsed_mac;
@@ -59,13 +59,13 @@ int main(int argc, char **argv)
     }
     catch (const std::exception &ex)
     {
-        std::fprintf(stderr, "Error loading replay data: %s\n", ex.what());
+        std::fprintf(stderr, "加载回放数据失败: %s\n", ex.what());
         return 1;
     }
 
     if (entries.empty())
     {
-        std::fprintf(stderr, "No replay entries found in the specified directories.\n");
+        std::fprintf(stderr, "在指定目录中未找到可回放数据条目。\n");
         return 1;
     }
 
@@ -96,7 +96,7 @@ int main(int argc, char **argv)
             std::ifstream f(entry.bin_file, std::ios::binary);
             if (!f.is_open())
             {
-                std::fprintf(stderr, "Cannot open %s\n", entry.bin_file.c_str());
+                std::fprintf(stderr, "无法打开文件: %s\n", entry.bin_file.c_str());
                 return 1;
             }
             f.seekg(static_cast<std::streamoff>(entry.offset));
@@ -104,7 +104,7 @@ int main(int argc, char **argv)
             f.read(reinterpret_cast<char *>(payload.data()), entry.length);
             if (!f)
             {
-                std::fprintf(stderr, "Short read from %s at offset %llu\n",
+                std::fprintf(stderr, "读取数据长度不足: %s, offset=%llu\n",
                              entry.bin_file.c_str(),
                              static_cast<unsigned long long>(entry.offset));
                 return 1;
@@ -116,7 +116,7 @@ int main(int argc, char **argv)
             rate.wait_for_next_slot();
             if (!sender.send_frame(frame.data(), frame.size()))
             {
-                std::fprintf(stderr, "send_frame failed at entry %llu\n",
+                std::fprintf(stderr, "发送数据帧失败，entry=%llu\n",
                              static_cast<unsigned long long>(sent_total));
                 return 1;
             }

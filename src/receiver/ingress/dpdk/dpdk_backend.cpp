@@ -215,7 +215,7 @@ namespace rxtech
 #if defined(__linux__) && defined(RXTECH_HAS_DPDK_RUNTIME)
         if (impl_ == nullptr)
         {
-            return make_dpdk_result(false, "DPDK backend internal state is unavailable");
+            return make_dpdk_result(false, "DPDK 后端内部状态不可用");
         }
 
         impl_->cleanup();
@@ -235,14 +235,14 @@ namespace rxtech
         if (eal_rc < 0)
         {
             ++stats_.rx_errors;
-            return make_dpdk_result(true, "rte_eal_init() failed");
+            return make_dpdk_result(true, "rte_eal_init() 调用失败");
         }
 
         std::uint16_t port_id = static_cast<std::uint16_t>(config.dpdk_port_id);
         if (!resolve_port_id(config, port_id) || !rte_eth_dev_is_valid_port(port_id))
         {
             ++stats_.rx_errors;
-            return make_dpdk_result(true, "failed to resolve DPDK port for device: " + config.dpdk_pci_addr);
+            return make_dpdk_result(true, "解析 DPDK 设备对应端口失败: " + config.dpdk_pci_addr);
         }
 
         impl_->port_id = port_id;
@@ -255,14 +255,14 @@ namespace rxtech
         if (impl_->mempool == nullptr)
         {
             ++stats_.rx_errors;
-            return make_dpdk_result(true, "rte_pktmbuf_pool_create() failed");
+            return make_dpdk_result(true, "rte_pktmbuf_pool_create() 调用失败");
         }
 
         rte_eth_conf port_conf{};
         if (rte_eth_dev_configure(port_id, 1, 1, &port_conf) < 0)
         {
             ++stats_.rx_errors;
-            return make_dpdk_result(true, "rte_eth_dev_configure() failed");
+            return make_dpdk_result(true, "rte_eth_dev_configure() 调用失败");
         }
         if (rte_eth_rx_queue_setup(port_id,
                                    0,
@@ -272,7 +272,7 @@ namespace rxtech
                                    impl_->mempool) < 0)
         {
             ++stats_.rx_errors;
-            return make_dpdk_result(true, "rte_eth_rx_queue_setup() failed");
+            return make_dpdk_result(true, "rte_eth_rx_queue_setup() 调用失败");
         }
         if (rte_eth_tx_queue_setup(port_id,
                                    0,
@@ -281,12 +281,12 @@ namespace rxtech
                                    nullptr) < 0)
         {
             ++stats_.rx_errors;
-            return make_dpdk_result(true, "rte_eth_tx_queue_setup() failed");
+            return make_dpdk_result(true, "rte_eth_tx_queue_setup() 调用失败");
         }
         if (rte_eth_dev_start(port_id) < 0)
         {
             ++stats_.rx_errors;
-            return make_dpdk_result(true, "rte_eth_dev_start() failed");
+            return make_dpdk_result(true, "rte_eth_dev_start() 调用失败");
         }
 
         impl_->started = true;
@@ -325,7 +325,7 @@ namespace rxtech
         return result;
 #else
         (void)config;
-        return make_dpdk_result(false, "DPDK runtime not linked; install libdpdk and rebuild on Linux");
+        return make_dpdk_result(false, "未链接 DPDK 运行时；请在 Linux 环境安装 libdpdk 后重新构建");
 #endif
     }
 

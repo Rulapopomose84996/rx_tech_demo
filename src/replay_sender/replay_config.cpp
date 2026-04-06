@@ -96,7 +96,7 @@ namespace rxtech::replay
                 const char *val = next();
                 if (!val)
                 {
-                    std::fprintf(stderr, "--data-dir requires a value\n");
+                    std::fprintf(stderr, "--data-dir 需要提供参数值\n");
                     return false;
                 }
                 out_cfg.data_dirs.emplace_back(val);
@@ -106,7 +106,7 @@ namespace rxtech::replay
                 const char *val = next();
                 if (!val)
                 {
-                    std::fprintf(stderr, "--iface requires a value\n");
+                    std::fprintf(stderr, "--iface 需要提供参数值\n");
                     return false;
                 }
                 out_cfg.interface = val;
@@ -116,7 +116,7 @@ namespace rxtech::replay
                 const char *val = next();
                 if (!val)
                 {
-                    std::fprintf(stderr, "--src-mac requires a value\n");
+                    std::fprintf(stderr, "--src-mac 需要提供参数值\n");
                     return false;
                 }
                 out_cfg.src_mac = val;
@@ -126,7 +126,7 @@ namespace rxtech::replay
                 const char *val = next();
                 if (!val)
                 {
-                    std::fprintf(stderr, "--dst-mac requires a value\n");
+                    std::fprintf(stderr, "--dst-mac 需要提供参数值\n");
                     return false;
                 }
                 out_cfg.dst_mac = val;
@@ -136,7 +136,7 @@ namespace rxtech::replay
                 const char *val = next();
                 if (!val)
                 {
-                    std::fprintf(stderr, "--dest-ip requires a value\n");
+                    std::fprintf(stderr, "--dest-ip 需要提供参数值\n");
                     return false;
                 }
                 out_cfg.dest_ip = val;
@@ -146,7 +146,7 @@ namespace rxtech::replay
                 const char *val = next();
                 if (!val)
                 {
-                    std::fprintf(stderr, "--src-ip requires a value\n");
+                    std::fprintf(stderr, "--src-ip 需要提供参数值\n");
                     return false;
                 }
                 out_cfg.src_ip = val;
@@ -156,7 +156,7 @@ namespace rxtech::replay
                 const char *val = next();
                 if (!val)
                 {
-                    std::fprintf(stderr, "--dest-port requires a value\n");
+                    std::fprintf(stderr, "--dest-port 需要提供参数值\n");
                     return false;
                 }
                 out_cfg.dest_port = static_cast<std::uint16_t>(std::atoi(val));
@@ -166,7 +166,7 @@ namespace rxtech::replay
                 const char *val = next();
                 if (!val)
                 {
-                    std::fprintf(stderr, "--src-port requires a value\n");
+                    std::fprintf(stderr, "--src-port 需要提供参数值\n");
                     return false;
                 }
                 out_cfg.src_port = static_cast<std::uint16_t>(std::atoi(val));
@@ -176,7 +176,7 @@ namespace rxtech::replay
                 const char *val = next();
                 if (!val)
                 {
-                    std::fprintf(stderr, "--pps requires a value\n");
+                    std::fprintf(stderr, "--pps 需要提供参数值\n");
                     return false;
                 }
                 out_cfg.pps = static_cast<std::uint32_t>(std::atoi(val));
@@ -186,7 +186,7 @@ namespace rxtech::replay
                 const char *val = next();
                 if (!val)
                 {
-                    std::fprintf(stderr, "--loops requires a value\n");
+                    std::fprintf(stderr, "--loops 需要提供参数值\n");
                     return false;
                 }
                 out_cfg.loop_count = static_cast<std::uint32_t>(std::atoi(val));
@@ -201,31 +201,31 @@ namespace rxtech::replay
             }
             else
             {
-                std::fprintf(stderr, "Unknown option: %s\n", arg);
+                std::fprintf(stderr, "未知参数: %s\n", arg);
                 return false;
             }
         }
 
         if (out_cfg.data_dirs.empty())
         {
-            std::fprintf(stderr, "Error: at least one --data-dir is required\n");
+            std::fprintf(stderr, "错误: 至少需要提供一个 --data-dir\n");
             return false;
         }
         if (out_cfg.interface.empty())
         {
-            std::fprintf(stderr, "Error: --iface is required\n");
+            std::fprintf(stderr, "错误: 必须提供 --iface\n");
             return false;
         }
 
         std::array<std::uint8_t, 6> parsed_mac{};
         if (!out_cfg.src_mac.empty() && !parse_mac_address(out_cfg.src_mac, parsed_mac))
         {
-            std::fprintf(stderr, "Error: invalid --src-mac format: %s\n", out_cfg.src_mac.c_str());
+            std::fprintf(stderr, "错误: --src-mac 格式无效: %s\n", out_cfg.src_mac.c_str());
             return false;
         }
         if (!out_cfg.dst_mac.empty() && !parse_mac_address(out_cfg.dst_mac, parsed_mac))
         {
-            std::fprintf(stderr, "Error: invalid --dst-mac format: %s\n", out_cfg.dst_mac.c_str());
+            std::fprintf(stderr, "错误: --dst-mac 格式无效: %s\n", out_cfg.dst_mac.c_str());
             return false;
         }
         return true;

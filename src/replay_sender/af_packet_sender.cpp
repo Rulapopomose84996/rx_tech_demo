@@ -27,7 +27,7 @@ namespace rxtech::replay
         fd_ = ::socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
         if (fd_ < 0)
             throw std::runtime_error(
-                std::string("AF_PACKET socket: ") + std::strerror(errno));
+                std::string("创建 AF_PACKET socket 失败: ") + std::strerror(errno));
 
         // Get interface index
         struct ifreq ifr{};
@@ -36,7 +36,7 @@ namespace rxtech::replay
         {
             ::close(fd_);
             throw std::runtime_error(
-                std::string("SIOCGIFINDEX for '") + interface + "': " + std::strerror(errno));
+                std::string("获取网卡索引失败（接口：") + interface + "）: " + std::strerror(errno));
         }
         if_index_ = ifr.ifr_ifindex;
     }
@@ -74,7 +74,7 @@ namespace rxtech::replay
 
     AfPacketSender::AfPacketSender(const std::string &)
     {
-        throw std::runtime_error("AfPacketSender: AF_PACKET is Linux-only");
+        throw std::runtime_error("AfPacketSender 仅支持 Linux 平台（AF_PACKET）");
     }
 
     AfPacketSender::~AfPacketSender() = default;

@@ -94,7 +94,7 @@ namespace rxtech::replay
         {
             std::ifstream f(manifest_path);
             if (!f.is_open())
-                throw std::runtime_error("Cannot open replay manifest: " + manifest_path);
+                throw std::runtime_error("无法打开回放清单文件: " + manifest_path);
             nlohmann::json j;
             f >> j;
 
@@ -130,7 +130,7 @@ namespace rxtech::replay
         {
             std::ifstream mf(metadata_path);
             if (!mf.is_open())
-                throw std::runtime_error("Cannot open metadata: " + metadata_path);
+                throw std::runtime_error("无法打开元数据文件: " + metadata_path);
             nlohmann::json meta;
             mf >> meta;
 
@@ -156,7 +156,7 @@ namespace rxtech::replay
             // Parse CSV: sequence,cpi,prt,channel,channel_name,packet_index,iq_count,tail_hex
             std::ifstream csv(csv_file);
             if (!csv.is_open())
-                throw std::runtime_error("Cannot open packet manifest: " + csv_file);
+                throw std::runtime_error("无法打开数据包清单文件: " + csv_file);
 
             std::string line;
             std::getline(csv, line); // skip header
@@ -209,7 +209,7 @@ namespace rxtech::replay
             return load_from_metadata(metas.front(), data_dir);
         }
 
-        throw std::runtime_error("No replay manifest or metadata found in: " + data_dir);
+        throw std::runtime_error("未找到回放清单或元数据文件: " + data_dir);
     }
 
     std::vector<ReplayEntry> load_replay_entries(const std::vector<std::string> &data_dirs)

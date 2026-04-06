@@ -375,7 +375,7 @@ namespace rxtech
         std::ifstream input(path);
         if (!input.is_open())
         {
-            throw std::runtime_error("failed to open config file: " + path);
+            throw std::runtime_error("打开配置文件失败: " + path);
         }
 
         std::string line;

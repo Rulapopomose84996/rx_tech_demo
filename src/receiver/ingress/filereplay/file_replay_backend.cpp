@@ -107,7 +107,7 @@ namespace rxtech
             const auto entries = replay::load_replay_entries(impl_->opts.data_dirs);
             if (entries.empty())
             {
-                result.reason = "No replay entries found";
+                result.reason = "未找到可回放的数据条目";
                 return result;
             }
 
@@ -119,12 +119,12 @@ namespace rxtech
                 // Read payload from bin file
                 std::ifstream f(entry.bin_file, std::ios::binary);
                 if (!f.is_open())
-                    throw std::runtime_error("Cannot open bin file: " + entry.bin_file);
+                    throw std::runtime_error("无法打开二进制文件: " + entry.bin_file);
                 f.seekg(static_cast<std::streamoff>(entry.offset));
                 std::vector<std::uint8_t> payload(entry.length);
                 f.read(reinterpret_cast<char *>(payload.data()), entry.length);
                 if (!f)
-                    throw std::runtime_error("Short read from: " + entry.bin_file);
+                    throw std::runtime_error("读取数据长度不足: " + entry.bin_file);
 
                 // Build Ethernet frame
                 auto frame = replay::build_eth_frame(payload.data(),
