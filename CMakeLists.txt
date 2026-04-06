@@ -14,7 +14,7 @@ include(cmake/dependencies.cmake)
 
 add_subdirectory(src/receiver)
 
-if(UNIX AND NOT CMAKE_CROSSCOMPILING)
+if(BUILD_REPLAY AND UNIX AND NOT CMAKE_CROSSCOMPILING)
     add_subdirectory(src/replay_sender)
 endif()
 
