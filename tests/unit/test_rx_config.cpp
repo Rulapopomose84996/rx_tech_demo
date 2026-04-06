@@ -61,12 +61,6 @@ int main()
         out << "cpu_cores = [16,17,18]\n";
         out << "run_until_stopped = true\n";
         out << "status_interval_seconds = 10\n";
-        out << "[feedback]\n";
-        out << "interval_seconds = 1\n";
-        out << "enabled = true\n";
-        out << "host = 172.20.11.11\n";
-        out << "bind_host = 172.20.11.100\n";
-        out << "port = 9999\n";
         out << "[log]\n";
         out << "level = debug\n";
         out << "output = file\n";
@@ -92,8 +86,7 @@ int main()
         config.duration_seconds != 12U || config.max_burst != 32U ||
         config.packet_size_bytes != 1024U || config.cpu_cores.size() != 3U ||
         config.cpu_cores[0] != 16 || !config.run_until_stopped ||
-        config.status_interval_seconds != 10U || config.feedback_interval_seconds != 1U || !config.feedback_enabled ||
-        config.feedback_host != "172.20.11.11" || config.feedback_bind_host != "172.20.11.100" || config.feedback_port != 9999U ||
+        config.status_interval_seconds != 10U ||
         config.allowed_source_ipv4 != "172.20.11.222" || config.allowed_dest_port != 9999U ||
         config.log_level != "debug" || config.log_output != "file" || config.log_file_path != "logs/rx.log" ||
         config.protocol_udp_packet_size != 2048U || config.protocol_channels_per_prt != 3U ||

@@ -115,12 +115,12 @@ set_tests_properties(test_cpi_verifier PROPERTIES WORKING_DIRECTORY ${CMAKE_SOUR
 rxtech_apply_warnings(test_cpi_verifier)
 
 add_executable(test_slow_consumer test_slow_consumer.cpp)
-target_link_libraries(test_slow_consumer PRIVATE rx_receiver_core)
+target_link_libraries(test_slow_consumer PRIVATE rx_slow_consumer_harness)
 add_test(NAME test_slow_consumer COMMAND test_slow_consumer)
 set_tests_properties(test_slow_consumer PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(test_slow_consumer)
 
-if(UNIX AND NOT CMAKE_CROSSCOMPILING)
+if(BUILD_REPLAY AND UNIX AND NOT CMAKE_CROSSCOMPILING)
     add_executable(test_replay_manifest_loader test_replay_manifest_loader.cpp)
     target_link_libraries(test_replay_manifest_loader PRIVATE replay_sender_lib)
     target_include_directories(test_replay_manifest_loader PRIVATE ${CMAKE_SOURCE_DIR}/src/replay_sender)

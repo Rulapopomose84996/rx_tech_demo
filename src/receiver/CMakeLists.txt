@@ -4,9 +4,7 @@ add_library(rx_receiver_core
     core/owner_loop.cpp
     core/owner_loop_summary.cpp
     finalize/cpi_finalizer.cpp
-    output/capture_sink.cpp
     output/cpi_consumer.cpp
-    output/slow_consumer.cpp
     protocol/data_order_tracker.cpp
     protocol/packet_pipeline.cpp
     protocol/protocol_sequence_interpreter.cpp
@@ -37,7 +35,6 @@ target_include_directories(rx_receiver_core
     ${CMAKE_CURRENT_SOURCE_DIR}/runtime
     ${CMAKE_CURRENT_SOURCE_DIR}/output
     ${CMAKE_CURRENT_SOURCE_DIR}/core/internal
-    ${CMAKE_CURRENT_SOURCE_DIR}/output/internal
     ${CMAKE_CURRENT_SOURCE_DIR}/sidecar/internal
     ${CMAKE_CURRENT_SOURCE_DIR}/verify
 )
@@ -97,6 +94,7 @@ target_include_directories(rx_receiver_app
     ${CMAKE_CURRENT_SOURCE_DIR}/app
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/ingress/dpdk/internal
+    ${CMAKE_CURRENT_SOURCE_DIR}/runtime/internal
 )
 
 target_link_libraries(rx_receiver_app
@@ -105,18 +103,23 @@ target_link_libraries(rx_receiver_app
     rx_receiver_dpdk_ingress
 )
 
-target_compile_definitions(rx_receiver_app PUBLIC RXTECH_HAS_DPDK_BACKEND=1)
 rxtech_apply_warnings(rx_receiver_app)
 
 add_executable(rx_receiver_dpdk app/main_dpdk.cpp)
 target_link_libraries(rx_receiver_dpdk PRIVATE rx_receiver_app)
 rxtech_apply_warnings(rx_receiver_dpdk)
 
-add_executable(rxbench_dpdk app/main_dpdk.cpp)
-target_link_libraries(rxbench_dpdk PRIVATE rx_receiver_app)
-rxtech_apply_warnings(rxbench_dpdk)
+add_library(rx_slow_consumer_harness
+    output/slow_consumer.cpp
+)
 
-if(UNIX AND NOT CMAKE_CROSSCOMPILING)
+target_link_libraries(rx_slow_consumer_harness
+    PUBLIC rx_receiver_core
+)
+
+rxtech_apply_warnings(rx_slow_consumer_harness)
+
+if(BUILD_REPLAY AND UNIX AND NOT CMAKE_CROSSCOMPILING)
     add_library(rx_receiver_filereplay
         ingress/filereplay/file_replay_backend.cpp
     )

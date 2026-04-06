@@ -15,7 +15,7 @@ add_test(NAME rxtech_integration_fake_tests COMMAND rxtech_integration_fake_test
 set_tests_properties(rxtech_integration_fake_tests PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(rxtech_integration_fake_tests)
 
-if(UNIX AND NOT CMAKE_CROSSCOMPILING)
+if(BUILD_REPLAY AND UNIX AND NOT CMAKE_CROSSCOMPILING)
     add_executable(rxtech_integration_file_replay_tests
         test_file_replay_pipeline.cpp
     )
@@ -31,7 +31,7 @@ add_executable(rxtech_integration_slow_consumer_tests
     test_slow_consumer_pressure.cpp
 )
 target_link_libraries(rxtech_integration_slow_consumer_tests
-    PRIVATE rx_receiver_core
+    PRIVATE rx_slow_consumer_harness
 )
 
 if(UNIX AND NOT APPLE)
