@@ -6,7 +6,6 @@
 
 #include "internal/cpi_state_coordinator.h"
 #include "internal/owner_loop_runtime_state.h"
-#include "capture_sink.h"
 #include "data_order_tracker.h"
 #include "packet_pipeline.h"
 #include "rxtech/cpi_consumer.h"
@@ -30,7 +29,8 @@ namespace rxtech
         PacketPipeline packet_pipeline(context.config, spec);
         CpiStateCoordinator cpi_state_coordinator(spec);
         DataOrderTracker data_order_tracker(spec);
-        CaptureSink capture_sink(artifacts);
+
+        *artifacts.index_stream << "cpi,channel,prt,packet_index,packet_kind,payload_len,valid\n";
 
         // CPI output pipeline: owner → output_ring → consumer → recycle_ring → owner
         constexpr std::size_t kOutputRingCapacity = 8U;
@@ -98,7 +98,23 @@ namespace rxtech
                         }
 
                         runtime_state.record_captured_packet(processed.interpreted);
-                        capture_sink.write(processed);
+                        artifacts.packet_stream->write(
+                            reinterpret_cast<const char *>(processed.udp_frame.udp_payload.data()),
+                            static_cast<std::streamsize>(processed.udp_frame.udp_payload.size()));
+                        *artifacts.index_stream
+                            << processed.interpreted.cpi
+                            << ',' << processed.interpreted.channel
+                            << ',' << processed.interpreted.prt
+                            << ',' << processed.interpreted.packet_index
+                            << ',' << packet_kind_name(processed.interpreted.kind)
+                            << ',' << processed.udp_frame.udp_payload.size()
+                            << ',' << (processed.interpreted.valid ? "true" : "false")
+                            << '\n';
+                        artifacts.file_offset += processed.udp_frame.udp_payload.size();
+                        artifacts.recorded_bytes += processed.udp_frame.udp_payload.size();
+                        ++artifacts.recorded_packets;
+                        artifacts.captured_bytes += processed.udp_frame.udp_payload.size();
+                        ++artifacts.captured_packets;
                     });
 
                 burst_bytes += process_stats.accepted_bytes;
@@ -125,7 +141,8 @@ namespace rxtech
                                           std::chrono::steady_clock::now());
         }
 
-        capture_sink.flush();
+        artifacts.packet_stream->flush();
+        artifacts.index_stream->flush();
 
         // Shutdown contract:
         // 1. recv loop stopped (above)

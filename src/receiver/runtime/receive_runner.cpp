@@ -14,6 +14,7 @@
 
 #include "rxtech/owner_loop.h"
 #include "rxtech/raw_frame_recorder.h"
+#include "internal/path_utils.h"
 
 namespace rxtech
 {
@@ -158,76 +159,6 @@ namespace rxtech
             return join_path(join_path(parent, run_label), filename);
         }
 
-        void create_directory_if_needed(const std::string &path)
-        {
-            if (path.empty())
-            {
-                return;
-            }
-
-            const int result = mkdir(path.c_str(), 0755);
-            if (result != 0 && errno != EEXIST)
-            {
-                throw std::runtime_error("failed to create directory: " + path);
-            }
-        }
-
-        void ensure_parent_directory(const std::string &file_path)
-        {
-            std::string normalized = file_path;
-            std::replace(normalized.begin(), normalized.end(), '\\', '/');
-            const std::size_t separator_pos = normalized.find_last_of('/');
-            if (separator_pos == std::string::npos)
-            {
-                return;
-            }
-
-            const std::string parent = normalized.substr(0U, separator_pos);
-            if (parent.empty())
-            {
-                return;
-            }
-
-            std::size_t start = 0;
-            if (parent.size() >= 2U && parent[1] == ':')
-            {
-                start = 2U;
-            }
-            else if (is_path_separator(parent[0]))
-            {
-                start = 1U;
-            }
-
-            std::string current = parent.substr(0U, start);
-            while (start < parent.size())
-            {
-                while (start < parent.size() && is_path_separator(parent[start]))
-                {
-                    if (current.empty())
-                    {
-                        current.push_back('/');
-                    }
-                    ++start;
-                }
-                const std::size_t next = parent.find('/', start);
-                const std::string part = parent.substr(start, next == std::string::npos ? std::string::npos : next - start);
-                if (!part.empty())
-                {
-                    if (!current.empty() && !is_path_separator(current.back()) && current.back() != ':')
-                    {
-                        current.push_back('/');
-                    }
-                    current += part;
-                    create_directory_if_needed(current);
-                }
-                if (next == std::string::npos)
-                {
-                    break;
-                }
-                start = next + 1U;
-            }
-        }
-
         RunSummary make_unavailable_summary(const ReceiveContext &context,
                                             const BackendInitResult &init_result)
         {
@@ -324,8 +255,8 @@ namespace rxtech
             std::ostringstream capture_index_sink;
             if (capture_enabled)
             {
-                ensure_parent_directory(capture_packets_path);
-                ensure_parent_directory(capture_index_path);
+                path_utils::ensure_parent_directory(capture_packets_path);
+                path_utils::ensure_parent_directory(capture_index_path);
 
                 capture_packets_stream.open(capture_packets_path, std::ios::binary | std::ios::trunc);
                 capture_index_stream.open(capture_index_path, std::ios::trunc);
