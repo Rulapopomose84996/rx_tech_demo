@@ -14,6 +14,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <ostream>
 #include <thread>
 
 #include "internal/cpi_state_coordinator.h"
