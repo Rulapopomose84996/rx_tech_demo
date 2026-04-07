@@ -13,10 +13,9 @@
 #include "rxtech/receive_context.h"
 #include "rxtech/receive_runner.h"
 #include "rxtech/rx_config.h"
+#include "path_utils.h"
 
-#if defined(RXTECH_HAS_DPDK_BACKEND)
 #include "dpdk_backend.h"
-#endif
 
 namespace rxtech
 {
@@ -24,63 +23,23 @@ namespace rxtech
     namespace
     {
 
-        class UnavailableBackend final : public IRxBackend
-        {
-        public:
-            UnavailableBackend(std::string backend_name, std::string reason)
-                : backend_name_(std::move(backend_name)), reason_(std::move(reason))
-            {
-            }
-
-            std::string name() const override
-            {
-                return backend_name_;
-            }
-
-            BackendInitResult init(const RxConfig &) override
-            {
-                BackendInitResult result;
-                result.available = false;
-                result.reason = reason_;
-                return result;
-            }
-
-            bool recv_burst(RxBurst &, std::uint32_t) override
-            {
-                return false;
-            }
-
-            void release_burst(RxBurst &burst) override
-            {
-                burst.packets.clear();
-            }
-
-            BackendStats stats() const override
-            {
-                return {};
-            }
-
-            void shutdown() override
-            {
-            }
-
-        private:
-            std::string backend_name_;
-            std::string reason_;
-        };
-
+        /**
+         * 创建后端实例
+         * 
+         * 根据指定的后端名称创建对应的后端对象。当前仅支持 dpdk 后端类型。
+         * 
+         * @param backend_name 后端类型名称，如 "dpdk"
+         * @return BackendPtr 指向创建的后端对象的智能指针
+         * @throws std::runtime_error 当传入的后端类型不支持时抛出异常
+         */
         BackendPtr make_backend(const std::string &backend_name)
         {
             if (backend_name == "dpdk")
             {
-#if defined(RXTECH_HAS_DPDK_BACKEND)
                 return std::make_unique<DpdkIngress>();
-#else
-                return std::make_unique<UnavailableBackend>("dpdk", "DPDK backend is disabled at build time");
-#endif
             }
 
-            throw std::runtime_error("unknown backend: " + backend_name + " (only dpdk is supported)");
+            throw std::runtime_error("未知的后端类型: " + backend_name + "（当前仅支持 dpdk）");
         }
 
         void print_usage(std::ostream &out, const char *program_name)
@@ -97,85 +56,6 @@ namespace rxtech
         std::string effective_capture_output_dir(const RxConfig &config)
         {
             return config.capture_output_dir.empty() ? config.output_dir : config.capture_output_dir;
-        }
-
-        bool is_path_separator(char ch)
-        {
-            return ch == '/' || ch == '\\';
-        }
-
-        void create_directory_if_needed(const std::string &path)
-        {
-            if (path.empty())
-            {
-                return;
-            }
-
-#if defined(_WIN32)
-            const int result = _mkdir(path.c_str());
-#else
-            const int result = mkdir(path.c_str(), 0755);
-#endif
-            if (result != 0 && errno != EEXIST)
-            {
-                throw std::runtime_error("failed to create directory: " + path);
-            }
-        }
-
-        void ensure_parent_directory(const std::string &file_path)
-        {
-            std::string normalized = file_path;
-            std::replace(normalized.begin(), normalized.end(), '\\', '/');
-            const std::size_t separator_pos = normalized.find_last_of('/');
-            if (separator_pos == std::string::npos)
-            {
-                return;
-            }
-
-            const std::string parent = normalized.substr(0U, separator_pos);
-            if (parent.empty())
-            {
-                return;
-            }
-
-            std::size_t start = 0;
-            if (parent.size() >= 2U && parent[1] == ':')
-            {
-                start = 2U;
-            }
-            else if (is_path_separator(parent[0]))
-            {
-                start = 1U;
-            }
-
-            std::string current = parent.substr(0U, start);
-            while (start < parent.size())
-            {
-                while (start < parent.size() && is_path_separator(parent[start]))
-                {
-                    if (current.empty())
-                    {
-                        current.push_back('/');
-                    }
-                    ++start;
-                }
-                const std::size_t next = parent.find('/', start);
-                const std::string part = parent.substr(start, next == std::string::npos ? std::string::npos : next - start);
-                if (!part.empty())
-                {
-                    if (!current.empty() && !is_path_separator(current.back()) && current.back() != ':')
-                    {
-                        current.push_back('/');
-                    }
-                    current += part;
-                    create_directory_if_needed(current);
-                }
-                if (next == std::string::npos)
-                {
-                    break;
-                }
-                start = next + 1U;
-            }
         }
 
         RxConfig build_effective_config(const std::string &backend_name, const CliArgs &args)
@@ -207,71 +87,79 @@ namespace rxtech
             {
                 if (effective_capture_output_dir(config).empty())
                 {
-                    return "capture_output_dir must not be empty when capture is enabled";
+                    return "启用数据捕获时，capture_output_dir 不能为空";
                 }
                 if (config.capture_index_filename.empty())
                 {
-                    return "capture_index_filename must not be empty when capture is enabled";
+                    return "启用数据捕获时，capture_index_filename 不能为空";
                 }
                 if (config.capture_data_filename.empty())
                 {
-                    return "capture_data_filename must not be empty when capture is enabled";
+                    return "启用数据捕获时，capture_data_filename 不能为空";
                 }
             }
             if (config.raw_record_enabled)
             {
                 if (config.raw_record_output_dir.empty())
                 {
-                    return "raw_record_output_dir must not be empty when raw recording is enabled";
+                    return "启用原始记录时，raw_record_output_dir 不能为空";
                 }
                 if (config.raw_record_file_prefix.empty())
                 {
-                    return "raw_record_file_prefix must not be empty when raw recording is enabled";
+                    return "启用原始记录时，raw_record_file_prefix 不能为空";
                 }
                 if (config.raw_record_ring_slots == 0U)
                 {
-                    return "raw_record_ring_slots must be greater than 0";
+                    return "raw_record_ring_slots 必须大于 0";
                 }
                 if (config.raw_record_writer_batch_size == 0U)
                 {
-                    return "raw_record_writer_batch_size must be greater than 0";
+                    return "raw_record_writer_batch_size 必须大于 0";
                 }
                 if (config.raw_record_max_frame_bytes == 0U)
                 {
-                    return "raw_record_max_frame_bytes must be greater than 0";
+                    return "raw_record_max_frame_bytes 必须大于 0";
                 }
                 if (config.raw_record_segment_bytes == 0U)
                 {
-                    return "raw_record_segment_bytes must be greater than 0";
+                    return "raw_record_segment_bytes 必须大于 0";
                 }
                 if (config.raw_record_max_total_bytes == 0U)
                 {
-                    return "raw_record_max_total_bytes must be greater than 0";
+                    return "raw_record_max_total_bytes 必须大于 0";
                 }
                 if (config.raw_record_segment_bytes > config.raw_record_max_total_bytes)
                 {
-                    return "raw_record_segment_bytes must be less than or equal to raw_record_max_total_bytes";
+                    return "raw_record_segment_bytes 必须小于或等于 raw_record_max_total_bytes";
                 }
             }
             if (config.log_output == "file" && config.log_file_path.empty())
             {
-                return "log_file_path must not be empty when log_output=file";
+                return "当日志输出模式为 file 时，log_file_path 不能为空";
             }
             if (config.protocol_udp_packet_size == 0U)
             {
-                return "protocol_udp_packet_size must be greater than 0";
+                return "protocol_udp_packet_size 必须大于 0";
             }
             if (config.protocol_channels_per_prt == 0U)
             {
-                return "protocol_channels_per_prt must be greater than 0";
+                return "protocol_channels_per_prt 必须大于 0";
             }
             if (config.protocol_packets_per_channel == 0U)
             {
-                return "protocol_packets_per_channel must be greater than 0";
+                return "protocol_packets_per_channel 必须大于 0";
             }
             return {};
         }
 
+        /**
+         * @brief 以 dry-run 模式打印配置信息
+         * 
+         * 该函数用于在 dry-run 模式下输出所有生效的配置参数，便于用户验证配置是否正确解析。
+         * 输出内容包括后端类型、捕获配置、原始记录配置、网络配置、协议配置和日志配置等。
+         * 
+         * @param config RxConfig 配置对象，包含所有需要打印的配置项
+         */
         void print_dry_run(const RxConfig &config)
         {
             std::cout << "[dry-run]" << std::endl;
@@ -305,21 +193,31 @@ namespace rxtech
             std::cout << "log_level=" << config.log_level << std::endl;
             std::cout << "log_output=" << config.log_output << std::endl;
             std::cout << "log_file_path=" << config.log_file_path << std::endl;
-            std::cout << "feedback_enabled=" << (config.feedback_enabled ? "true" : "false") << std::endl;
-            std::cout << "feedback_host=" << config.feedback_host << std::endl;
-            std::cout << "feedback_bind_host=" << config.feedback_bind_host << std::endl;
-            std::cout << "feedback_port=" << config.feedback_port << std::endl;
         }
 
     } // namespace
 
+    /**
+     * 运行接收器应用程序的主入口函数
+     * 
+     * 该函数负责解析命令行参数、验证配置、初始化后端和指标收集器，
+     * 并执行数据接收任务。支持干运行模式、日志输出到文件或控制台，
+     * 以及持续运行直到手动停止的模式。
+     * 
+     * @param backend_name 后端名称，用于创建相应的接收器后端实例
+     * @param argc 命令行参数数量
+     * @param argv 命令行参数数组
+     * @return int 程序退出码：0表示成功，1表示一般错误，2表示资源不可用
+     */
     int run_app(const std::string &backend_name, int argc, char **argv)
     {
         try
         {
+            // 解析命令行参数并进行初步验证
             const CliArgs args = parse_cli_args(argc, argv);
             const char *program_name = argc > 0 ? argv[0] : "rx_receiver_dpdk";
 
+            // 处理参数无效的情况
             if (!args.valid)
             {
                 if (!args.error_message.empty())
@@ -330,49 +228,56 @@ namespace rxtech
                 return 1;
             }
 
+            // 处理帮助请求
             if (args.help)
             {
                 print_usage(std::cout, program_name);
                 return 0;
             }
 
+            // 验证必需的配置参数
             if (args.config_path.empty() && !args.dry_run)
             {
-                std::cerr << "missing required argument: --config" << std::endl;
+                std::cerr << "缺少必需参数: --config" << std::endl;
                 print_usage(std::cerr, program_name);
                 return 1;
             }
 
+            // 构建接收上下文并生成有效配置
             ReceiveContext context;
             context.config = build_effective_config(backend_name, args);
             prepare_run_artifact_paths(context.config);
 
+            // 验证配置的合法性
             const std::string validation_error = validate_config(context.config);
             if (!validation_error.empty())
             {
-                std::cerr << "invalid config: " << validation_error << std::endl;
+                std::cerr << "配置无效: " << validation_error << std::endl;
                 return 1;
             }
 
+            // 处理干运行模式：仅打印配置信息而不实际执行
             if (args.dry_run)
             {
                 print_dry_run(context.config);
                 return 0;
             }
 
+            // 初始化后端实例和指标收集器
             context.backend = make_backend(backend_name);
             context.metrics = std::make_unique<MetricsCollector>();
 
+            // 配置日志输出目标
             ReceiveRunner runner;
             std::ofstream log_stream;
             std::ostream *status_output = nullptr;
             if (context.config.log_output == "file" && !context.config.log_file_path.empty())
             {
-                ensure_parent_directory(context.config.log_file_path);
+                path_utils::ensure_parent_directory(context.config.log_file_path);
                 log_stream.open(context.config.log_file_path, std::ios::out | std::ios::trunc);
                 if (!log_stream.is_open())
                 {
-                    throw std::runtime_error("failed to open log file: " + context.config.log_file_path);
+                    throw std::runtime_error("无法打开日志文件: " + context.config.log_file_path);
                 }
                 status_output = &log_stream;
             }
@@ -384,6 +289,8 @@ namespace rxtech
             {
                 runner.set_status_output(status_output);
             }
+
+            // 执行接收任务并获取运行摘要
             const RunSummary summary = runner.run(context);
             if (!summary.human_summary.empty())
             {
@@ -392,7 +299,7 @@ namespace rxtech
                     log_stream << summary.human_summary;
                     log_stream.flush();
                     std::cout << summary.human_summary;
-                    std::cout << "日志文件： " << context.config.log_file_path << std::endl;
+                    std::cout << "日志文件: " << context.config.log_file_path << std::endl;
                 }
                 else
                 {
@@ -401,17 +308,19 @@ namespace rxtech
             }
             else
             {
-                std::cout << "运行结果： " << (summary.run_status == "success" ? "成功" : "失败") << std::endl;
+                std::cout << "运行结果: " << (summary.run_status == "success" ? "成功" : "失败") << std::endl;
             }
+
+            // 处理运行失败的情况
             if (summary.run_status != "success")
             {
-                std::cerr << "run failed: " << summary.error_message << std::endl;
+                std::cerr << "运行失败: " << summary.error_message << std::endl;
                 return summary.run_status == "unavailable" ? 2 : 1;
             }
         }
         catch (const std::exception &ex)
         {
-            std::cerr << "run failed: " << ex.what() << std::endl;
+            std::cerr << "运行失败: " << ex.what() << std::endl;
             return 1;
         }
 

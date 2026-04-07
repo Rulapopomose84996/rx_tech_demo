@@ -119,7 +119,7 @@ namespace rxtech
             };
             if (::stat(path.c_str(), &st) != 0)
             {
-                throw std::runtime_error("failed to stat file: " + path);
+                throw std::runtime_error("获取文件状态失败: " + path);
             }
             return static_cast<std::uint64_t>(st.st_size);
         }
@@ -156,7 +156,7 @@ namespace rxtech
                     current += part;
                     if (::mkdir(current.c_str(), 0755) != 0 && errno != EEXIST)
                     {
-                        throw std::runtime_error("failed to create directory: " + current);
+                        throw std::runtime_error("创建目录失败: " + current);
                     }
                 }
                 if (next == std::string::npos)
@@ -219,7 +219,7 @@ namespace rxtech
             }
             if (output_dir.empty())
             {
-                throw std::runtime_error("raw_record_output_dir must not be empty when raw recording is enabled");
+                throw std::runtime_error("启用原始帧录制时 raw_record_output_dir 不能为空");
             }
 
             create_directories_if_needed(output_dir);
@@ -422,7 +422,7 @@ namespace rxtech
             active_stream.write(reinterpret_cast<const char *>(buffer.bytes.data()), static_cast<std::streamsize>(buffer.length));
             if (!active_stream.good())
             {
-                throw std::runtime_error("raw frame recorder failed while writing segment: " + active_segment_path);
+                throw std::runtime_error("写入原始帧分段文件失败: " + active_segment_path);
             }
 
             {
@@ -452,7 +452,7 @@ namespace rxtech
             std::ofstream stream(segment_path, std::ios::binary | std::ios::trunc);
             if (!stream.is_open())
             {
-                throw std::runtime_error("failed to open raw record segment: " + segment_path);
+                throw std::runtime_error("打开原始帧分段文件失败: " + segment_path);
             }
 
             RawFrameFileHeader file_header;
@@ -461,7 +461,7 @@ namespace rxtech
             stream.write(reinterpret_cast<const char *>(&file_header), static_cast<std::streamsize>(sizeof(file_header)));
             if (!stream.good())
             {
-                throw std::runtime_error("failed to initialize raw record segment: " + segment_path);
+                throw std::runtime_error("初始化原始帧分段文件失败: " + segment_path);
             }
 
             active_stream = std::move(stream);

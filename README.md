@@ -113,7 +113,6 @@ docs/
 - `[runtime]`
 - `[protocol]`
 - `[log]`
-- `[feedback]`
 
 `[runtime]` 常用键包括：
 

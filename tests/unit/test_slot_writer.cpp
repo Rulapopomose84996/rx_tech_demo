@@ -29,7 +29,7 @@ int main()
     packet.kind = rxtech::PacketKind::data_packet;
     packet.cpi = 42U;
     packet.channel = 2U;
-    packet.prt = 0U;
+    packet.prt = 1U;
     packet.packet_index = 5U;
     packet.payload_ptr = payload.data();
     packet.payload_len = static_cast<std::uint32_t>(payload.size());
@@ -59,14 +59,14 @@ int main()
         {
             if (channel == 2U && packet_index == 5U)
             {
-                tracker.advance(context, 0U, channel, false);
+                tracker.advance(context, 1U, channel, false);
                 continue;
             }
             packet.channel = channel;
             packet.packet_index = packet_index;
             const rxtech::SlotWriteResult current = writer.write(context, packet);
             assert(current.first_write);
-            tracker.advance(context, 0U, channel, packet_index == spec.packets_per_channel);
+            tracker.advance(context, 1U, channel, packet_index == spec.packets_per_channel);
         }
     }
     assert(context.header.ready_prt_count == 1U);
@@ -89,7 +89,7 @@ int main()
         prt_ok_pkt.valid = true;
         prt_ok_pkt.kind = rxtech::PacketKind::data_packet;
         prt_ok_pkt.cpi = 99U;
-        prt_ok_pkt.prt = 3U; // within [0,3]
+        prt_ok_pkt.prt = 4U; // within [1,4]
         prt_ok_pkt.channel = 0U;
         prt_ok_pkt.packet_index = 1U;
         prt_ok_pkt.payload_ptr = payload.data();
@@ -98,7 +98,7 @@ int main()
         assert(prt_ok.first_write);
 
         rxtech::ParsedPacketView prt_bad_pkt = prt_ok_pkt;
-        prt_bad_pkt.prt = 4U; // out of range
+        prt_bad_pkt.prt = 5U; // out of range
         prt_bad_pkt.packet_index = 1U;
         const rxtech::SlotWriteResult prt_bad = writer.write(ctx2, prt_bad_pkt);
         assert(!prt_bad.first_write);
@@ -117,13 +117,13 @@ int main()
                                        static_cast<std::uint16_t>(spec.packets_per_channel));
         rxtech::ProgressTracker tracker3(spec);
 
-        // Tail on PRT 0 (not last) — should NOT set WaveEnd
-        tracker3.advance(ctx3, 0U, 0U, true);
+        // Tail on PRT 1 (not last) — should NOT set WaveEnd
+        tracker3.advance(ctx3, 1U, 0U, true);
         assert((ctx3.header.trigger_bits & rxtech::TriggerTailObserved) != 0U);
         assert((ctx3.header.trigger_bits & rxtech::TriggerWaveEnd) == 0U);
 
-        // Tail on PRT 1 (last expected) — should set WaveEnd
-        tracker3.advance(ctx3, 1U, 0U, true);
+        // Tail on PRT 2 (last expected) — should set WaveEnd
+        tracker3.advance(ctx3, 2U, 0U, true);
         assert((ctx3.header.trigger_bits & rxtech::TriggerWaveEnd) != 0U);
     }
 

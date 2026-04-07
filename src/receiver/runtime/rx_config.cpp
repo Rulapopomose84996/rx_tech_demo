@@ -4,10 +4,13 @@
 
 #include <cctype>
 #include <fstream>
+#include <functional>
 #include <string>
 #include <sstream>
 #include <stdexcept>
+#include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace rxtech
 {
@@ -95,386 +98,261 @@ namespace rxtech
             return section_assigned_keys.count(canonical_key) > 0U;
         }
 
+        using ConfigSetter = std::function<void(RxConfig &, const std::string &)>;
+        using ConfigDispatch = std::unordered_map<std::string, std::pair<std::string, ConfigSetter>>;
+
+        const ConfigDispatch &config_dispatch_map()
+        {
+            struct Row
+            {
+                const char *canonical;
+                std::vector<const char *> names;
+                ConfigSetter setter;
+            };
+
+            static const ConfigDispatch map = []()
+            {
+                const std::vector<Row> table = {
+                    {"backend_name",
+                     {"backend", "backend_name"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.backend_name = v; }},
+
+                    {"capture_output_dir",
+                     {"output", "output_dir", "capture_output_dir", "capture.output_dir"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.output_dir = v; c.capture_output_dir = v; }},
+
+                    {"capture_enabled",
+                     {"capture.enabled", "capture_enabled"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.capture_enabled = parse_bool(v); }},
+
+                    {"capture_index_filename",
+                     {"capture.index_filename", "capture_index_filename"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.capture_index_filename = v; }},
+
+                    {"capture_data_filename",
+                     {"capture.data_filename", "capture_data_filename"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.capture_data_filename = v; }},
+
+                    {"raw_record_enabled",
+                     {"raw_record.enabled", "raw_record_enabled"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.raw_record_enabled = parse_bool(v); }},
+
+                    {"raw_record_output_dir",
+                     {"raw_record.output_dir", "raw_record_output_dir"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.raw_record_output_dir = v; }},
+
+                    {"raw_record_file_prefix",
+                     {"raw_record.file_prefix", "raw_record_file_prefix"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.raw_record_file_prefix = v; }},
+
+                    {"raw_record_ring_slots",
+                     {"raw_record.ring_slots", "raw_record_ring_slots"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.raw_record_ring_slots = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"raw_record_writer_batch_size",
+                     {"raw_record.writer_batch_size", "raw_record_writer_batch_size"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.raw_record_writer_batch_size = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"raw_record_max_frame_bytes",
+                     {"raw_record.max_frame_bytes", "raw_record_max_frame_bytes"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.raw_record_max_frame_bytes = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"raw_record_segment_bytes",
+                     {"raw_record.segment_bytes", "raw_record_segment_bytes"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.raw_record_segment_bytes = static_cast<std::uint64_t>(std::stoull(v)); }},
+
+                    {"raw_record_max_total_bytes",
+                     {"raw_record.max_total_bytes", "raw_record_max_total_bytes"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.raw_record_max_total_bytes = static_cast<std::uint64_t>(std::stoull(v)); }},
+
+                    {"interface_name",
+                     {"interface", "interface_name", "network.interface_name"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.interface_name = v; }},
+
+                    {"receiver_ipv4",
+                     {"receiver_ipv4", "network.receiver_ipv4"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.receiver_ipv4 = v; }},
+
+                    {"allowed_source_ipv4",
+                     {"allowed_source_ipv4", "network.allowed_source_ipv4"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.allowed_source_ipv4 = v; }},
+
+                    {"queue_id",
+                     {"queue_id", "network.queue_id"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.queue_id = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"max_burst",
+                     {"max_burst", "runtime.max_burst"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.max_burst = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"duration_seconds",
+                     {"duration_seconds", "runtime.duration_seconds"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.duration_seconds = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"packet_size_bytes",
+                     {"packet_size_bytes"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.packet_size_bytes = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"status_interval_seconds",
+                     {"status_interval_seconds", "runtime.status_interval_seconds"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.status_interval_seconds = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"allowed_dest_port",
+                     {"allowed_dest_port", "network.allowed_dest_port"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.allowed_dest_port = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"cpu_cores",
+                     {"cpu_cores", "runtime.cpu_cores"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.cpu_cores = parse_int_list(v); }},
+
+                    {"run_until_stopped",
+                     {"run_until_stopped", "runtime.run_until_stopped"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.run_until_stopped = parse_bool(v); }},
+
+                    {"dpdk_port_id",
+                     {"dpdk_port_id", "dpdk.port_id"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.dpdk_port_id = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"dpdk_pci_addr",
+                     {"dpdk_pci_addr", "dpdk.pci_addr"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.dpdk_pci_addr = v; }},
+
+                    {"dpdk_socket_mem_mb",
+                     {"dpdk_socket_mem_mb", "dpdk.socket_mem_mb"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.dpdk_socket_mem_mb = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"dpdk_mempool_size",
+                     {"dpdk_mempool_size", "dpdk.mempool_size"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.dpdk_mempool_size = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"dpdk_mbuf_cache_size",
+                     {"dpdk_mbuf_cache_size", "dpdk.mbuf_cache_size"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.dpdk_mbuf_cache_size = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"dpdk_rx_desc",
+                     {"dpdk_rx_desc", "dpdk.rx_desc"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.dpdk_rx_desc = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"dpdk_tx_desc",
+                     {"dpdk_tx_desc", "dpdk.tx_desc"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.dpdk_tx_desc = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"log_level",
+                     {"log.level", "log_level"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.log_level = to_lower(v); }},
+
+                    {"log_output",
+                     {"log.output", "log_output"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.log_output = to_lower(v); }},
+
+                    {"log_file_path",
+                     {"log.file_path", "log_file_path"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.log_file_path = v; }},
+
+                    {"protocol_udp_packet_size",
+                     {"protocol.udp_packet_size", "protocol_udp_packet_size"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.protocol_udp_packet_size = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"protocol_channels_per_prt",
+                     {"protocol.channels_per_prt", "protocol_channels_per_prt"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.protocol_channels_per_prt = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"protocol_packets_per_channel",
+                     {"protocol.packets_per_channel", "protocol_packets_per_channel"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.protocol_packets_per_channel = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"protocol_expected_n_prt",
+                     {"protocol.expected_n_prt", "protocol_expected_n_prt"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.protocol_expected_n_prt = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"protocol_cpi_timeout_ns",
+                     {"protocol.cpi_timeout_ns", "protocol_cpi_timeout_ns"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.protocol_cpi_timeout_ns = std::stoull(v); }},
+
+                    {"protocol_dynamic_prt_enabled",
+                     {"protocol.dynamic_prt_enabled", "protocol_dynamic_prt_enabled"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.protocol_dynamic_prt_enabled = parse_bool(v); }},
+
+                    {"protocol_max_n_prt",
+                     {"protocol.max_n_prt", "protocol_max_n_prt"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.protocol_max_n_prt = static_cast<std::uint32_t>(std::stoul(v)); }},
+                };
+
+                ConfigDispatch m;
+                for (const auto &row : table)
+                {
+                    for (const char *name : row.names)
+                    {
+                        m.emplace(name, std::make_pair(std::string(row.canonical), row.setter));
+                    }
+                }
+                return m;
+            }();
+            return map;
+        }
+
         void assign_config_value(RxConfig &config,
                                  const std::string &key,
                                  const std::string &value,
                                  bool section_key,
                                  std::unordered_set<std::string> &section_assigned_keys)
         {
-            const std::string normalized_key = to_lower(trim(key));
-            const std::string normalized_value = strip_quotes(trim(value));
+            const std::string nk = to_lower(trim(key));
+            const std::string nv = strip_quotes(trim(value));
 
-            if (normalized_key == "backend" || normalized_key == "backend_name")
+            const ConfigDispatch &dispatch = config_dispatch_map();
+            const auto it = dispatch.find(nk);
+            if (it == dispatch.end())
             {
-                if (should_skip_assignment("backend_name", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.backend_name = normalized_value;
+                return;
             }
-            else if (normalized_key == "output" || normalized_key == "output_dir" ||
-                     normalized_key == "capture_output_dir" || normalized_key == "capture.output_dir")
+            const std::string &canonical = it->second.first;
+            if (should_skip_assignment(canonical, section_key, section_assigned_keys))
             {
-                if (should_skip_assignment("capture_output_dir", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.output_dir = normalized_value;
-                config.capture_output_dir = normalized_value;
+                return;
             }
-            else if (normalized_key == "capture.enabled" || normalized_key == "capture_enabled")
-            {
-                if (should_skip_assignment("capture_enabled", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.capture_enabled = parse_bool(normalized_value);
-            }
-            else if (normalized_key == "capture.index_filename" || normalized_key == "capture_index_filename")
-            {
-                if (should_skip_assignment("capture_index_filename", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.capture_index_filename = normalized_value;
-            }
-            else if (normalized_key == "capture.data_filename" || normalized_key == "capture_data_filename")
-            {
-                if (should_skip_assignment("capture_data_filename", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.capture_data_filename = normalized_value;
-            }
-            else if (normalized_key == "raw_record.enabled" || normalized_key == "raw_record_enabled")
-            {
-                if (should_skip_assignment("raw_record_enabled", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.raw_record_enabled = parse_bool(normalized_value);
-            }
-            else if (normalized_key == "raw_record.output_dir" || normalized_key == "raw_record_output_dir")
-            {
-                if (should_skip_assignment("raw_record_output_dir", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.raw_record_output_dir = normalized_value;
-            }
-            else if (normalized_key == "raw_record.file_prefix" || normalized_key == "raw_record_file_prefix")
-            {
-                if (should_skip_assignment("raw_record_file_prefix", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.raw_record_file_prefix = normalized_value;
-            }
-            else if (normalized_key == "raw_record.ring_slots" || normalized_key == "raw_record_ring_slots")
-            {
-                if (should_skip_assignment("raw_record_ring_slots", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.raw_record_ring_slots = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "raw_record.writer_batch_size" || normalized_key == "raw_record_writer_batch_size")
-            {
-                if (should_skip_assignment("raw_record_writer_batch_size", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.raw_record_writer_batch_size = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "raw_record.max_frame_bytes" || normalized_key == "raw_record_max_frame_bytes")
-            {
-                if (should_skip_assignment("raw_record_max_frame_bytes", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.raw_record_max_frame_bytes = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "raw_record.segment_bytes" || normalized_key == "raw_record_segment_bytes")
-            {
-                if (should_skip_assignment("raw_record_segment_bytes", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.raw_record_segment_bytes = static_cast<std::uint64_t>(std::stoull(normalized_value));
-            }
-            else if (normalized_key == "raw_record.max_total_bytes" || normalized_key == "raw_record_max_total_bytes")
-            {
-                if (should_skip_assignment("raw_record_max_total_bytes", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.raw_record_max_total_bytes = static_cast<std::uint64_t>(std::stoull(normalized_value));
-            }
-            else if (normalized_key == "interface" || normalized_key == "interface_name" ||
-                     normalized_key == "network.interface_name")
-            {
-                if (should_skip_assignment("interface_name", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.interface_name = normalized_value;
-            }
-            else if (normalized_key == "receiver_ipv4" || normalized_key == "network.receiver_ipv4")
-            {
-                if (should_skip_assignment("receiver_ipv4", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.receiver_ipv4 = normalized_value;
-            }
-            else if (normalized_key == "allowed_source_ipv4" || normalized_key == "network.allowed_source_ipv4")
-            {
-                if (should_skip_assignment("allowed_source_ipv4", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.allowed_source_ipv4 = normalized_value;
-            }
-            else if (normalized_key == "queue_id" || normalized_key == "network.queue_id")
-            {
-                if (should_skip_assignment("queue_id", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.queue_id = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "max_burst" || normalized_key == "runtime.max_burst")
-            {
-                if (should_skip_assignment("max_burst", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.max_burst = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "duration_seconds" || normalized_key == "runtime.duration_seconds")
-            {
-                if (should_skip_assignment("duration_seconds", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.duration_seconds = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "packet_size_bytes")
-            {
-                if (should_skip_assignment("packet_size_bytes", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.packet_size_bytes = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "status_interval_seconds" || normalized_key == "runtime.status_interval_seconds")
-            {
-                if (should_skip_assignment("status_interval_seconds", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.status_interval_seconds = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "feedback_interval_seconds" || normalized_key == "feedback.interval_seconds")
-            {
-                if (should_skip_assignment("feedback_interval_seconds", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.feedback_interval_seconds = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "feedback_port" || normalized_key == "feedback.port")
-            {
-                if (should_skip_assignment("feedback_port", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.feedback_port = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "allowed_dest_port" || normalized_key == "network.allowed_dest_port")
-            {
-                if (should_skip_assignment("allowed_dest_port", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.allowed_dest_port = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "feedback_host" || normalized_key == "feedback.host")
-            {
-                if (should_skip_assignment("feedback_host", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.feedback_host = normalized_value;
-            }
-            else if (normalized_key == "feedback_bind_host" || normalized_key == "feedback.bind_host")
-            {
-                if (should_skip_assignment("feedback_bind_host", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.feedback_bind_host = normalized_value;
-            }
-            else if (normalized_key == "feedback_enabled" || normalized_key == "feedback.enabled")
-            {
-                if (should_skip_assignment("feedback_enabled", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.feedback_enabled = parse_bool(normalized_value);
-            }
-            else if (normalized_key == "cpu_cores" || normalized_key == "runtime.cpu_cores")
-            {
-                if (should_skip_assignment("cpu_cores", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.cpu_cores = parse_int_list(normalized_value);
-            }
-            else if (normalized_key == "run_until_stopped" || normalized_key == "runtime.run_until_stopped")
-            {
-                if (should_skip_assignment("run_until_stopped", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.run_until_stopped = parse_bool(normalized_value);
-            }
-            else if (normalized_key == "dpdk_port_id" || normalized_key == "dpdk.port_id")
-            {
-                if (should_skip_assignment("dpdk_port_id", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.dpdk_port_id = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "dpdk_pci_addr" || normalized_key == "dpdk.pci_addr")
-            {
-                if (should_skip_assignment("dpdk_pci_addr", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.dpdk_pci_addr = normalized_value;
-            }
-            else if (normalized_key == "dpdk_socket_mem_mb" || normalized_key == "dpdk.socket_mem_mb")
-            {
-                if (should_skip_assignment("dpdk_socket_mem_mb", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.dpdk_socket_mem_mb = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "dpdk_mempool_size" || normalized_key == "dpdk.mempool_size")
-            {
-                if (should_skip_assignment("dpdk_mempool_size", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.dpdk_mempool_size = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "dpdk_mbuf_cache_size" || normalized_key == "dpdk.mbuf_cache_size")
-            {
-                if (should_skip_assignment("dpdk_mbuf_cache_size", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.dpdk_mbuf_cache_size = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "dpdk_rx_desc" || normalized_key == "dpdk.rx_desc")
-            {
-                if (should_skip_assignment("dpdk_rx_desc", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.dpdk_rx_desc = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "dpdk_tx_desc" || normalized_key == "dpdk.tx_desc")
-            {
-                if (should_skip_assignment("dpdk_tx_desc", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.dpdk_tx_desc = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "log.level" || normalized_key == "log_level")
-            {
-                if (should_skip_assignment("log_level", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.log_level = to_lower(normalized_value);
-            }
-            else if (normalized_key == "log.output" || normalized_key == "log_output")
-            {
-                if (should_skip_assignment("log_output", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.log_output = to_lower(normalized_value);
-            }
-            else if (normalized_key == "log.file_path" || normalized_key == "log_file_path")
-            {
-                if (should_skip_assignment("log_file_path", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.log_file_path = normalized_value;
-            }
-            else if (normalized_key == "protocol.udp_packet_size" || normalized_key == "protocol_udp_packet_size")
-            {
-                if (should_skip_assignment("protocol_udp_packet_size", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.protocol_udp_packet_size = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "protocol.channels_per_prt" || normalized_key == "protocol_channels_per_prt")
-            {
-                if (should_skip_assignment("protocol_channels_per_prt", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.protocol_channels_per_prt = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "protocol.packets_per_channel" || normalized_key == "protocol_packets_per_channel")
-            {
-                if (should_skip_assignment("protocol_packets_per_channel", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.protocol_packets_per_channel = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "protocol.expected_n_prt" || normalized_key == "protocol_expected_n_prt")
-            {
-                if (should_skip_assignment("protocol_expected_n_prt", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.protocol_expected_n_prt = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
-            else if (normalized_key == "protocol.cpi_timeout_ns" || normalized_key == "protocol_cpi_timeout_ns")
-            {
-                if (should_skip_assignment("protocol_cpi_timeout_ns", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.protocol_cpi_timeout_ns = std::stoull(normalized_value);
-            }
-            else if (normalized_key == "protocol.dynamic_prt_enabled" || normalized_key == "protocol_dynamic_prt_enabled")
-            {
-                if (should_skip_assignment("protocol_dynamic_prt_enabled", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.protocol_dynamic_prt_enabled = parse_bool(normalized_value);
-            }
-            else if (normalized_key == "protocol.max_n_prt" || normalized_key == "protocol_max_n_prt")
-            {
-                if (should_skip_assignment("protocol_max_n_prt", section_key, section_assigned_keys))
-                {
-                    return;
-                }
-                config.protocol_max_n_prt = static_cast<std::uint32_t>(std::stoul(normalized_value));
-            }
+            it->second.second(config, nv);
         }
 
     } // namespace
@@ -497,7 +375,7 @@ namespace rxtech
         std::ifstream input(path);
         if (!input.is_open())
         {
-            throw std::runtime_error("failed to open config file: " + path);
+            throw std::runtime_error("打开配置文件失败: " + path);
         }
 
         std::string line;
@@ -588,10 +466,6 @@ namespace rxtech
             base.allowed_source_ipv4 = overrides.allowed_source_ipv4;
         if (!overrides.dpdk_pci_addr.empty())
             base.dpdk_pci_addr = overrides.dpdk_pci_addr;
-        if (!overrides.feedback_host.empty())
-            base.feedback_host = overrides.feedback_host;
-        if (!overrides.feedback_bind_host.empty())
-            base.feedback_bind_host = overrides.feedback_bind_host;
         if (!overrides.log_level.empty())
             base.log_level = overrides.log_level;
         if (!overrides.log_output.empty())
@@ -611,14 +485,8 @@ namespace rxtech
             base.packet_size_bytes = overrides.packet_size_bytes;
         if (overrides.status_interval_seconds != defaults.status_interval_seconds)
             base.status_interval_seconds = overrides.status_interval_seconds;
-        if (overrides.feedback_interval_seconds != defaults.feedback_interval_seconds)
-            base.feedback_interval_seconds = overrides.feedback_interval_seconds;
-        if (overrides.feedback_port != defaults.feedback_port)
-            base.feedback_port = overrides.feedback_port;
         if (overrides.allowed_dest_port != defaults.allowed_dest_port)
             base.allowed_dest_port = overrides.allowed_dest_port;
-        if (overrides.feedback_enabled != defaults.feedback_enabled)
-            base.feedback_enabled = overrides.feedback_enabled;
         if (overrides.capture_enabled != defaults.capture_enabled)
             base.capture_enabled = overrides.capture_enabled;
         if (overrides.raw_record_enabled != defaults.raw_record_enabled)
