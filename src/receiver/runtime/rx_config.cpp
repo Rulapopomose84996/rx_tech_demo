@@ -193,6 +193,31 @@ namespace rxtech
                      [](RxConfig &c, const std::string &v)
                      { c.allowed_source_ipv4 = v; }},
 
+                    {"socket_bind_ip",
+                     {"socket_bind_ip", "network.socket_bind_ip", "socket.bind_ip"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.socket_bind_ip = v; }},
+
+                    {"socket_bind_port",
+                     {"socket_bind_port", "network.socket_bind_port", "socket.bind_port"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.socket_bind_port = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"socket_rcvbuf_bytes",
+                     {"socket_rcvbuf_bytes", "socket.rcvbuf_bytes"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.socket_rcvbuf_bytes = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"socket_nonblocking",
+                     {"socket_nonblocking", "socket.nonblocking"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.socket_nonblocking = parse_bool(v); }},
+
+                    {"socket_batch_timeout_ms",
+                     {"socket_batch_timeout_ms", "socket.batch_timeout_ms"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.socket_batch_timeout_ms = static_cast<std::uint32_t>(std::stoul(v)); }},
+
                     {"queue_id",
                      {"queue_id", "network.queue_id"},
                      [](RxConfig &c, const std::string &v)
@@ -464,6 +489,8 @@ namespace rxtech
             base.receiver_ipv4 = overrides.receiver_ipv4;
         if (!overrides.allowed_source_ipv4.empty())
             base.allowed_source_ipv4 = overrides.allowed_source_ipv4;
+        if (!overrides.socket_bind_ip.empty())
+            base.socket_bind_ip = overrides.socket_bind_ip;
         if (!overrides.dpdk_pci_addr.empty())
             base.dpdk_pci_addr = overrides.dpdk_pci_addr;
         if (!overrides.log_level.empty())
@@ -487,6 +514,14 @@ namespace rxtech
             base.status_interval_seconds = overrides.status_interval_seconds;
         if (overrides.allowed_dest_port != defaults.allowed_dest_port)
             base.allowed_dest_port = overrides.allowed_dest_port;
+        if (overrides.socket_bind_port != defaults.socket_bind_port)
+            base.socket_bind_port = overrides.socket_bind_port;
+        if (overrides.socket_rcvbuf_bytes != defaults.socket_rcvbuf_bytes)
+            base.socket_rcvbuf_bytes = overrides.socket_rcvbuf_bytes;
+        if (overrides.socket_nonblocking != defaults.socket_nonblocking)
+            base.socket_nonblocking = overrides.socket_nonblocking;
+        if (overrides.socket_batch_timeout_ms != defaults.socket_batch_timeout_ms)
+            base.socket_batch_timeout_ms = overrides.socket_batch_timeout_ms;
         if (overrides.capture_enabled != defaults.capture_enabled)
             base.capture_enabled = overrides.capture_enabled;
         if (overrides.raw_record_enabled != defaults.raw_record_enabled)
@@ -545,6 +580,21 @@ namespace rxtech
             base.run_until_stopped = overrides.run_until_stopped;
         if (!overrides.cpu_cores.empty())
             base.cpu_cores = overrides.cpu_cores;
+    }
+
+    std::string effective_socket_bind_ip(const RxConfig &config)
+    {
+        return config.socket_bind_ip.empty() ? config.receiver_ipv4 : config.socket_bind_ip;
+    }
+
+    std::uint16_t effective_socket_bind_port(const RxConfig &config)
+    {
+        const std::uint32_t port = config.socket_bind_port != 0U ? config.socket_bind_port : config.allowed_dest_port;
+        if (port == 0U || port > 65535U)
+        {
+            return 0U;
+        }
+        return static_cast<std::uint16_t>(port);
     }
 
     ProtocolSpec protocol_spec_from_config(const RxConfig &config)

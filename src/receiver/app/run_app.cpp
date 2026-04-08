@@ -16,6 +16,7 @@
 #include "path_utils.h"
 
 #include "dpdk_backend.h"
+#include "linux_socket_backend.h"
 
 namespace rxtech
 {
@@ -25,10 +26,10 @@ namespace rxtech
 
         /**
          * 创建后端实例
-         * 
-         * 根据指定的后端名称创建对应的后端对象。当前仅支持 dpdk 后端类型。
-         * 
-         * @param backend_name 后端类型名称，如 "dpdk"
+         *
+         * 根据指定的后端名称创建对应的后端对象。当前支持 dpdk 和 socket 两种后端类型。
+         *
+         * @param backend_name 后端类型名称，如 "dpdk" 或 "socket"
          * @return BackendPtr 指向创建的后端对象的智能指针
          * @throws std::runtime_error 当传入的后端类型不支持时抛出异常
          */
@@ -38,8 +39,12 @@ namespace rxtech
             {
                 return std::make_unique<DpdkIngress>();
             }
+            if (backend_name == "socket")
+            {
+                return std::make_unique<LinuxSocketIngress>();
+            }
 
-            throw std::runtime_error("未知的后端类型: " + backend_name + "（当前仅支持 dpdk）");
+            throw std::runtime_error("未知的后端类型: " + backend_name + "（当前支持 dpdk、socket）");
         }
 
         void print_usage(std::ostream &out, const char *program_name)
@@ -83,6 +88,44 @@ namespace rxtech
 
         std::string validate_config(const RxConfig &config)
         {
+            constexpr std::uint32_t kMaxUdpPort = 65535U;
+            if (config.allowed_dest_port > kMaxUdpPort)
+            {
+                return "allowed_dest_port 必须小于或等于 65535";
+            }
+            if (config.backend_name == "socket")
+            {
+                const std::uint32_t raw_socket_bind_port =
+                    config.socket_bind_port != 0U ? config.socket_bind_port : config.allowed_dest_port;
+                const std::string socket_bind_ip = effective_socket_bind_ip(config);
+                const std::uint16_t socket_bind_port = effective_socket_bind_port(config);
+                if (socket_bind_ip.empty())
+                {
+                    return "backend=socket 时，socket_bind_ip 或 receiver_ipv4 不能为空";
+                }
+                if (config.socket_bind_port > kMaxUdpPort)
+                {
+                    return "backend=socket 时，socket_bind_port 必须小于或等于 65535";
+                }
+                if (raw_socket_bind_port == 0U || socket_bind_port == 0U)
+                {
+                    return "backend=socket 时，socket_bind_port 或 allowed_dest_port 必须大于 0";
+                }
+                if (!config.socket_bind_ip.empty() && config.socket_bind_ip != "0.0.0.0" &&
+                    !config.receiver_ipv4.empty() && config.socket_bind_ip != config.receiver_ipv4)
+                {
+                    return "backend=socket 时，socket_bind_ip 与 receiver_ipv4 不能冲突；如需任意地址绑定请使用 0.0.0.0";
+                }
+                if (config.socket_bind_port != 0U && config.allowed_dest_port != 0U &&
+                    config.socket_bind_port != config.allowed_dest_port)
+                {
+                    return "backend=socket 时，socket_bind_port 与 allowed_dest_port 不能冲突";
+                }
+                if (config.socket_rcvbuf_bytes == 0U)
+                {
+                    return "backend=socket 时，socket_rcvbuf_bytes 必须大于 0";
+                }
+            }
             if (config.capture_enabled)
             {
                 if (effective_capture_output_dir(config).empty())
@@ -154,10 +197,10 @@ namespace rxtech
 
         /**
          * @brief 以 dry-run 模式打印配置信息
-         * 
+         *
          * 该函数用于在 dry-run 模式下输出所有生效的配置参数，便于用户验证配置是否正确解析。
          * 输出内容包括后端类型、捕获配置、原始记录配置、网络配置、协议配置和日志配置等。
-         * 
+         *
          * @param config RxConfig 配置对象，包含所有需要打印的配置项
          */
         void print_dry_run(const RxConfig &config)
@@ -181,6 +224,11 @@ namespace rxtech
             std::cout << "receiver_ipv4=" << config.receiver_ipv4 << std::endl;
             std::cout << "allowed_source_ipv4=" << config.allowed_source_ipv4 << std::endl;
             std::cout << "allowed_dest_port=" << config.allowed_dest_port << std::endl;
+            std::cout << "socket_bind_ip=" << effective_socket_bind_ip(config) << std::endl;
+            std::cout << "socket_bind_port=" << effective_socket_bind_port(config) << std::endl;
+            std::cout << "socket_rcvbuf_bytes=" << config.socket_rcvbuf_bytes << std::endl;
+            std::cout << "socket_nonblocking=" << (config.socket_nonblocking ? "true" : "false") << std::endl;
+            std::cout << "socket_batch_timeout_ms=" << config.socket_batch_timeout_ms << std::endl;
             std::cout << "queue_id=" << config.queue_id << std::endl;
             std::cout << "duration_seconds=" << config.duration_seconds << std::endl;
             std::cout << "max_burst=" << config.max_burst << std::endl;
@@ -199,11 +247,11 @@ namespace rxtech
 
     /**
      * 运行接收器应用程序的主入口函数
-     * 
+     *
      * 该函数负责解析命令行参数、验证配置、初始化后端和指标收集器，
      * 并执行数据接收任务。支持干运行模式、日志输出到文件或控制台，
      * 以及持续运行直到手动停止的模式。
-     * 
+     *
      * @param backend_name 后端名称，用于创建相应的接收器后端实例
      * @param argc 命令行参数数量
      * @param argv 命令行参数数组

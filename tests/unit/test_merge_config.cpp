@@ -20,6 +20,11 @@ int main()
     overrides.cpu_cores = {16, 17};
     overrides.allowed_source_ipv4 = "172.20.11.222";
     overrides.allowed_dest_port = 9999U;
+    overrides.socket_bind_ip = "0.0.0.0";
+    overrides.socket_bind_port = 10000U;
+    overrides.socket_rcvbuf_bytes = 8388608U;
+    overrides.socket_nonblocking = true;
+    overrides.socket_batch_timeout_ms = 25U;
     overrides.capture_enabled = false;
     overrides.log_level = "debug";
     overrides.log_output = "file";
@@ -40,6 +45,11 @@ int main()
     assert(base.cpu_cores[1] == 17);
     assert(base.allowed_source_ipv4 == "172.20.11.222");
     assert(base.allowed_dest_port == 9999U);
+    assert(base.socket_bind_ip == "0.0.0.0");
+    assert(base.socket_bind_port == 10000U);
+    assert(base.socket_rcvbuf_bytes == 8388608U);
+    assert(base.socket_nonblocking);
+    assert(base.socket_batch_timeout_ms == 25U);
     assert(!base.capture_enabled);
     assert(base.log_level == "debug");
     assert(base.log_output == "file");
