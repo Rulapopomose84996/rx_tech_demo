@@ -1,9 +1,135 @@
 #include "internal/cpi_state_coordinator.h"
 
+#include <algorithm>
+
 #include "rxtech/time_utils.h"
 
 namespace rxtech
 {
+
+    namespace
+    {
+
+        std::uint32_t max_supported_n_prt(const ProtocolSpec &spec)
+        {
+            return std::min(spec.max_n_prt, static_cast<std::uint32_t>(kCpiPrtMax));
+        }
+
+        ControlSnapshot make_snapshot_base(std::uint16_t cpi_id,
+                                           const ProtocolSpec &spec,
+                                           BindSource bind_source)
+        {
+            ControlSnapshot snapshot;
+            snapshot.cpi_id = cpi_id;
+            snapshot.channel_count = static_cast<std::uint16_t>(spec.channels_per_prt);
+            snapshot.packets_per_channel = static_cast<std::uint16_t>(spec.packets_per_channel);
+            snapshot.timeout_ns = spec.cpi_timeout_ns;
+            snapshot.bind_source = bind_source;
+            return snapshot;
+        }
+
+        ControlSnapshot make_fixed_snapshot(std::uint16_t cpi_id, const ProtocolSpec &spec)
+        {
+            ControlSnapshot snapshot = make_snapshot_base(cpi_id, spec, BindSource::fixed);
+            snapshot.n_prt = static_cast<std::uint16_t>(
+                std::min(spec.expected_n_prt, static_cast<std::uint32_t>(kCpiPrtMax)));
+            snapshot.valid = snapshot.n_prt > 0U;
+            return snapshot;
+        }
+
+        ControlSnapshot make_provisional_snapshot(std::uint16_t cpi_id, const ProtocolSpec &spec)
+        {
+            ControlSnapshot snapshot = make_snapshot_base(cpi_id, spec, BindSource::provisional);
+            snapshot.n_prt = static_cast<std::uint16_t>(max_supported_n_prt(spec));
+            snapshot.valid = snapshot.n_prt > 0U;
+            return snapshot;
+        }
+
+        ControlSnapshot make_control_snapshot(const ParsedPacketView &parsed, const ProtocolSpec &spec)
+        {
+            if (!spec.dynamic_prt_enabled)
+            {
+                return make_fixed_snapshot(parsed.cpi, spec);
+            }
+
+            ControlSnapshot snapshot = make_snapshot_base(parsed.cpi, spec, BindSource::control);
+            const auto parsed_n_prt = static_cast<std::uint32_t>(parsed.prt);
+            const auto max_n_prt = max_supported_n_prt(spec);
+            if (parsed_n_prt >= 1U && parsed_n_prt <= max_n_prt)
+            {
+                snapshot.n_prt = static_cast<std::uint16_t>(parsed_n_prt);
+                snapshot.valid = true;
+                return snapshot;
+            }
+
+            return make_fixed_snapshot(parsed.cpi, spec);
+        }
+
+        ControlSnapshot select_open_snapshot(std::uint16_t cpi_id,
+                                             const ProtocolSpec &spec,
+                                             const ControlSnapshot &staged_control)
+        {
+            if (!spec.dynamic_prt_enabled)
+            {
+                return make_fixed_snapshot(cpi_id, spec);
+            }
+
+            if (staged_control.cpi_id == cpi_id && staged_control.valid)
+            {
+                return staged_control;
+            }
+
+            return make_provisional_snapshot(cpi_id, spec);
+        }
+
+        bool can_converge_to_control(const ControlSnapshot &candidate, const CpiContext &ctx)
+        {
+            return candidate.bind_source == BindSource::control &&
+                   candidate.valid &&
+                   candidate.n_prt >= ctx.header.observed_n_prt;
+        }
+
+        void merge_control_snapshot(CpiContext &ctx, const ControlSnapshot &candidate)
+        {
+            ControlSnapshot &bound = ctx.control;
+            if (bound.bind_source == BindSource::control)
+            {
+                if (candidate.bind_source == BindSource::control &&
+                    bound.valid &&
+                    candidate.valid &&
+                    bound.n_prt != candidate.n_prt)
+                {
+                    bound.conflict = true;
+                }
+                return;
+            }
+
+            if (bound.bind_source == BindSource::provisional)
+            {
+                if (can_converge_to_control(candidate, ctx))
+                {
+                    bind_control_snapshot(ctx, candidate);
+                }
+                else if (candidate.bind_source == BindSource::control && candidate.valid)
+                {
+                    bound.conflict = true;
+                }
+                return;
+            }
+
+            if (candidate.bind_source == BindSource::control && candidate.valid)
+            {
+                bind_control_snapshot(ctx, candidate);
+                return;
+            }
+
+            if (bound.cpi_id == 0U || !bound.valid)
+            {
+                bind_control_snapshot(ctx, candidate);
+            }
+        }
+
+    } // namespace
 
     void CpiStateCoordinator::process_control_packet(const ParsedPacketView &parsed)
     {
@@ -12,91 +138,31 @@ namespace rxtech
             return;
         }
 
-        if (spec_.dynamic_prt_enabled)
+        const ControlSnapshot candidate = make_control_snapshot(parsed, spec_);
+        if (active_ctx_ != nullptr && active_ctx_->header.cpi_id == candidate.cpi_id)
         {
-            // ParsedPacketView::prt is reused to carry the n_prt field from control packets.
-            // The parser writes the control table's n_prt value into this field.
-            const auto parsed_n_prt = static_cast<std::uint32_t>(parsed.prt);
-
-            if (active_ctx_ != nullptr && active_ctx_->bind.bind_source != BindSource::fixed)
-            {
-                // CPI already has a binding — check for duplicate or conflict
-                if (active_ctx_->bind.bind_source == BindSource::control)
-                {
-                    // Already bound by a previous control packet
-                    if (static_cast<std::uint32_t>(active_ctx_->bind.n_prt) != parsed_n_prt)
-                    {
-                        active_ctx_->bind.conflict = true;
-                    }
-                    // Either way, do not overwrite the first binding
-                }
-                else if (active_ctx_->bind.bind_source == BindSource::provisional)
-                {
-                    // Provisional → try to converge
-                    if (parsed_n_prt >= 1U && parsed_n_prt <= spec_.max_n_prt &&
-                        parsed_n_prt >= active_ctx_->header.observed_n_prt)
-                    {
-                        // Converge: refine n_prt from provisional max to actual control value
-                        current_snapshot_.n_prt = static_cast<std::uint16_t>(parsed_n_prt);
-                        current_snapshot_.valid = true;
-                        active_ctx_->bind.bind_source = BindSource::control;
-                        active_ctx_->bind.n_prt = current_snapshot_.n_prt;
-                        set_expected_prt_count(*active_ctx_, current_snapshot_.n_prt,
-                                               current_snapshot_.channel_count,
-                                               current_snapshot_.packets_per_channel);
-                    }
-                    else
-                    {
-                        // Conflict: control n_prt < observed prt or out of range
-                        active_ctx_->bind.conflict = true;
-                    }
-                }
-            }
-            else
-            {
-                // No active CPI or still at fixed default — set snapshot from control packet
-                if (parsed_n_prt >= 1U && parsed_n_prt <= spec_.max_n_prt)
-                {
-                    current_snapshot_.n_prt = static_cast<std::uint16_t>(parsed_n_prt);
-                    current_snapshot_.valid = true;
-                    current_snapshot_.bind_source = BindSource::control;
-                }
-                else
-                {
-                    // Invalid n_prt from control packet — fall back to expected_n_prt
-                    current_snapshot_.n_prt = static_cast<std::uint16_t>(spec_.expected_n_prt);
-                    current_snapshot_.valid = (spec_.expected_n_prt > 0U);
-                    current_snapshot_.bind_source = BindSource::fixed;
-                }
-            }
-        }
-        else
-        {
-            current_snapshot_.n_prt = static_cast<std::uint16_t>(spec_.expected_n_prt);
-            current_snapshot_.valid = (spec_.expected_n_prt > 0U);
-            current_snapshot_.bind_source = BindSource::fixed;
+            merge_control_snapshot(*active_ctx_, candidate);
+            current_control_ = active_ctx_->control;
+            return;
         }
 
-        current_snapshot_.wave_cpi = parsed.cpi;
-        current_snapshot_.channel_count = static_cast<std::uint16_t>(spec_.channels_per_prt);
-        current_snapshot_.packets_per_channel = static_cast<std::uint16_t>(spec_.packets_per_channel);
-        current_snapshot_.timeout_ns = spec_.cpi_timeout_ns;
-        current_snapshot_.bind_tsc = steady_clock_now_ns();
+        if (previous_ctx_ != nullptr && previous_ctx_->header.cpi_id == candidate.cpi_id)
+        {
+            merge_control_snapshot(*previous_ctx_, candidate);
+            return;
+        }
+
+        current_control_ = candidate;
     }
 
-    void CpiStateCoordinator::bind_snapshot_to_active()
+    void CpiStateCoordinator::bind_snapshot_to_active(const ControlSnapshot &snapshot)
     {
         if (active_ctx_ == nullptr)
         {
             return;
         }
-        active_ctx_->bind = current_snapshot_;
-        if (current_snapshot_.valid && current_snapshot_.n_prt > 0U)
-        {
-            set_expected_prt_count(*active_ctx_, current_snapshot_.n_prt,
-                                   current_snapshot_.channel_count,
-                                   current_snapshot_.packets_per_channel);
-        }
+
+        bind_control_snapshot(*active_ctx_, snapshot);
     }
 
     bool CpiStateCoordinator::check_timeout(std::uint64_t now_ns, IMetricsCollector &metrics)
@@ -106,7 +172,7 @@ namespace rxtech
         // Check previous CPI timeout first
         if (previous_ctx_ != nullptr)
         {
-            const std::uint64_t prev_timeout = previous_ctx_->bind.timeout_ns;
+            const std::uint64_t prev_timeout = previous_ctx_->control.timeout_ns;
             if (prev_timeout != 0U)
             {
                 const std::uint64_t prev_anchor = previous_ctx_->header.first_rx_tsc;
@@ -124,7 +190,7 @@ namespace rxtech
         {
             return timed_out;
         }
-        const std::uint64_t timeout_ns = active_ctx_->bind.timeout_ns;
+        const std::uint64_t timeout_ns = active_ctx_->control.timeout_ns;
         if (timeout_ns == 0U)
         {
             return timed_out;
@@ -166,21 +232,9 @@ namespace rxtech
             metrics.on_error();
             return false;
         }
-        active_ctx_->header.channels_per_prt = static_cast<std::uint16_t>(spec_.channels_per_prt);
-        active_ctx_->header.packets_per_channel = static_cast<std::uint16_t>(spec_.packets_per_channel);
 
-        if (spec_.dynamic_prt_enabled && current_snapshot_.bind_source != BindSource::control)
-        {
-            // Data arrived first — provisional with max_n_prt as upper bound
-            current_snapshot_.n_prt = static_cast<std::uint16_t>(std::min(spec_.max_n_prt, static_cast<std::uint32_t>(kCpiPrtMax)));
-            current_snapshot_.channel_count = static_cast<std::uint16_t>(spec_.channels_per_prt);
-            current_snapshot_.packets_per_channel = static_cast<std::uint16_t>(spec_.packets_per_channel);
-            current_snapshot_.timeout_ns = spec_.cpi_timeout_ns;
-            current_snapshot_.valid = true;
-            current_snapshot_.bind_source = BindSource::provisional;
-        }
-
-        bind_snapshot_to_active();
+        current_control_ = select_open_snapshot(cpi_id, spec_, current_control_);
+        bind_snapshot_to_active(current_control_);
         return true;
     }
 

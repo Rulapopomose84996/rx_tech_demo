@@ -24,7 +24,7 @@ namespace rxtech
      */
     struct CpiProcessResult
     {
-        bool accepted = false;  ///< 标识数据包是否被接受处理
+        bool accepted = false; ///< 标识数据包是否被接受处理
     };
 
     /**
@@ -188,29 +188,29 @@ namespace rxtech
         void finalize_previous(std::uint32_t trigger, IMetricsCollector &metrics);
 
         /**
-         * @brief 绑定快照到活动CPI
+         * @brief 绑定控制快照到活动CPI
          *
-         * 将当前的波形快照信息（wave snapshot）关联到活动CPI上下文中。
+         * 将显式控制快照关联到活动CPI上下文中。
          * 快照包含CPI的配置参数，如PRT数量、通道数、超时时间等，
          * 这些信息用于后续的数据验证和处理。
          */
-        void bind_snapshot_to_active();
+        void bind_snapshot_to_active(const ControlSnapshot &snapshot);
 
-        CpiContextPool ctx_pool_;                                       ///< CPI上下文池，管理所有可用的CPI上下文实例
-        RecentClosedRing closed_ring_;                                  ///< 最近关闭的CPI环形缓冲区，用于追踪刚完成的CPI以防止重复处理
-        CpiAdmission admission_;                                        ///< CPI准入控制器，判断新数据包是否应该开启新的CPI
-        SlotWriter slot_writer_;                                        ///< 时隙写入器，负责将IQ数据写入CPI的正确位置
-        ProgressTracker progress_tracker_;                              ///< 进度跟踪器，监控CPI中各个PRT和通道的接收进度
-        CpiFinalizer finalizer_;                                        ///< CPI完成器，负责生成最终的CPI输出结果
-        ProtocolSpec spec_{};                                           ///< 协议规范，定义数据包格式和布局规则
-        BoundWaveSnapshotLite current_snapshot_{};                      ///< 当前绑定的波形快照，包含CPI的配置信息
-        SpscRing<CpiOutput> *output_ring_ = nullptr;                    ///< 指向输出环形缓冲区的指针，用于发送完成的CPI结果
-        SpscRing<ReleaseToken> *recycle_ring_ = nullptr;                ///< 指向回收环形缓冲区的指针，用于释放CPI上下文资源
-        std::uint64_t next_output_id_ = 1U;                             ///< 下一个输出ID，用于唯一标识每个CPI输出
-        std::uint32_t active_ctx_index_ = kInvalidPoolIndex;            ///< 活动CPI上下文在池中的索引，kInvalidPoolIndex表示无活动CPI
-        CpiContext *active_ctx_ = nullptr;                              ///< 指向活动CPI上下文的指针
-        std::uint32_t previous_ctx_index_ = kInvalidPoolIndex;          ///< 前一个CPI上下文在池中的索引，用于延迟清理
-        CpiContext *previous_ctx_ = nullptr;                            ///< 指向前一个CPI上下文的指针
+        CpiContextPool ctx_pool_;                              ///< CPI上下文池，管理所有可用的CPI上下文实例
+        RecentClosedRing closed_ring_;                         ///< 最近关闭的CPI环形缓冲区，用于追踪刚完成的CPI以防止重复处理
+        CpiAdmission admission_;                               ///< CPI准入控制器，判断新数据包是否应该开启新的CPI
+        SlotWriter slot_writer_;                               ///< 时隙写入器，负责将IQ数据写入CPI的正确位置
+        ProgressTracker progress_tracker_;                     ///< 进度跟踪器，监控CPI中各个PRT和通道的接收进度
+        CpiFinalizer finalizer_;                               ///< CPI完成器，负责生成最终的CPI输出结果
+        ProtocolSpec spec_{};                                  ///< 协议规范，定义数据包格式和布局规则
+        ControlSnapshot current_control_{};                    ///< 当前暂存的控制快照，用于绑定或收敛活动 CPI
+        SpscRing<CpiOutput> *output_ring_ = nullptr;           ///< 指向输出环形缓冲区的指针，用于发送完成的CPI结果
+        SpscRing<ReleaseToken> *recycle_ring_ = nullptr;       ///< 指向回收环形缓冲区的指针，用于释放CPI上下文资源
+        std::uint64_t next_output_id_ = 1U;                    ///< 下一个输出ID，用于唯一标识每个CPI输出
+        std::uint32_t active_ctx_index_ = kInvalidPoolIndex;   ///< 活动CPI上下文在池中的索引，kInvalidPoolIndex表示无活动CPI
+        CpiContext *active_ctx_ = nullptr;                     ///< 指向活动CPI上下文的指针
+        std::uint32_t previous_ctx_index_ = kInvalidPoolIndex; ///< 前一个CPI上下文在池中的索引，用于延迟清理
+        CpiContext *previous_ctx_ = nullptr;                   ///< 指向前一个CPI上下文的指针
     };
 
 } // namespace rxtech

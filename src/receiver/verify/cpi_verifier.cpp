@@ -55,7 +55,10 @@ namespace rxtech
         }
 
         // ── Check 4: PRT count matches expectation ────────────────────────────
-        const std::uint32_t expected_prt_count = output.view.n_prt;
+        const std::uint32_t expected_prt_count =
+            output.control.valid && output.control.n_prt > 0U
+                ? output.control.n_prt
+                : output.view.n_prt;
         if (output.ready_prt_count < expected_prt_count)
         {
             result.missing_prt_count = expected_prt_count - output.ready_prt_count;
@@ -66,8 +69,14 @@ namespace rxtech
         // ── Checks 5 & 6: per-PRT channel coverage + per-channel packet count ─
         if (output.view.prt_summary != nullptr && expected_prt_count > 0U)
         {
-            const std::uint16_t expected_ch = static_cast<std::uint16_t>(spec.channels_per_prt);
-            const std::uint16_t expected_pkt = static_cast<std::uint16_t>(spec.packets_per_channel);
+            const std::uint16_t expected_ch =
+                output.control.channel_count > 0U
+                    ? output.control.channel_count
+                    : static_cast<std::uint16_t>(spec.channels_per_prt);
+            const std::uint16_t expected_pkt =
+                output.control.packets_per_channel > 0U
+                    ? output.control.packets_per_channel
+                    : static_cast<std::uint16_t>(spec.packets_per_channel);
 
             for (std::uint32_t prt_idx = 0; prt_idx < expected_prt_count; ++prt_idx)
             {

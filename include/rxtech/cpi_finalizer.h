@@ -21,11 +21,13 @@ namespace rxtech
     struct CpiOutput
     {
         std::uint16_t cpi_id = 0;
+        ControlSnapshot control{};
         CpiDecision decision = CpiDecision::DISCARD_INVALID;
         std::uint32_t received_slot_count = 0;
         std::uint32_t missing_slot_count = 0;
         std::uint32_t duplicate_count = 0;
         std::uint32_t ready_prt_count = 0;
+        std::uint32_t trigger_bits = TriggerNone;
         std::uint64_t first_rx_tsc = 0;
         std::uint64_t last_rx_tsc = 0;
         std::uint64_t seal_tsc = 0;

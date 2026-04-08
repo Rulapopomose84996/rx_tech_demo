@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <limits>
 
+#include "rxtech/control_snapshot.h"
+
 namespace rxtech
 {
 
@@ -81,30 +83,10 @@ namespace rxtech
         std::uint32_t pool_index = kInvalidPoolIndex;
     };
 
-    enum class BindSource : std::uint8_t
-    {
-        fixed,
-        provisional,
-        control
-    };
-
-    struct BoundWaveSnapshotLite
-    {
-        std::uint16_t wave_cpi = 0;
-        std::uint16_t n_prt = 0;
-        std::uint16_t channel_count = 0;
-        std::uint16_t packets_per_channel = 0;
-        std::uint64_t timeout_ns = 0;
-        std::uint64_t bind_tsc = 0;
-        bool valid = false;
-        BindSource bind_source = BindSource::fixed;
-        bool conflict = false;
-    };
-
     struct CpiContext
     {
         alignas(64) CpiHotHeader header{};
-        BoundWaveSnapshotLite bind{};
+        ControlSnapshot control{};
         std::array<PrtSummary, kCpiPrtMax> prt_summary{};
         std::array<std::uint16_t, kCpiMaxTotalSlots> slot_valid_bytes{};
         alignas(2048) std::array<std::uint8_t, static_cast<std::size_t>(kCpiMaxTotalSlots) * kCpiSlotStride> payload{};
@@ -115,7 +97,7 @@ namespace rxtech
             header.cpi_id = cpi_id;
             header.pool_index = pool_index;
             header.state = CpiState::ACTIVE;
-            bind = {};
+            control = {};
             prt_summary.fill({});
             slot_valid_bytes.fill(0U);
             payload.fill(0U);
@@ -160,6 +142,23 @@ namespace rxtech
         ctx.header.packets_per_channel = packets_per_channel;
         const auto slots_per_prt = static_cast<std::uint32_t>(channels_per_prt) * packets_per_channel;
         ctx.header.expected_slot_count = count == 0U ? 0U : static_cast<std::uint32_t>(count) * slots_per_prt;
+    }
+
+    inline void bind_control_snapshot(CpiContext &ctx, const ControlSnapshot &control)
+    {
+        ctx.control = control;
+        ctx.header.channels_per_prt = control.channel_count;
+        ctx.header.packets_per_channel = control.packets_per_channel;
+        if (control.valid && control.n_prt > 0U)
+        {
+            set_expected_prt_count(ctx, control.n_prt,
+                                   control.channel_count,
+                                   control.packets_per_channel);
+            return;
+        }
+
+        ctx.header.expected_n_prt = 0U;
+        ctx.header.expected_slot_count = 0U;
     }
 
 } // namespace rxtech

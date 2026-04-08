@@ -28,8 +28,15 @@ int main()
 
     rxtech::CpiContext *ctx = pool.get(idx);
     assert(ctx != nullptr);
-    ctx->header.channels_per_prt = 3U;
-    ctx->header.packets_per_channel = 9U;
+    rxtech::ControlSnapshot control;
+    control.cpi_id = 42U;
+    control.n_prt = 1U;
+    control.channel_count = 3U;
+    control.packets_per_channel = 9U;
+    control.timeout_ns = 1000U;
+    control.valid = true;
+    control.bind_source = rxtech::BindSource::control;
+    rxtech::bind_control_snapshot(*ctx, control);
 
     rxtech::CpiFinalizer finalizer;
     ctx->header.state = rxtech::CpiState::ACTIVE;
@@ -41,6 +48,10 @@ int main()
     rxtech::CpiOutput output = *maybe_output;
     output.pool_index = idx;
     output.output_id = 1U;
+    assert(output.control.cpi_id == 42U);
+    assert(output.control.n_prt == 1U);
+    assert(output.control.bind_source == rxtech::BindSource::control);
+    assert((output.trigger_bits & rxtech::TriggerCpiSwitch) != 0U);
     assert(output_ring.push(output));
 
     // Start consumer thread.
@@ -93,8 +104,14 @@ int main()
             rxtech::CpiContext *c = pool2.get(pi);
             c->header.state = rxtech::CpiState::ACTIVE;
             c->header.ready_prt_count = 1U;
-            c->header.channels_per_prt = 3U;
-            c->header.packets_per_channel = 9U;
+            rxtech::ControlSnapshot control2;
+            control2.cpi_id = static_cast<std::uint16_t>(i);
+            control2.n_prt = 1U;
+            control2.channel_count = 3U;
+            control2.packets_per_channel = 9U;
+            control2.valid = true;
+            control2.bind_source = rxtech::BindSource::fixed;
+            rxtech::bind_control_snapshot(*c, control2);
             const auto out = finalizer.try_finalize(*c, rxtech::TriggerCpiSwitch);
             assert(out.has_value());
             rxtech::CpiOutput o = *out;

@@ -35,6 +35,21 @@ namespace
         return s;
     }
 
+    rxtech::ControlSnapshot make_control(std::uint16_t cpi_id,
+                                         const rxtech::ProtocolSpec &spec,
+                                         std::uint16_t n_prt,
+                                         rxtech::BindSource bind_source = rxtech::BindSource::control)
+    {
+        rxtech::ControlSnapshot control;
+        control.cpi_id = cpi_id;
+        control.n_prt = n_prt;
+        control.channel_count = static_cast<std::uint16_t>(spec.channels_per_prt);
+        control.packets_per_channel = static_cast<std::uint16_t>(spec.packets_per_channel);
+        control.valid = n_prt > 0U;
+        control.bind_source = bind_source;
+        return control;
+    }
+
     struct OwnedOutput
     {
         std::unique_ptr<rxtech::CpiContext> ctx;
@@ -81,12 +96,7 @@ namespace
         owned.ctx = std::make_unique<rxtech::CpiContext>();
         rxtech::CpiContext &ctx = *owned.ctx;
         ctx.reset(cpi_id, 0U);
-        ctx.header.channels_per_prt = static_cast<std::uint16_t>(spec.channels_per_prt);
-        ctx.header.packets_per_channel = static_cast<std::uint16_t>(spec.packets_per_channel);
-        ctx.header.expected_n_prt = n_prt;
-        ctx.header.expected_slot_count = static_cast<std::uint32_t>(n_prt) *
-                                         spec.channels_per_prt *
-                                         spec.packets_per_channel;
+        rxtech::bind_control_snapshot(ctx, make_control(cpi_id, spec, n_prt));
         ctx.header.state = rxtech::CpiState::ACTIVE;
 
         for (std::uint16_t prt = 1U; prt <= n_prt; ++prt)
@@ -112,6 +122,8 @@ int main()
     // ── Test 1: complete CPI, normal pass ─────────────────────────────────────
     {
         const auto owned = make_complete_output(spec, 1U, 2U);
+        assert(owned.output.control.cpi_id == 1U);
+        assert(owned.output.control.n_prt == 2U);
         const auto result = verifier.verify(owned.output, spec);
         assert(result.passed);
         assert(result.error_flags == rxtech::CpiVerifyError::kNone);

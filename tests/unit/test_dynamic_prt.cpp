@@ -70,6 +70,36 @@ namespace
         return iv;
     }
 
+    rxtech::CpiOutput finalize_via_switch(rxtech::CpiStateCoordinator &coord,
+                                          rxtech::SpscRing<rxtech::CpiOutput> &output_ring,
+                                          const rxtech::ProtocolSpec &spec,
+                                          rxtech::MetricsCollector &metrics,
+                                          std::string &status,
+                                          std::string &error,
+                                          std::uint16_t next_cpi,
+                                          std::uint16_t tail_cpi)
+    {
+        const auto next_result = coord.process_data_packet(make_data(next_cpi, 1U, 0U, 1U),
+                                                           make_interpreted_data(next_cpi, 1U, 0U, 1U),
+                                                           spec,
+                                                           metrics,
+                                                           status,
+                                                           error);
+        assert(next_result.accepted);
+
+        const auto tail_result = coord.process_data_packet(make_data(tail_cpi, 1U, 0U, 1U),
+                                                           make_interpreted_data(tail_cpi, 1U, 0U, 1U),
+                                                           spec,
+                                                           metrics,
+                                                           status,
+                                                           error);
+        assert(tail_result.accepted);
+
+        rxtech::CpiOutput output;
+        assert(output_ring.pop(output));
+        return output;
+    }
+
 } // namespace
 
 int main()
@@ -96,6 +126,13 @@ int main()
         auto result = coord.process_data_packet(parsed, interpreted, spec, metrics, status, error);
         assert(result.accepted);
 
+        const auto output = finalize_via_switch(coord, output_ring, spec, metrics, status, error, 2U, 3U);
+        assert(output.cpi_id == 1U);
+        assert(output.control.cpi_id == 1U);
+        assert(output.control.n_prt == 20U);
+        assert(output.control.bind_source == rxtech::BindSource::control);
+        assert(!output.control.conflict);
+
         coord.release_active();
     }
 
@@ -121,6 +158,12 @@ int main()
         // Control packet with n_prt=30 (>= observed max prt=5) → converge
         coord.process_control_packet(make_control(1U, 30U));
 
+        const auto output = finalize_via_switch(coord, output_ring, spec, metrics, status, error, 2U, 3U);
+        assert(output.control.cpi_id == 1U);
+        assert(output.control.n_prt == 30U);
+        assert(output.control.bind_source == rxtech::BindSource::control);
+        assert(!output.control.conflict);
+
         coord.release_active();
     }
 
@@ -140,13 +183,17 @@ int main()
         // Data with prt=10 → provisional
         auto parsed = make_data(1U, 10U, 0U, 1U);
         auto interpreted = make_interpreted_data(1U, 10U, 0U, 1U);
-        coord.process_data_packet(parsed, interpreted, spec, metrics, status, error);
+        const auto result = coord.process_data_packet(parsed, interpreted, spec, metrics, status, error);
+        assert(result.accepted);
 
         // Control says n_prt=5, but we've seen prt=10 → conflict
-        // Note: observed_n_prt is not automatically tracked to max(prt) in current impl,
-        // so conflict detection relies on header.observed_n_prt being updated.
-        // This test validates the path exists.
         coord.process_control_packet(make_control(1U, 5U));
+
+        const auto output = finalize_via_switch(coord, output_ring, spec, metrics, status, error, 2U, 3U);
+        assert(output.control.cpi_id == 1U);
+        assert(output.control.bind_source == rxtech::BindSource::provisional);
+        assert(output.control.conflict);
+        assert(output.control.n_prt == 64U);
 
         coord.release_active();
     }
@@ -172,10 +219,15 @@ int main()
         auto result = coord.process_data_packet(parsed, interpreted, spec, metrics, status, error);
         assert(result.accepted);
 
+        const auto output = finalize_via_switch(coord, output_ring, spec, metrics, status, error, 2U, 3U);
+        assert(output.control.cpi_id == 1U);
+        assert(output.control.bind_source == rxtech::BindSource::fixed);
+        assert(output.control.n_prt == 25U);
+
         coord.release_active();
     }
 
-    // Test 5: n_prt=0 or > max_n_prt → fallback to expected_n_prt
+    // Test 5: invalid control n_prt → fallback to expected_n_prt
     {
         auto spec = make_spec(true, 15U, 50U);
         rxtech::CpiStateCoordinator coord(spec);
@@ -184,13 +236,26 @@ int main()
         rxtech::SpscRing<rxtech::ReleaseToken> recycle_ring(kRingCap);
         coord.attach_rings(&output_ring, &recycle_ring);
 
+        rxtech::MetricsCollector metrics;
+        std::string status = "success";
+        std::string error;
+
         // Control packet with n_prt=0 (invalid)
         coord.process_control_packet(make_control(1U, 0U));
-        // Should fall back to expected_n_prt=15
 
-        // Control packet with n_prt=999 (exceeds max_n_prt=50)
-        coord.process_control_packet(make_control(2U, 999U));
-        // Should fall back
+        const auto first = coord.process_data_packet(make_data(1U, 1U, 0U, 1U),
+                                                     make_interpreted_data(1U, 1U, 0U, 1U),
+                                                     spec,
+                                                     metrics,
+                                                     status,
+                                                     error);
+        assert(first.accepted);
+
+        const auto output = finalize_via_switch(coord, output_ring, spec, metrics, status, error, 2U, 3U);
+        assert(output.control.cpi_id == 1U);
+        assert(output.control.bind_source == rxtech::BindSource::fixed);
+        assert(output.control.n_prt == 15U);
+        assert(output.control.valid);
 
         coord.release_active();
     }

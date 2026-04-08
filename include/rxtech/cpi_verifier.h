@@ -67,15 +67,16 @@ namespace rxtech
         std::uint32_t bad_channel_prt_count = 0; ///< PRTs with channel coverage < expected
     };
 
-    /// Verifies a CpiOutput against the protocol spec for business correctness.
+    /// Verifies a CpiOutput against its bound control snapshot, with ProtocolSpec
+    /// retained as a fallback when legacy or synthetic outputs omit control data.
     ///
     /// Checks (in order):
     ///   1. decision == COMPLETE_OK
     ///   2. missing_slot_count == 0
     ///   3. duplicate_count == 0
     ///   4. ready_prt_count == expected n_prt
-    ///   5. Per-PRT channel coverage (ready_channel_count == spec.channels_per_prt)
-    ///   6. Per-channel packet count (ch_recv_count[ch] == spec.packets_per_channel)
+    ///   5. Per-PRT channel coverage (ready_channel_count == control.channel_count)
+    ///   6. Per-channel packet count (ch_recv_count[ch] == control.packets_per_channel)
     ///
     /// All applicable errors are accumulated; the result is only passed=true when
     /// no errors are found.
