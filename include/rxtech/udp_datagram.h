@@ -18,6 +18,8 @@ namespace rxtech
     {
         const std::uint8_t *payload_data = nullptr;
         std::uint32_t payload_len = 0;
+        const std::uint8_t *raw_frame_data = nullptr;
+        std::uint32_t raw_frame_len = 0;
         std::uint32_t src_ipv4_be = 0;
         std::uint32_t dst_ipv4_be = 0;
         std::uint16_t src_port = 0;

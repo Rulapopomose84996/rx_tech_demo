@@ -21,6 +21,11 @@ namespace rxtech
 
     // ── Implementation details ───────────────────────────────────────────────
 
+    namespace
+    {
+        constexpr std::uint32_t kSyntheticFramePrefixBytes = 14U + 20U + 8U;
+    }
+
     struct FileReplayBackend::Impl
     {
         FileReplayOptions opts;
@@ -198,8 +203,10 @@ namespace rxtech
             const std::size_t frame_index = impl_->cursor;
             const auto &frame = impl_->frames[impl_->cursor];
             UdpDatagramDesc datagram;
-            datagram.payload_data = frame.data();
-            datagram.payload_len = static_cast<std::uint32_t>(frame.size());
+            datagram.raw_frame_data = frame.data();
+            datagram.raw_frame_len = static_cast<std::uint32_t>(frame.size());
+            datagram.payload_data = frame.data() + kSyntheticFramePrefixBytes;
+            datagram.payload_len = static_cast<std::uint32_t>(frame.size() - kSyntheticFramePrefixBytes);
             datagram.src_ipv4_be = impl_->src_ipv4_be;
             datagram.dst_ipv4_be = impl_->dst_ipv4_be;
             datagram.src_port = impl_->src_port;
@@ -211,7 +218,7 @@ namespace rxtech
             ++impl_->cursor;
             ++served;
             ++impl_->stats.rx_packets;
-            impl_->stats.rx_bytes += datagram.payload_len;
+            impl_->stats.rx_bytes += datagram.raw_frame_len;
         }
 
         ++impl_->stats.rx_polls;
