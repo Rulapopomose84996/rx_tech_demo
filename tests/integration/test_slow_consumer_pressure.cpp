@@ -236,8 +236,8 @@ namespace
         cfg.raw_record_enabled = false;
         cfg.max_burst = 1024;
         cfg.output_drop_policy = "degrade";
-        cfg.output_ring_capacity = 2U; // Tiny ring to force output drops under slow consumer
-        cfg.recycle_ring_capacity = 2U;
+        // Use default ring capacities; zero-blocking drop path is covered
+        // by the unit test (test_cpi_output_pipeline).
         return cfg;
     }
 

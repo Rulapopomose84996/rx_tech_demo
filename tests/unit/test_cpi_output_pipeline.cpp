@@ -166,7 +166,9 @@ int main()
     //   3. output_backpressure_count is incremented
     {
         // Use a tiny ring so we can easily fill it.
-        constexpr std::size_t kTinyRingCap = 2U;
+        // SpscRing(1) allocates cap=2 internally (next power-of-two >= 1+1),
+        // with one slot sacrificed, so usable capacity is exactly 1.
+        constexpr std::size_t kTinyRingCap = 1U;
         rxtech::SpscRing<rxtech::CpiOutput> tiny_output_ring(kTinyRingCap);
         rxtech::SpscRing<rxtech::ReleaseToken> tiny_recycle_ring(kTinyRingCap);
         rxtech::CpiContextPool drop_pool;
@@ -174,8 +176,7 @@ int main()
         rxtech::MetricsCollector drop_metrics;
 
         // Fill all usable output slots so next push will fail.
-        // SpscRing(2) has usable capacity of 1 (one slot reserved).
-        // Fill it with a dummy CpiOutput.
+        // SpscRing(1) → internal cap=2, usable=1. Fill it with a dummy.
         {
             rxtech::CpiOutput dummy{};
             dummy.cpi_id = 999U;
