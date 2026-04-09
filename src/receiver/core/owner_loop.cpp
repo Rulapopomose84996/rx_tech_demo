@@ -21,7 +21,7 @@
 #include "internal/cpi_state_coordinator.h"
 #include "internal/owner_loop_runtime_state.h"
 #include "data_order_tracker.h"
-#include "packet_pipeline.h"
+#include "udp_datagram_pipeline.h"
 #include "rxtech/cpi_consumer.h"
 #include "rxtech/raw_frame_recorder.h"
 #include "rxtech/time_utils.h"
@@ -74,7 +74,7 @@ namespace rxtech
         const ProtocolSpec spec = protocol_spec_from_config(context.config);
         
         // 初始化数据包处理管道
-        PacketPipeline packet_pipeline(context.config, spec);
+        UdpDatagramPipeline packet_pipeline(context.config, spec);
         
         // 初始化 CPI 状态协调器，管理 CPI 生命周期
         CpiStateCoordinator cpi_state_coordinator(spec);
@@ -140,29 +140,23 @@ namespace rxtech
             // 处理 burst 中的每个数据包
             for (const UdpDatagramDesc &datagram : burst.datagrams)
             {
-                if (datagram.raw_frame_data == nullptr || datagram.raw_frame_len == 0U)
-                {
-                    runtime_state.run_status = "error";
-                    runtime_state.run_error = "legacy bridge requires raw_frame_data/raw_frame_len";
-                    break;
-                }
-
-                PacketDesc packet;
-                packet.data = const_cast<std::uint8_t *>(datagram.raw_frame_data);
-                packet.len = datagram.raw_frame_len;
-                packet.ts_ns = datagram.ts_ns;
-                packet.queue_id = datagram.queue_id;
-                packet.cookie = datagram.cookie;
-
                 // 如果启用了原始帧录制，提交数据包到录制器
-                if (artifacts.raw_frame_recorder != nullptr)
+                if (artifacts.raw_frame_recorder != nullptr &&
+                    datagram.raw_frame_data != nullptr &&
+                    datagram.raw_frame_len != 0U)
                 {
+                    PacketDesc packet;
+                    packet.data = const_cast<std::uint8_t *>(datagram.raw_frame_data);
+                    packet.len = datagram.raw_frame_len;
+                    packet.ts_ns = datagram.ts_ns;
+                    packet.queue_id = datagram.queue_id;
+                    packet.cookie = datagram.cookie;
                     artifacts.raw_frame_recorder->submit(packet);
                 }
 
                 // 通过包管道处理数据包，包括协议解析、验证和 CPI 状态更新
-                const PacketProcessStats process_stats = packet_pipeline.process_packet(
-                    packet,
+                const PacketProcessStats process_stats = packet_pipeline.process_datagram(
+                    datagram,
                     *context.metrics,
                     status_reporter.diagnostic_output(),
                     invalid_dumped,

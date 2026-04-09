@@ -10,6 +10,7 @@ add_library(rx_receiver_core
     protocol/protocol_sequence_interpreter.cpp
     protocol/sample_packet_parser.cpp
     protocol/sample_packet_validator.cpp
+    protocol/udp_datagram_pipeline.cpp
     protocol/udp_payload_assembler.cpp
     sidecar/metrics.cpp
     sidecar/runtime_status_reporter.cpp
