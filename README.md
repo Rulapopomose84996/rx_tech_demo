@@ -89,6 +89,19 @@ docs/
 13. 结果层除全局 CPI / PRT / 通道计数外，还会显示"当前 PRT 覆盖"，用于区分"当前 PRT 仍在接收中"与"解析顺序异常"。
 14. 程序结束时，RuntimeStatusReporter 构建最终 RunSummary 并渲染人类可读的总结报告
 
+## 实时优先输出边界
+
+当前接收主链遵循"实时优先"原则：
+
+- `OwnerLoop` 主线程对输出侧零阻塞。`CpiStateCoordinator` 在 finalize 后只做一次非阻塞 `output_ring.push()`；push 失败时立即释放上下文池位，不重试、不等待。
+- 输出侧允许退化。当 `CpiConsumer` 消费速度不足，导致 `output_ring` 满时，finalized CPI 会被丢弃，但丢弃事件会被计数并纳入运行结论。
+- 运行结论分级：
+  - `success`：无输出退化
+  - `degraded`：主链保持实时，但发生过输出丢弃（默认策略 `output_drop_policy=degrade`）
+  - `error`：配置为 `output_drop_policy=error` 时，输出丢弃使运行结论升级为错误
+- 无论 `degraded` 还是 `error`，主线程行为不变——始终零阻塞。
+- 退化事件可在实时状态面板的"输出链路统计"区域和最终汇总的"输出退化次数"字段观测到。
+
 ## 配置与 CLI
 
 当前 CLI 参数完整列表：
@@ -130,6 +143,9 @@ docs/
 - `cpu_cores`
 - `run_until_stopped`
 - `status_interval_seconds`
+- `output_drop_policy`：输出丢弃策略，`degrade`（默认）或 `error`
+- `output_ring_capacity`：输出 SPSC 环容量，默认 `32`
+- `recycle_ring_capacity`：回收 SPSC 环容量，默认 `32`
 
 `[raw_record]` 常用键包括：
 
