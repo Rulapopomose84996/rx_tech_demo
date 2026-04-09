@@ -316,6 +316,12 @@ namespace rxtech
                                                               std::string &run_error)
     {
         CpiProcessResult result;
+        if (active_ctx_ == nullptr && closed_ring_.contains(parsed.cpi))
+        {
+            metrics.on_late_packet_rejected();
+            metrics.on_drop();
+            return result;
+        }
         if (active_ctx_ == nullptr && !open_active(packet.cpi, metrics, run_status, run_error))
         {
             return result;

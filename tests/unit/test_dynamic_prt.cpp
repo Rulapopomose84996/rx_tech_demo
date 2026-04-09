@@ -295,5 +295,50 @@ int main()
         coord.release_active();
     }
 
+    // Test 7: finalized CPI must not be reopened before recycle drains
+    {
+        auto spec = make_spec(false, 1U, 1U);
+        spec.channels_per_prt = 1U;
+        spec.packets_per_channel = 1U;
+        rxtech::CpiStateCoordinator coord(spec);
+        constexpr std::size_t kRingCap = 8U;
+        rxtech::SpscRing<rxtech::CpiOutput> output_ring(kRingCap);
+        rxtech::SpscRing<rxtech::ReleaseToken> recycle_ring(kRingCap);
+        coord.attach_rings(&output_ring, &recycle_ring);
+
+        rxtech::MetricsCollector metrics;
+        std::string status = "success";
+        std::string error;
+
+        const auto first = coord.process_data_packet(make_data(1U, 1U, 0U, 1U),
+                                                     make_interpreted_data(1U, 1U, 0U, 1U),
+                                                     spec,
+                                                     metrics,
+                                                     status,
+                                                     error);
+        assert(first.accepted);
+
+        rxtech::CpiOutput first_output;
+        assert(output_ring.pop(first_output));
+        assert(first_output.cpi_id == 1U);
+
+        // Before recycle is drained, another packet from the same finalized CPI
+        // must be treated as late-to-closed/drop rather than opening a new active context.
+        for (int i = 0; i < 8; ++i)
+        {
+            const auto late = coord.process_data_packet(make_data(1U, 1U, 0U, 1U),
+                                                        make_interpreted_data(1U, 1U, 0U, 1U),
+                                                        spec,
+                                                        metrics,
+                                                        status,
+                                                        error);
+            assert(!late.accepted);
+            assert(status == "success");
+            assert(error.empty());
+        }
+
+        coord.release_active();
+    }
+
     return 0;
 }
