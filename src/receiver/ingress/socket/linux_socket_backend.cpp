@@ -13,6 +13,9 @@
 #include "rxtech/time_utils.h"
 
 #if defined(__linux__)
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #include <arpa/inet.h>
 #include <cerrno>
 #include <fcntl.h>
@@ -269,6 +272,11 @@ namespace rxtech
             return true;
         }
 
+        if (burst.datagrams.capacity() < max_burst)
+        {
+            burst.datagrams.reserve(max_burst);
+        }
+
         impl_->prepare_batch(max_burst);
         for (std::uint32_t index = 0; index < max_burst; ++index)
         {
@@ -322,6 +330,8 @@ namespace rxtech
             stats_.max_burst_size,
             static_cast<std::uint32_t>(received));
 
+        burst.datagrams.resize(static_cast<std::size_t>(received));
+        std::size_t datagram_count = 0U;
         for (int index = 0; index < received; ++index)
         {
             Impl::SocketSlot &slot = impl_->slots[static_cast<std::size_t>(index)];
@@ -347,7 +357,7 @@ namespace rxtech
                 }
             }
 
-            UdpDatagramDesc datagram;
+            UdpDatagramDesc &datagram = burst.datagrams[datagram_count++];
             datagram.payload_data = slot.payload.data();
             datagram.payload_len = slot.payload_len;
             datagram.raw_frame_data = nullptr;
@@ -366,6 +376,8 @@ namespace rxtech
             ++stats_.rx_packets;
             stats_.rx_bytes += datagram.payload_len;
         }
+
+        burst.datagrams.resize(datagram_count);
 
         if (burst.datagrams.empty())
         {
