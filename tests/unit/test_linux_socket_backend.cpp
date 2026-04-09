@@ -230,6 +230,13 @@ int main()
         std::cerr << "expected max burst size to reflect the received datagram\n";
         return 1;
     }
+    if (stats.kernel_drop_count != 0U)
+    {
+        backend.release_burst(burst);
+        backend.shutdown();
+        std::cerr << "expected no kernel drops for the basic loopback receive case\n";
+        return 1;
+    }
 
     backend.release_burst(burst);
     backend.shutdown();
@@ -330,6 +337,41 @@ int main()
 
     full_burst_backend.release_burst(full_burst);
     full_burst_backend.shutdown();
+
+    std::array<char, CMSG_SPACE(sizeof(std::uint32_t))> drop_control{};
+    msghdr drop_msg{};
+    drop_msg.msg_control = drop_control.data();
+    drop_msg.msg_controllen = drop_control.size();
+    cmsghdr *drop_cmsg = CMSG_FIRSTHDR(&drop_msg);
+    if (drop_cmsg == nullptr)
+    {
+        std::cerr << "failed to allocate kernel-drop control message\n";
+        return 1;
+    }
+    drop_cmsg->cmsg_level = SOL_SOCKET;
+    drop_cmsg->cmsg_type = SO_RXQ_OVFL;
+    drop_cmsg->cmsg_len = CMSG_LEN(sizeof(std::uint32_t));
+    const std::uint32_t kernel_drop_total = 11U;
+    std::memcpy(CMSG_DATA(drop_cmsg), &kernel_drop_total, sizeof(kernel_drop_total));
+
+    std::uint32_t last_seen_kernel_drop_count = 3U;
+    const std::uint64_t kernel_drop_delta =
+        rxtech::update_kernel_drop_count_from_cmsg(drop_msg, last_seen_kernel_drop_count);
+    if (kernel_drop_delta != 8U || last_seen_kernel_drop_count != kernel_drop_total)
+    {
+        std::cerr << "expected kernel-drop control parsing to report only the incremental delta\n";
+        return 1;
+    }
+
+    msghdr no_drop_msg{};
+    std::uint32_t unchanged_kernel_drop_count = last_seen_kernel_drop_count;
+    const std::uint64_t no_drop_delta =
+        rxtech::update_kernel_drop_count_from_cmsg(no_drop_msg, unchanged_kernel_drop_count);
+    if (no_drop_delta != 0U || unchanged_kernel_drop_count != last_seen_kernel_drop_count)
+    {
+        std::cerr << "expected missing kernel-drop control data to leave counters unchanged\n";
+        return 1;
+    }
 
     const std::uint16_t empty_poll_port = reserve_loopback_port();
     if (empty_poll_port == 0U)

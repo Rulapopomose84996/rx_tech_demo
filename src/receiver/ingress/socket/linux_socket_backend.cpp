@@ -70,6 +70,39 @@ namespace rxtech
 
     } // namespace
 
+#if defined(__linux__)
+    std::uint64_t update_kernel_drop_count_from_cmsg(const msghdr &msg,
+                                                     std::uint32_t &last_seen_kernel_drop_count)
+    {
+        for (cmsghdr *cmsg = CMSG_FIRSTHDR(const_cast<msghdr *>(&msg));
+             cmsg != nullptr;
+             cmsg = CMSG_NXTHDR(const_cast<msghdr *>(&msg), cmsg))
+        {
+            if (cmsg->cmsg_level != SOL_SOCKET ||
+                cmsg->cmsg_type != SO_RXQ_OVFL ||
+                cmsg->cmsg_len < CMSG_LEN(sizeof(std::uint32_t)))
+            {
+                continue;
+            }
+
+            std::uint32_t kernel_drop_total = 0U;
+            std::memcpy(&kernel_drop_total, CMSG_DATA(cmsg), sizeof(kernel_drop_total));
+            if (kernel_drop_total < last_seen_kernel_drop_count)
+            {
+                last_seen_kernel_drop_count = kernel_drop_total;
+                return 0U;
+            }
+
+            const std::uint64_t delta =
+                static_cast<std::uint64_t>(kernel_drop_total - last_seen_kernel_drop_count);
+            last_seen_kernel_drop_count = kernel_drop_total;
+            return delta;
+        }
+
+        return 0U;
+    }
+#endif
+
     struct LinuxSocketIngress::Impl
     {
 #if defined(__linux__)
@@ -91,6 +124,7 @@ namespace rxtech
         std::vector<mmsghdr> msgs;
         std::uint32_t dest_ipv4_be = 0;
         std::uint16_t bind_port = 0;
+        std::uint32_t last_seen_kernel_drop_count = 0;
 
         void prepare_batch(const std::uint32_t capacity)
         {
@@ -137,6 +171,7 @@ namespace rxtech
             msgs.clear();
             dest_ipv4_be = 0;
             bind_port = 0;
+            last_seen_kernel_drop_count = 0;
         }
 #endif
     };
@@ -229,6 +264,14 @@ namespace rxtech
             return make_socket_result(true, socket_error_message("设置 IP_PKTINFO"));
         }
 
+        int enable_kernel_drop_count = 1;
+        if (::setsockopt(socket_fd, SOL_SOCKET, SO_RXQ_OVFL, &enable_kernel_drop_count, sizeof(enable_kernel_drop_count)) != 0)
+        {
+            ++stats_.rx_errors;
+            ::close(socket_fd);
+            return make_socket_result(true, socket_error_message("设置 SO_RXQ_OVFL"));
+        }
+
         if (::bind(socket_fd,
                    reinterpret_cast<const sockaddr *>(&bind_addr),
                    sizeof(bind_addr)) != 0)
@@ -243,6 +286,7 @@ namespace rxtech
         impl_->batch_timeout_ms = config.socket_batch_timeout_ms;
         impl_->dest_ipv4_be = ntohl(frame_dest_addr.s_addr);
         impl_->bind_port = bind_port;
+        impl_->last_seen_kernel_drop_count = 0U;
 
         stats_.queue_id = config.queue_id;
         stats_.frame_size = config.protocol_udp_packet_size;
@@ -338,6 +382,8 @@ namespace rxtech
             const mmsghdr &msg = impl_->msgs[static_cast<std::size_t>(index)];
             slot.payload_len = static_cast<std::uint32_t>(msg.msg_len);
             slot.truncated = (msg.msg_hdr.msg_flags & MSG_TRUNC) != 0;
+            stats_.kernel_drop_count += update_kernel_drop_count_from_cmsg(msg.msg_hdr,
+                                                                           impl_->last_seen_kernel_drop_count);
             if (slot.peer.sin_family != AF_INET)
             {
                 ++stats_.backend_drops;

@@ -5,8 +5,18 @@
 
 #include "rxtech/rx_backend.h"
 
+#if defined(__linux__)
+#include <cstdint>
+#include <sys/socket.h>
+#endif
+
 namespace rxtech
 {
+
+#if defined(__linux__)
+    std::uint64_t update_kernel_drop_count_from_cmsg(const msghdr &msg,
+                                                     std::uint32_t &last_seen_kernel_drop_count);
+#endif
 
     class LinuxSocketIngress final : public IRxBackend
     {

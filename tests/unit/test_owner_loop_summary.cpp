@@ -28,6 +28,7 @@ int main()
     summary.control_table_packets = 1U;
     summary.data_packets = 7U;
     summary.dropped_packets = 2U;
+    summary.backend_dropped_packets = 3U;
     summary.captured_packets = 9U;
     summary.captured_bytes = 18000U;
     summary.recorded_bytes = 12345U;
@@ -58,13 +59,17 @@ int main()
     summary.backend_kernel_drops = 9U;
 
     rxtech::BackendStats backend{};
+    backend.backend_drops = 3U;
     backend.receive_batches = 12U;
     backend.max_burst_size = 6U;
     backend.kernel_drop_count = 9U;
 
     rxtech::RunSummary merged_summary{};
+    merged_summary.dropped_packets = 5U;
     rxtech::merge_backend_stats(merged_summary, backend);
 
+    assert(merged_summary.dropped_packets == 5U);
+    assert(merged_summary.backend_dropped_packets == 3U);
     assert(merged_summary.backend_receive_batches == 12U);
     assert(merged_summary.backend_max_burst_size == 6U);
     assert(merged_summary.backend_kernel_drops == 9U);
@@ -74,6 +79,9 @@ int main()
     assert(human.find("后端类型： dpdk") != std::string::npos);
     assert(human.find("原始收包： 12 包，3456 字节") != std::string::npos);
     assert(human.find("原始帧已写： 5 帧，5000 字节") != std::string::npos);
+    assert(human.find("协议丢弃： 2 包") != std::string::npos);
+    assert(human.find("后端丢弃： 3 包") != std::string::npos);
+    assert(human.find("内核丢弃： 9 包") != std::string::npos);
     assert(human.find("接收顺序： 偏离按 PRT 推进顺序，当前捕获更像按通道分批到达") != std::string::npos);
     assert(human.find("首个顺序偏差： 第 10 个数据包开始偏离") != std::string::npos);
     assert(human.find("当前重组 PRT： CPI 2 / PRT 41（接收中）") != std::string::npos);
@@ -93,6 +101,7 @@ int main()
     bool saw_max_burst_size = false;
     bool saw_kernel_drops = false;
     bool saw_protocol_drops = false;
+    bool saw_backend_drops = false;
     for (const std::string &line : lines)
     {
         if (line.find("链路判定") != std::string::npos && line.find("已检测到业务协议流量") != std::string::npos)
@@ -133,6 +142,10 @@ int main()
         {
             saw_protocol_drops = true;
         }
+        if (line.find("后端丢弃报文") != std::string::npos && line.find("3") != std::string::npos)
+        {
+            saw_backend_drops = true;
+        }
     }
 
     assert(saw_link_state);
@@ -143,6 +156,7 @@ int main()
     assert(saw_max_burst_size);
     assert(saw_kernel_drops);
     assert(saw_protocol_drops);
+    assert(saw_backend_drops);
     assert(!saw_debug_lines);
 
     rxtech::RunSummary pre_business_summary;

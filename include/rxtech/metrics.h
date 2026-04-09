@@ -121,6 +121,7 @@ namespace rxtech
         std::uint64_t data_packets = 0;
         std::uint64_t parsed_packets = 0;
         std::uint64_t dropped_packets = 0;
+        std::uint64_t backend_dropped_packets = 0;
         std::uint64_t backend_errors = 0;
         std::uint64_t nic_drops = 0;
         std::uint64_t pool_exhaustion_count = 0;
