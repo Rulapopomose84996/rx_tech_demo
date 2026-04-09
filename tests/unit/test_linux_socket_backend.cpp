@@ -350,6 +350,48 @@ int main()
     backend.release_burst(burst);
     backend.shutdown();
 
+    const std::uint16_t timeout_poll_port = reserve_loopback_port();
+    if (timeout_poll_port == 0U)
+    {
+        std::cerr << "failed to reserve loopback UDP port for timeout empty poll\n";
+        return 1;
+    }
+
+    rxtech::RxConfig timeout_poll_config = make_socket_config(timeout_poll_port);
+    timeout_poll_config.socket_batch_timeout_ms = 5U;
+    rxtech::LinuxSocketIngress timeout_poll_backend;
+    const rxtech::BackendInitResult timeout_poll_init = timeout_poll_backend.init(timeout_poll_config);
+    if (!timeout_poll_init.ok)
+    {
+        std::cerr << "socket backend init for timeout empty poll failed: " << timeout_poll_init.reason << '\n';
+        return 1;
+    }
+
+    rxtech::UdpDatagramBurst timeout_poll_burst;
+    if (!timeout_poll_backend.recv_burst(timeout_poll_burst, 4U))
+    {
+        timeout_poll_backend.shutdown();
+        std::cerr << "socket backend timeout empty poll recv_burst failed\n";
+        return 1;
+    }
+    if (!timeout_poll_burst.datagrams.empty())
+    {
+        timeout_poll_backend.release_burst(timeout_poll_burst);
+        timeout_poll_backend.shutdown();
+        std::cerr << "expected timeout empty poll to return no datagrams\n";
+        return 1;
+    }
+    const rxtech::BackendStats timeout_poll_stats = timeout_poll_backend.stats();
+    if (timeout_poll_stats.empty_polls < 1U)
+    {
+        timeout_poll_backend.release_burst(timeout_poll_burst);
+        timeout_poll_backend.shutdown();
+        std::cerr << "expected timeout empty poll to increment empty poll accounting\n";
+        return 1;
+    }
+    timeout_poll_backend.release_burst(timeout_poll_burst);
+    timeout_poll_backend.shutdown();
+
     constexpr std::uint32_t full_burst_budget = 4U;
     const std::uint16_t full_burst_port = reserve_loopback_port();
     if (full_burst_port == 0U)

@@ -251,6 +251,19 @@ namespace rxtech
             return make_socket_result(true, socket_error_message("设置 SO_RCVBUF"));
         }
 
+        if (!config.socket_nonblocking && config.socket_batch_timeout_ms > 0U)
+        {
+            timeval timeout{};
+            timeout.tv_sec = static_cast<long>(config.socket_batch_timeout_ms / 1000U);
+            timeout.tv_usec = static_cast<long>((config.socket_batch_timeout_ms % 1000U) * 1000U);
+            if (::setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0)
+            {
+                ++stats_.rx_errors;
+                ::close(socket_fd);
+                return make_socket_result(true, socket_error_message("设置 SO_RCVTIMEO"));
+            }
+        }
+
         if (config.socket_nonblocking)
         {
             const int flags = ::fcntl(socket_fd, F_GETFL, 0);
@@ -343,21 +356,12 @@ namespace rxtech
             msg.msg_len = 0U;
         }
 
-        timespec timeout{};
-        timespec *timeout_ptr = nullptr;
-        if (!impl_->nonblocking && impl_->batch_timeout_ms > 0U)
-        {
-            timeout.tv_sec = static_cast<time_t>(impl_->batch_timeout_ms / 1000U);
-            timeout.tv_nsec = static_cast<long>((impl_->batch_timeout_ms % 1000U) * 1000000U);
-            timeout_ptr = &timeout;
-        }
-
         const int recv_flags = impl_->nonblocking ? MSG_DONTWAIT : MSG_WAITFORONE;
         const int received = ::recvmmsg(impl_->socket_fd,
                                         impl_->msgs.data(),
                                         max_burst,
                                         recv_flags,
-                                        timeout_ptr);
+                                        nullptr);
         if (received < 0)
         {
             if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
