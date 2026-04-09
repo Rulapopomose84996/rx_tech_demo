@@ -60,6 +60,14 @@ int main()
     rxtech::PacketKind observed_kind = rxtech::PacketKind::unknown;
     std::vector<std::uint8_t> legacy_payload;
     std::vector<std::uint8_t> observed_payload;
+    std::uint32_t legacy_source_ipv4_be = 0U;
+    std::uint32_t observed_source_ipv4_be = 0U;
+    std::uint32_t legacy_dest_ipv4_be = 0U;
+    std::uint32_t observed_dest_ipv4_be = 0U;
+    std::uint16_t legacy_source_port = 0U;
+    std::uint16_t observed_source_port = 0U;
+    std::uint16_t legacy_dest_port = 0U;
+    std::uint16_t observed_dest_port = 0U;
     std::uint32_t legacy_queue_id = 0U;
     std::uint32_t observed_queue_id = 0U;
     std::uint64_t legacy_ts_ns = 0U;
@@ -82,6 +90,10 @@ int main()
             ++legacy_callback_count;
             legacy_kind = processed.interpreted.kind;
             legacy_payload.assign(processed.udp_frame.udp_payload.begin(), processed.udp_frame.udp_payload.end());
+            legacy_source_ipv4_be = processed.udp_frame.source_ipv4_be;
+            legacy_dest_ipv4_be = processed.udp_frame.dest_ipv4_be;
+            legacy_source_port = processed.udp_frame.source_port;
+            legacy_dest_port = processed.udp_frame.dest_port;
             legacy_queue_id = processed.source_queue_id;
             legacy_ts_ns = processed.source_ts_ns;
         });
@@ -90,6 +102,10 @@ int main()
     assert(legacy_callback_count == 1U);
     assert(legacy_kind == rxtech::PacketKind::data_packet);
     assert(legacy_payload.size() == 2048U);
+    assert(legacy_source_ipv4_be == source_ipv4_be);
+    assert(legacy_dest_ipv4_be == dest_ipv4_be);
+    assert(legacy_source_port == source_port);
+    assert(legacy_dest_port == dest_port);
     assert(legacy_queue_id == queue_id);
     assert(legacy_ts_ns == ts_ns);
 
@@ -115,6 +131,10 @@ int main()
             ++callback_count;
             observed_kind = processed.interpreted.kind;
             observed_payload.assign(processed.udp_frame.udp_payload.begin(), processed.udp_frame.udp_payload.end());
+            observed_source_ipv4_be = processed.udp_frame.source_ipv4_be;
+            observed_dest_ipv4_be = processed.udp_frame.dest_ipv4_be;
+            observed_source_port = processed.udp_frame.source_port;
+            observed_dest_port = processed.udp_frame.dest_port;
             observed_queue_id = processed.source_queue_id;
             observed_ts_ns = processed.source_ts_ns;
         });
@@ -123,11 +143,19 @@ int main()
     assert(callback_count == 1U);
     assert(observed_kind == rxtech::PacketKind::data_packet);
     assert(observed_payload.size() == 2048U);
+    assert(observed_source_ipv4_be == source_ipv4_be);
+    assert(observed_dest_ipv4_be == dest_ipv4_be);
+    assert(observed_source_port == source_port);
+    assert(observed_dest_port == dest_port);
     assert(observed_queue_id == queue_id);
     assert(observed_ts_ns == ts_ns);
     assert(stats.accepted_bytes == legacy_stats.accepted_bytes);
     assert(stats.filtered_packets == legacy_stats.filtered_packets);
     assert(observed_payload == legacy_payload);
     assert(observed_kind == legacy_kind);
+    assert(observed_source_ipv4_be == legacy_source_ipv4_be);
+    assert(observed_dest_ipv4_be == legacy_dest_ipv4_be);
+    assert(observed_source_port == legacy_source_port);
+    assert(observed_dest_port == legacy_dest_port);
     return 0;
 }
