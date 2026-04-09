@@ -121,6 +121,19 @@ namespace rxtech
                 break;
             }
 
+            struct BurstReleaseGuard
+            {
+                IRxBackend *backend = nullptr;
+                UdpDatagramBurst *burst = nullptr;
+                ~BurstReleaseGuard()
+                {
+                    if (backend != nullptr && burst != nullptr)
+                    {
+                        backend->release_burst(*burst);
+                    }
+                }
+            } burst_release_guard{context.backend.get(), &burst};
+
             std::uint64_t burst_bytes = 0;
             std::size_t accepted_packets = 0U;
             
@@ -131,7 +144,6 @@ namespace rxtech
                 {
                     runtime_state.run_status = "error";
                     runtime_state.run_error = "legacy bridge requires raw_frame_data/raw_frame_len";
-                    context.backend->release_burst(burst);
                     break;
                 }
 
@@ -238,9 +250,6 @@ namespace rxtech
                 context.metrics->on_burst(accepted_packets, burst_bytes);
             }
             
-            // 释放 burst 资源
-            context.backend->release_burst(burst);
-
             // T-004: 定期检查活跃 CPI 的超时状态
             cpi_state_coordinator.check_timeout(steady_clock_now_ns(), *context.metrics);
 

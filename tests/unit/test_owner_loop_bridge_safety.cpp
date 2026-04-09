@@ -52,6 +52,7 @@ namespace
 
         void release_burst(rxtech::UdpDatagramBurst &burst) override
         {
+            ++release_calls_;
             burst.datagrams.clear();
         }
 
@@ -64,6 +65,7 @@ namespace
 
         std::atomic<bool> stop_flag_{false};
         std::uint32_t polls_ = 0;
+        std::uint32_t release_calls_ = 0;
 
     private:
         rxtech::BackendStats stats_{};
@@ -101,5 +103,6 @@ int main()
     assert(summary.run_status == "error");
     assert(summary.error_message.find("raw_frame_data/raw_frame_len") != std::string::npos);
     assert(backend->polls_ == 1U);
+    assert(backend->release_calls_ == 1U);
     return 0;
 }
