@@ -312,7 +312,7 @@ namespace rxtech
             UdpDatagramDesc datagram;
             datagram.raw_frame_data = frame.data();
             datagram.raw_frame_len = static_cast<std::uint32_t>(frame.size());
-            datagram.payload_data = impl_->recv_buffer.data();
+            datagram.payload_data = frame.data() + kSyntheticFramePrefixBytes;
             datagram.payload_len = static_cast<std::uint32_t>(received);
             datagram.src_ipv4_be = source_ipv4_be;
             datagram.dst_ipv4_be = impl_->dest_ipv4_be;
