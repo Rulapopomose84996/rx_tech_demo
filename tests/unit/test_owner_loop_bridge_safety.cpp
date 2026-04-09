@@ -118,6 +118,13 @@ int main()
 
     assert(summary.run_status == "success");
     assert(summary.error_message.empty());
+    assert(summary.rx_packets == 1U);
+    assert(summary.captured_packets == 1U);
+    assert(summary.recorded_packets == 1U);
+    assert(summary.captured_bytes == 2048U);
+    assert(summary.recorded_bytes == 2048U);
+    assert(packet_sink.str().size() == 2048U);
+    assert(index_sink.str().find("data_packet") != std::string::npos);
     assert(backend->polls_ == 3U);
     assert(backend->release_calls_ == 3U);
     return 0;

@@ -4,8 +4,15 @@
 #include <functional>
 #include <iosfwd>
 
-#include "packet_pipeline.h"
 #include "rxtech/udp_datagram.h"
+#include "rxtech/metrics.h"
+#include "rxtech/protocol_sequence_interpreter.h"
+#include "rxtech/protocol_spec.h"
+#include "rxtech/rx_config.h"
+#include "rxtech/sample_packet_parser.h"
+#include "rxtech/sample_packet_validator.h"
+#include "rxtech/udp_payload_assembler.h"
+#include "protocol_pipeline_types.h"
 
 namespace rxtech
 {

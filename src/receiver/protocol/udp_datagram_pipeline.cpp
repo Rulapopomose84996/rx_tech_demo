@@ -36,6 +36,11 @@ namespace rxtech
             return (octets[0] << 24U) | (octets[1] << 16U) | (octets[2] << 8U) | octets[3];
         }
 
+        bool is_malformed_descriptor(const UdpDatagramDesc &datagram)
+        {
+            return datagram.payload_len > 0U && datagram.payload_data == nullptr;
+        }
+
 #if defined(RXTECH_DEBUG_DIAGNOSTICS) && RXTECH_DEBUG_DIAGNOSTICS
         std::uint32_t read_u32_le_at(const std::uint8_t *data, std::size_t size, std::size_t offset)
         {
@@ -138,6 +143,11 @@ namespace rxtech
                                                              const std::function<void(const ProcessedPacket &)> &on_packet)
     {
         PacketProcessStats stats;
+        if (is_malformed_descriptor(datagram))
+        {
+            metrics.on_error();
+            return stats;
+        }
 
         UdpPayloadFrame udp_frame;
         if (datagram.payload_data != nullptr && datagram.payload_len != 0U)

@@ -8,44 +8,14 @@
 
 #include "rxtech/metrics.h"
 #include "rxtech/packet_desc.h"
-#include "rxtech/protocol_sequence_interpreter.h"
 #include "rxtech/protocol_spec.h"
 #include "rxtech/rx_config.h"
-#include "rxtech/sample_packet_parser.h"
-#include "rxtech/sample_packet_validator.h"
 #include "rxtech/udp_payload_assembler.h"
+#include "protocol_pipeline_types.h"
 
 namespace rxtech
 {
     class UdpDatagramPipeline;
-
-    /**
-     * @brief 处理后的数据包结构体
-     * 
-     * 该结构体封装了经过完整处理流程的数据包信息，包括UDP载荷帧、
-     * 解析后的数据包视图和解释后的数据包视图，以及数据包的来源信息。
-     */
-    struct ProcessedPacket
-    {
-        UdpPayloadFrame udp_frame;              ///< UDP载荷帧，包含完整的UDP载荷数据和网络层信息
-        ParsedPacketView parsed;                ///< 解析后的数据包视图，包含从原始数据中提取的协议字段
-        InterpretedPacketView interpreted;      ///< 解释后的数据包视图，包含基于协议序列的语义化信息
-        std::uint32_t source_queue_id = 0;      ///< 源队列ID，标识数据包来自哪个接收队列
-        std::uint64_t source_ts_ns = 0;         ///< 源时间戳（纳秒），记录数据包到达的时间
-    };
-
-    /**
-     * @brief 数据包处理统计信息结构体
-     * 
-     * 用于跟踪和记录数据包处理过程中的关键指标，包括接受的数据量、
-     * 数据包数量以及被过滤的数据包数量。
-     */
-    struct PacketProcessStats
-    {
-        std::uint64_t accepted_bytes = 0;       ///< 接受的总字节数
-        std::size_t accepted_packets = 0;       ///< 接受的数据包数量
-        std::uint64_t filtered_packets = 0;     ///< 被过滤的数据包数量
-    };
 
     /**
      * @brief 数据包处理管道类
