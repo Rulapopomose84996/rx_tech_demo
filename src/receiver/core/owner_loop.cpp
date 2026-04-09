@@ -87,10 +87,12 @@ namespace rxtech
 
         // CPI 输出管道：owner → output_ring → consumer → recycle_ring → owner
         // 使用无锁单生产者单消费者环形缓冲区实现线程间通信
-        constexpr std::size_t kOutputRingCapacity = 32U;
-        SpscRing<CpiOutput> output_ring(kOutputRingCapacity);
-        SpscRing<ReleaseToken> recycle_ring(kOutputRingCapacity);
+        const std::size_t output_capacity = std::max<std::size_t>(2U, context.config.output_ring_capacity);
+        const std::size_t recycle_capacity = std::max<std::size_t>(2U, context.config.recycle_ring_capacity);
+        SpscRing<CpiOutput> output_ring(output_capacity);
+        SpscRing<ReleaseToken> recycle_ring(recycle_capacity);
         cpi_state_coordinator.attach_rings(&output_ring, &recycle_ring);
+        cpi_state_coordinator.configure_output_policy(context.config.output_drop_policy);
 
         // 启动 CPI consumer 线程，异步处理 CPI 输出
         std::atomic<bool> consumer_stop{false};
@@ -271,6 +273,12 @@ namespace rxtech
         // 1. 接收循环已停止（上述 while 循环退出）
         // 2.  finalize 任何活跃或之前的 CPI 状态
         cpi_state_coordinator.finalize_active_for_shutdown(*context.metrics);
+
+        // 2b. 根据输出退化状态升级运行结论
+        if (cpi_state_coordinator.output_degraded() && runtime_state.run_status == "success")
+        {
+            runtime_state.run_status = cpi_state_coordinator.output_drop_is_error() ? "error" : "degraded";
+        }
 
         // 3-4. 通知 consumer 线程退出并等待其完成
         consumer_stop.store(true, std::memory_order_release);

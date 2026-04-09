@@ -235,6 +235,9 @@ namespace
         cfg.capture_enabled = false;
         cfg.raw_record_enabled = false;
         cfg.max_burst = 1024;
+        cfg.output_drop_policy = "degrade";
+        cfg.output_ring_capacity = 2U; // Tiny ring to force output drops under slow consumer
+        cfg.recycle_ring_capacity = 2U;
         return cfg;
     }
 
@@ -280,13 +283,16 @@ int main()
     // Impose a hard timeout so the test cannot hang forever.
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(120);
 
-    loop.run(ctx, artifacts, [&stop, &deadline]()
+    rxtech::RunSummary run_summary = loop.run(ctx, artifacts, [&stop, &deadline]()
              {
         if (std::chrono::steady_clock::now() >= deadline)
             return true;
         return stop.load(std::memory_order_relaxed); });
 
     // ── Assertions ────────────────────────────────────────────────────────────
+
+    // Deadline must not have been hit (loop should have finished cleanly).
+    assert(std::chrono::steady_clock::now() < deadline);
 
     // All CPIs must have been consumed.
     assert(!decisions.empty());
@@ -297,16 +303,16 @@ int main()
         assert(d != rxtech::CpiDecision::DISCARD_INVALID);
     }
 
-    // Pool must not have been permanently exhausted (verified indirectly: if it
-    // were, the pipeline would have stalled and we'd see missing CPIs or hangs).
-    const rxtech::RunSummary *summary_ptr = nullptr; // RunSummary obtained from loop.run above
-    (void)summary_ptr;
-
-    // Deadline must not have been hit (loop should have finished cleanly).
-    assert(std::chrono::steady_clock::now() < deadline);
-
     // At least as many decisions as CPIs sent.
     assert(decisions.size() >= static_cast<std::size_t>(kNumCpi));
+
+    // Under a slow consumer with a tiny output ring, output drops are expected.
+    // The run should complete with degraded status (or at least not hang).
+    // If output drops occurred, the summary should reflect degradation.
+    if (run_summary.output_backpressure_count > 0U)
+    {
+        assert(run_summary.run_status == "degraded" || run_summary.run_status == "error");
+    }
 
     return 0;
 }
