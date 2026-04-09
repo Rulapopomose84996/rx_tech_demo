@@ -65,12 +65,15 @@ namespace rxtech
 
         double calculate_drop_rate(const RunSummary &summary)
         {
-            const double total = static_cast<double>(summary.rx_packets + summary.dropped_packets);
+            const double total = static_cast<double>(
+                summary.rx_packets + summary.dropped_packets + summary.backend_dropped_packets + summary.backend_kernel_drops);
             if (total <= 0.0)
             {
                 return 0.0;
             }
-            return static_cast<double>(summary.dropped_packets) / total;
+            return static_cast<double>(
+                       summary.dropped_packets + summary.backend_dropped_packets + summary.backend_kernel_drops) /
+                   total;
         }
 
         std::vector<std::string> build_status_snapshot_lines(const RunSummary &summary,
@@ -106,6 +109,10 @@ namespace rxtech
             lines.push_back(build_metric_line("控制表报文", std::to_string(summary.control_table_packets) + " 报文"));
             lines.push_back(build_metric_line("数据报文", std::to_string(summary.data_packets) + " 报文"));
             lines.push_back(build_metric_line("协议丢弃报文", std::to_string(summary.dropped_packets) + " 报文"));
+            lines.push_back(build_metric_line("后端丢弃报文", std::to_string(summary.backend_dropped_packets) + " 报文"));
+            lines.push_back(build_metric_line("接收批次", std::to_string(summary.backend_receive_batches)));
+            lines.push_back(build_metric_line("最大突发批次", std::to_string(summary.backend_max_burst_size)));
+            lines.push_back(build_metric_line("内核丢弃报文", std::to_string(summary.backend_kernel_drops) + " 报文"));
             lines.push_back("");
             lines.push_back("[结果层统计]");
             lines.push_back(build_metric_line("全局 CPI 数", std::to_string(summary.cpi_count)));

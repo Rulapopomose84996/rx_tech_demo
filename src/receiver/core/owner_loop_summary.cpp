@@ -11,10 +11,13 @@ namespace rxtech
     {
         summary.raw_rx_packets = backend_stats.rx_packets;
         summary.raw_rx_bytes = backend_stats.rx_bytes;
-        summary.dropped_packets += backend_stats.backend_drops;
+        summary.backend_dropped_packets += backend_stats.backend_drops;
         summary.backend_errors += backend_stats.rx_errors;
         summary.rx_polls = backend_stats.rx_polls;
         summary.empty_polls = backend_stats.empty_polls;
+        summary.backend_receive_batches = backend_stats.receive_batches;
+        summary.backend_max_burst_size = backend_stats.max_burst_size;
+        summary.backend_kernel_drops = backend_stats.kernel_drop_count;
         summary.arp_request_packets = backend_stats.arp_request_packets;
         summary.arp_reply_packets = backend_stats.arp_reply_packets;
         summary.queue_id = backend_stats.queue_id;
@@ -48,12 +51,15 @@ namespace rxtech
 
     double calculate_drop_rate(const RunSummary &summary)
     {
-        const double total = static_cast<double>(summary.rx_packets + summary.dropped_packets);
+        const double total = static_cast<double>(
+            summary.rx_packets + summary.dropped_packets + summary.backend_dropped_packets + summary.backend_kernel_drops);
         if (total <= 0.0)
         {
             return 0.0;
         }
-        return static_cast<double>(summary.dropped_packets) / total;
+        return static_cast<double>(
+                   summary.dropped_packets + summary.backend_dropped_packets + summary.backend_kernel_drops) /
+               total;
     }
 
     const char *protocol_channel_name(std::uint16_t channel)
@@ -211,6 +217,10 @@ namespace rxtech
         out << "控制表包： " << summary.control_table_packets << " 包\n";
         out << "数据包： " << summary.data_packets << " 包\n";
         out << "协议丢弃： " << summary.dropped_packets << " 包\n";
+        out << "后端丢弃： " << summary.backend_dropped_packets << " 包\n";
+        out << "后端接收批次： " << summary.backend_receive_batches << "\n";
+        out << "后端最大突发批次： " << summary.backend_max_burst_size << "\n";
+        out << "内核丢弃： " << summary.backend_kernel_drops << " 包\n";
         out << "CPI 数： " << summary.cpi_count << "\n";
         out << "PRT 数： " << summary.prt_count << "\n";
         out << "完整 PRT 数： " << summary.complete_prt_count << "\n";

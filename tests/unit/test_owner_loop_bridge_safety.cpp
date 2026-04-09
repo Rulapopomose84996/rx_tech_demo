@@ -17,6 +17,18 @@
 
 namespace
 {
+    std::vector<std::uint8_t> make_sample_payload()
+    {
+        std::vector<std::uint8_t> bytes = {
+            0x03, 0xff, 0xaa, 0x55,
+            0x01, 0x00,
+            0x00, 0x00,
+            0x22, 0x00,
+            0x02, 0x00,
+            0x00, 0x00, 0x00, 0x00};
+        bytes.resize(2048U, 0xABU);
+        return bytes;
+    }
 
     class MissingRawFrameBackend final : public rxtech::IRxBackend
     {
@@ -36,10 +48,14 @@ namespace
             ++polls_;
             if (polls_ == 1U)
             {
-                payload_.assign({0x03U, 0xFFU, 0xAAU, 0x55U});
+                payload_ = make_sample_payload();
                 rxtech::UdpDatagramDesc datagram;
                 datagram.payload_data = payload_.data();
                 datagram.payload_len = static_cast<std::uint32_t>(payload_.size());
+                datagram.src_ipv4_be = 0x7F000001U;
+                datagram.dst_ipv4_be = 0x7F000001U;
+                datagram.src_port = 40000U;
+                datagram.dst_port = 9999U;
                 datagram.backend_kind = rxtech::BackendKind::socket;
                 burst.datagrams.push_back(datagram);
             }
@@ -100,9 +116,16 @@ int main()
             return backend->stop_flag_.load(std::memory_order_relaxed);
         });
 
-    assert(summary.run_status == "error");
-    assert(summary.error_message.find("raw_frame_data/raw_frame_len") != std::string::npos);
-    assert(backend->polls_ == 1U);
-    assert(backend->release_calls_ == 1U);
+    assert(summary.run_status == "success");
+    assert(summary.error_message.empty());
+    assert(summary.rx_packets == 1U);
+    assert(summary.captured_packets == 1U);
+    assert(summary.recorded_packets == 1U);
+    assert(summary.captured_bytes == 2048U);
+    assert(summary.recorded_bytes == 2048U);
+    assert(packet_sink.str().size() == 2048U);
+    assert(index_sink.str().find("data_packet") != std::string::npos);
+    assert(backend->polls_ == 3U);
+    assert(backend->release_calls_ == 3U);
     return 0;
 }

@@ -77,6 +77,12 @@ add_test(NAME test_udp_datagram_pipeline COMMAND test_udp_datagram_pipeline)
 set_tests_properties(test_udp_datagram_pipeline PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(test_udp_datagram_pipeline)
 
+add_executable(test_data_order_tracker test_data_order_tracker.cpp)
+target_link_libraries(test_data_order_tracker PRIVATE rx_receiver_core)
+add_test(NAME test_data_order_tracker COMMAND test_data_order_tracker)
+set_tests_properties(test_data_order_tracker PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+rxtech_apply_warnings(test_data_order_tracker)
+
 add_executable(test_owner_loop_bridge_safety test_owner_loop_bridge_safety.cpp)
 target_link_libraries(test_owner_loop_bridge_safety PRIVATE rx_receiver_core)
 add_test(NAME test_owner_loop_bridge_safety COMMAND test_owner_loop_bridge_safety)
@@ -118,6 +124,13 @@ target_include_directories(test_dpdk_eal_args PRIVATE ${CMAKE_SOURCE_DIR}/src/re
 add_test(NAME test_dpdk_eal_args COMMAND test_dpdk_eal_args)
 set_tests_properties(test_dpdk_eal_args PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(test_dpdk_eal_args)
+
+add_executable(test_dpdk_datagram_adapter test_dpdk_datagram_adapter.cpp)
+target_link_libraries(test_dpdk_datagram_adapter PRIVATE rx_receiver_dpdk_ingress)
+target_include_directories(test_dpdk_datagram_adapter PRIVATE ${CMAKE_SOURCE_DIR}/src/receiver/ingress/dpdk/internal)
+add_test(NAME test_dpdk_datagram_adapter COMMAND test_dpdk_datagram_adapter)
+set_tests_properties(test_dpdk_datagram_adapter PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+rxtech_apply_warnings(test_dpdk_datagram_adapter)
 
 add_executable(test_cpi_output_pipeline test_cpi_output_pipeline.cpp)
 target_link_libraries(test_cpi_output_pipeline PRIVATE rx_receiver_core)

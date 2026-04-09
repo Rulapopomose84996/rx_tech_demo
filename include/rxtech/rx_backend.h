@@ -24,13 +24,16 @@ namespace rxtech
         std::uint64_t rx_bytes = 0;
         std::uint64_t rx_errors = 0;
         std::uint64_t backend_drops = 0;
+        std::uint64_t kernel_drop_count = 0;
         std::uint64_t rx_polls = 0;
         std::uint64_t empty_polls = 0;
+        std::uint64_t receive_batches = 0;
         std::uint64_t arp_request_packets = 0;
         std::uint64_t arp_reply_packets = 0;
         std::uint32_t queue_id = 0;
         std::uint64_t umem_size = 0;
         std::uint32_t frame_size = 0;
+        std::uint32_t max_burst_size = 0;
         std::uint32_t fill_ring_size = 0;
         std::uint32_t completion_ring_size = 0;
     };

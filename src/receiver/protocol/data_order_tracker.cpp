@@ -55,6 +55,21 @@ namespace rxtech
         return out.str();
     }
 
+    namespace
+    {
+        bool is_cpi_rollover(const rxtech::InterpretedPacketView &previous,
+                             const rxtech::InterpretedPacketView &current,
+                             const rxtech::ProtocolSpec &spec)
+        {
+            return previous.packet_index == spec.packets_per_channel &&
+                   previous.channel + 1U == spec.channels_per_prt &&
+                   current.cpi == static_cast<std::uint16_t>(previous.cpi + 1U) &&
+                   current.prt == 1U &&
+                   current.channel == 0U &&
+                   current.packet_index == 1U;
+        }
+    }
+
     void DataOrderTracker::observe(const InterpretedPacketView &packet)
     {
         ++checked_packets_;
@@ -63,6 +78,14 @@ namespace rxtech
             expected_next_ = build_next_expected(packet);
             previous_packet_ = packet;
             initialized_ = true;
+            return;
+        }
+
+        const bool rollover = is_cpi_rollover(previous_packet_, packet, spec_);
+        if (rollover)
+        {
+            expected_next_ = build_next_expected(packet);
+            previous_packet_ = packet;
             return;
         }
 

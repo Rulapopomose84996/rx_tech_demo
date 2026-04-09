@@ -4,46 +4,18 @@
 #include <cstdint>
 #include <functional>
 #include <iosfwd>
+#include <memory>
 
 #include "rxtech/metrics.h"
 #include "rxtech/packet_desc.h"
-#include "rxtech/protocol_sequence_interpreter.h"
 #include "rxtech/protocol_spec.h"
 #include "rxtech/rx_config.h"
-#include "rxtech/sample_packet_parser.h"
-#include "rxtech/sample_packet_validator.h"
 #include "rxtech/udp_payload_assembler.h"
+#include "protocol_pipeline_types.h"
 
 namespace rxtech
 {
-
-    /**
-     * @brief 处理后的数据包结构体
-     * 
-     * 该结构体封装了经过完整处理流程的数据包信息，包括UDP载荷帧、
-     * 解析后的数据包视图和解释后的数据包视图，以及数据包的来源信息。
-     */
-    struct ProcessedPacket
-    {
-        UdpPayloadFrame udp_frame;              ///< UDP载荷帧，包含完整的UDP载荷数据和网络层信息
-        ParsedPacketView parsed;                ///< 解析后的数据包视图，包含从原始数据中提取的协议字段
-        InterpretedPacketView interpreted;      ///< 解释后的数据包视图，包含基于协议序列的语义化信息
-        std::uint32_t source_queue_id = 0;      ///< 源队列ID，标识数据包来自哪个接收队列
-        std::uint64_t source_ts_ns = 0;         ///< 源时间戳（纳秒），记录数据包到达的时间
-    };
-
-    /**
-     * @brief 数据包处理统计信息结构体
-     * 
-     * 用于跟踪和记录数据包处理过程中的关键指标，包括接受的数据量、
-     * 数据包数量以及被过滤的数据包数量。
-     */
-    struct PacketProcessStats
-    {
-        std::uint64_t accepted_bytes = 0;       ///< 接受的总字节数
-        std::size_t accepted_packets = 0;       ///< 接受的数据包数量
-        std::uint64_t filtered_packets = 0;     ///< 被过滤的数据包数量
-    };
+    class UdpDatagramPipeline;
 
     /**
      * @brief 数据包处理管道类
@@ -66,6 +38,7 @@ namespace rxtech
          * @param spec 协议规范对象，定义数据包的格式、魔数、大小等协议参数
          */
         PacketPipeline(const RxConfig &config, const ProtocolSpec &spec);
+        ~PacketPipeline();
 
         /**
          * @brief 处理单个数据包
@@ -98,28 +71,8 @@ namespace rxtech
                                           const std::function<void(const ProcessedPacket &)> &on_packet);
 
     private:
-        /**
-         * @brief 检查UDP载荷帧是否符合数据包过滤条件
-         * 
-         * 根据配置的允许源IP地址和目标端口，判断给定的UDP载荷帧是否应该被处理。
-         * 过滤条件包括：
-         * - 源IPv4地址必须与配置的allowed_source_ipv4匹配（如果已配置）
-         * - 目标端口必须与配置的allowed_dest_port匹配（如果已配置）
-         * 
-         * @param frame UDP载荷帧对象，包含源/目标IP地址和端口信息
-         * 
-         * @return bool 如果数据包符合过滤条件返回true，否则返回false
-         */
-        bool matches_packet_filter(const UdpPayloadFrame &frame) const;
-
-        RxConfig config_;                           ///< 接收配置对象，存储网络和过滤配置
-        ProtocolSpec spec_;                         ///< 协议规范对象，定义数据包格式和解析规则
-        PacketParser parser_;                       ///< 数据包解析器，负责从UDP载荷中提取协议字段
-        PacketValidator validator_;                 ///< 数据包验证器，检查解析后的数据包是否有效
-        ProtocolSequenceInterpreter interpreter_;   ///< 协议序列解释器，解释数据包在序列中的位置
-        UdpPayloadAssembler assembler_;             ///< UDP载荷组装器，负责IP分片重组和UDP载荷提取
-        std::uint32_t allowed_source_ipv4_be_ = 0;  ///< 允许的源IPv4地址（大端序），0表示不过滤
-        std::uint32_t receiver_ipv4_be_ = 0;        ///< 接收端IPv4地址（大端序），用于验证目标地址
+        UdpPayloadAssembler assembler_;                    ///< UDP载荷组装器，负责IP分片重组和UDP载荷提取
+        std::unique_ptr<UdpDatagramPipeline> datagram_pipeline_; ///< datagram-first 协议入口
     };
 
 } // namespace rxtech
