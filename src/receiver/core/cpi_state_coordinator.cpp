@@ -1,6 +1,7 @@
 #include "internal/cpi_state_coordinator.h"
 
 #include <algorithm>
+#include <thread>
 
 #include "rxtech/time_utils.h"
 
@@ -222,13 +223,44 @@ namespace rxtech
             active_ctx_ = nullptr;
             active_ctx_index_ = kInvalidPoolIndex;
         }
+        auto drain_recycle_once = [this]() -> bool
+        {
+            if (recycle_ring_ == nullptr)
+            {
+                return false;
+            }
+
+            bool recycled = false;
+            ReleaseToken token;
+            while (recycle_ring_->pop(token))
+            {
+                ctx_pool_.release(token.ctx_pool_index);
+                recycled = true;
+            }
+            return recycled;
+        };
+
         active_ctx_index_ = ctx_pool_.acquire(cpi_id);
+        if (active_ctx_index_ == kInvalidPoolIndex)
+        {
+            for (int attempt = 0; attempt < 3 && active_ctx_index_ == kInvalidPoolIndex; ++attempt)
+            {
+                const bool recycled = drain_recycle_once();
+                if (active_ctx_index_ == kInvalidPoolIndex && !recycled)
+                {
+                    std::this_thread::yield();
+                    drain_recycle_once();
+                }
+                active_ctx_index_ = ctx_pool_.acquire(cpi_id);
+            }
+        }
         active_ctx_ = ctx_pool_.get(active_ctx_index_);
         if (active_ctx_ == nullptr)
         {
             active_ctx_index_ = kInvalidPoolIndex;
             run_status = "error";
             run_error = "cpi context pool exhausted";
+            metrics.on_pool_exhaustion();
             metrics.on_error();
             return false;
         }

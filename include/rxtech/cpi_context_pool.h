@@ -11,7 +11,7 @@
 namespace rxtech
 {
 
-    constexpr std::size_t kCpiContextPoolDepth = 4U;
+    constexpr std::size_t kCpiContextPoolDepth = 16U;
 
     class CpiContextPool
     {

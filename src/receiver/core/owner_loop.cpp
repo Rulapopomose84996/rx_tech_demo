@@ -87,7 +87,7 @@ namespace rxtech
 
         // CPI 输出管道：owner → output_ring → consumer → recycle_ring → owner
         // 使用无锁单生产者单消费者环形缓冲区实现线程间通信
-        constexpr std::size_t kOutputRingCapacity = 8U;
+        constexpr std::size_t kOutputRingCapacity = 32U;
         SpscRing<CpiOutput> output_ring(kOutputRingCapacity);
         SpscRing<ReleaseToken> recycle_ring(kOutputRingCapacity);
         cpi_state_coordinator.attach_rings(&output_ring, &recycle_ring);
@@ -140,6 +140,11 @@ namespace rxtech
             // 处理 burst 中的每个数据包
             for (const UdpDatagramDesc &datagram : burst.datagrams)
             {
+                // Drain recycle tokens before processing the next datagram so
+                // large bursts do not temporarily exhaust the CPI context pool
+                // after several back-to-back finalizations.
+                cpi_state_coordinator.drain_recycle(*context.metrics);
+
                 // 如果启用了原始帧录制，提交数据包到录制器
                 if (artifacts.raw_frame_recorder != nullptr &&
                     datagram.raw_frame_data != nullptr &&

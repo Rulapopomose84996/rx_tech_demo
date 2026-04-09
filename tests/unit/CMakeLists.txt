@@ -77,6 +77,12 @@ add_test(NAME test_udp_datagram_pipeline COMMAND test_udp_datagram_pipeline)
 set_tests_properties(test_udp_datagram_pipeline PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(test_udp_datagram_pipeline)
 
+add_executable(test_data_order_tracker test_data_order_tracker.cpp)
+target_link_libraries(test_data_order_tracker PRIVATE rx_receiver_core)
+add_test(NAME test_data_order_tracker COMMAND test_data_order_tracker)
+set_tests_properties(test_data_order_tracker PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+rxtech_apply_warnings(test_data_order_tracker)
+
 add_executable(test_owner_loop_bridge_safety test_owner_loop_bridge_safety.cpp)
 target_link_libraries(test_owner_loop_bridge_safety PRIVATE rx_receiver_core)
 add_test(NAME test_owner_loop_bridge_safety COMMAND test_owner_loop_bridge_safety)
