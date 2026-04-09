@@ -153,8 +153,9 @@ namespace rxtech
 
     bool DpdkDatagramAdapter::adapt_frame(const PacketDesc &packet,
                                           BackendStats &stats,
-                                          UdpDatagramBurst &burst) const
+                                          UdpDatagramDesc &datagram) const
     {
+        datagram = {};
         if (packet.data == nullptr || packet.len < kEthernetHeaderBytes)
         {
             return false;
@@ -216,7 +217,6 @@ namespace rxtech
             return false;
         }
 
-        UdpDatagramDesc datagram;
         datagram.payload_data = udp_header + kUdpHeaderBytes;
         datagram.payload_len = static_cast<std::uint32_t>(udp_length - kUdpHeaderBytes);
         datagram.raw_frame_data = packet.data;
@@ -229,9 +229,6 @@ namespace rxtech
         datagram.queue_id = packet.queue_id;
         datagram.cookie = packet.cookie;
         datagram.backend_kind = BackendKind::dpdk;
-        burst.datagrams.push_back(datagram);
-        ++stats.rx_packets;
-        stats.rx_bytes += datagram.payload_len;
         return true;
     }
 
@@ -308,7 +305,6 @@ namespace rxtech
                 return false;
             }
 
-            UdpDatagramBurst burst;
             PacketDesc packet;
             packet.data = rte_pktmbuf_mtod(mbuf, std::uint8_t *);
             packet.len = rte_pktmbuf_pkt_len(mbuf);
@@ -318,13 +314,7 @@ namespace rxtech
 
             BackendStats ignored_stats;
             DpdkDatagramAdapter adapter(local_ip_be);
-            if (!adapter.adapt_frame(packet, ignored_stats, burst) || burst.datagrams.empty())
-            {
-                return false;
-            }
-
-            datagram = burst.datagrams.front();
-            return true;
+            return adapter.adapt_frame(packet, ignored_stats, datagram);
         }
 #endif
     };
@@ -484,6 +474,8 @@ namespace rxtech
         for (std::uint16_t index = 0; index < received; ++index)
         {
             rte_mbuf *mbuf = mbufs[index];
+            ++stats_.rx_packets;
+            stats_.rx_bytes += rte_pktmbuf_pkt_len(mbuf);
             if (impl_->maybe_reply_arp(mbuf, stats_))
             {
                 rte_pktmbuf_free(mbuf);
@@ -497,8 +489,6 @@ namespace rxtech
             }
 
             burst.datagrams.push_back(datagram);
-            ++stats_.rx_packets;
-            stats_.rx_bytes += datagram.payload_len;
         }
         return true;
 #else

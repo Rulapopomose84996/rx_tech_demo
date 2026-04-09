@@ -17,7 +17,7 @@ class DpdkDatagramAdapter final {
 public:
     explicit DpdkDatagramAdapter(std::uint32_t local_ip_be);
 
-    bool adapt_frame(const PacketDesc& packet, BackendStats& stats, UdpDatagramBurst& burst) const;
+    bool adapt_frame(const PacketDesc& packet, BackendStats& stats, UdpDatagramDesc& datagram) const;
 
 private:
     std::uint32_t local_ip_be_ = 0;
