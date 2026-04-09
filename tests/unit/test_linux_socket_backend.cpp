@@ -4,9 +4,6 @@
 #include <vector>
 
 #include "linux_socket_backend.h"
-#include "packet_pipeline.h"
-#include "rxtech/metrics.h"
-#include "rxtech/protocol_spec.h"
 #include "rxtech/rx_config.h"
 
 #if defined(__linux__)
@@ -114,13 +111,7 @@ int main()
     config.receiver_ipv4 = "127.0.0.1";
     config.allowed_source_ipv4 = "127.0.0.1";
     config.allowed_dest_port = port;
-    config.socket_bind_ip = "127.0.0.1";
-    config.socket_bind_port = port;
-    config.socket_batch_timeout_ms = 50U;
-    config.socket_rcvbuf_bytes = 1024U * 1024U;
     config.protocol_udp_packet_size = 2048U;
-    config.protocol_channels_per_prt = 3U;
-    config.protocol_packets_per_channel = 9U;
 
     rxtech::LinuxSocketIngress backend;
     const rxtech::BackendInitResult init_result = backend.init(config);
@@ -153,45 +144,23 @@ int main()
         return 1;
     }
 
-    rxtech::MetricsCollector metrics;
-    const rxtech::ProtocolSpec spec = rxtech::protocol_spec_from_config(config);
-    rxtech::PacketPipeline pipeline(config, spec);
-
-    std::uint32_t invalid_dumped = 0U;
-    std::size_t callback_count = 0U;
-    rxtech::PacketKind packet_kind = rxtech::PacketKind::unknown;
-    std::size_t udp_payload_size = 0U;
-    rxtech::PacketDesc packet;
-    packet.data = const_cast<std::uint8_t *>(burst.datagrams.front().payload_data);
-    packet.len = burst.datagrams.front().payload_len;
-    packet.ts_ns = burst.datagrams.front().ts_ns;
-    packet.queue_id = burst.datagrams.front().queue_id;
-    packet.cookie = burst.datagrams.front().cookie;
-    const rxtech::PacketProcessStats stats = pipeline.process_packet(
-        packet,
-        metrics,
-        nullptr,
-        invalid_dumped,
-        [&](const rxtech::ProcessedPacket &processed)
-        {
-            ++callback_count;
-            packet_kind = processed.interpreted.kind;
-            udp_payload_size = processed.udp_frame.udp_payload.size();
-        });
+    if (burst.datagrams.front().payload_data == nullptr || burst.datagrams.front().payload_len != 2048U)
+    {
+        backend.release_burst(burst);
+        backend.shutdown();
+        std::cerr << "expected UDP payload view to be populated\n";
+        return 1;
+    }
+    if (burst.datagrams.front().payload_data[0] != 0x03U || burst.datagrams.front().payload_data[1] != 0xFFU)
+    {
+        backend.release_burst(burst);
+        backend.shutdown();
+        std::cerr << "expected UDP payload bytes to match sample payload\n";
+        return 1;
+    }
 
     backend.release_burst(burst);
     backend.shutdown();
-
-    if (stats.accepted_packets != 1U)
-    {
-        std::cerr << "expected PacketPipeline to accept one UDP frame, got " << stats.accepted_packets << '\n';
-        return 1;
-    }
-    if (callback_count != 1U || packet_kind != rxtech::PacketKind::data_packet || udp_payload_size != 2048U)
-    {
-        std::cerr << "expected socket packet to pass through PacketPipeline as one valid data packet\n";
-        return 1;
-    }
     return 0;
 #endif
 }

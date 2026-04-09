@@ -310,8 +310,10 @@ namespace rxtech
                         static_cast<std::size_t>(received));
 
             UdpDatagramDesc datagram;
-            datagram.payload_data = frame.data();
-            datagram.payload_len = static_cast<std::uint32_t>(frame.size());
+            datagram.raw_frame_data = frame.data();
+            datagram.raw_frame_len = static_cast<std::uint32_t>(frame.size());
+            datagram.payload_data = impl_->recv_buffer.data();
+            datagram.payload_len = static_cast<std::uint32_t>(received);
             datagram.src_ipv4_be = source_ipv4_be;
             datagram.dst_ipv4_be = impl_->dest_ipv4_be;
             datagram.src_port = source_port;
@@ -323,7 +325,7 @@ namespace rxtech
             burst.datagrams.push_back(datagram);
 
             ++stats_.rx_packets;
-            stats_.rx_bytes += datagram.payload_len;
+            stats_.rx_bytes += datagram.raw_frame_len;
         }
 
         if (burst.datagrams.empty())

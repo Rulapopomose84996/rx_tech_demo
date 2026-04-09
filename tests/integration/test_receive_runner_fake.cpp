@@ -122,8 +122,10 @@ namespace
             for (const auto &payload : packet_storage_)
             {
                 rxtech::UdpDatagramDesc datagram;
-                datagram.payload_data = payload.data();
-                datagram.payload_len = static_cast<std::uint32_t>(payload.size());
+                datagram.raw_frame_data = payload.data();
+                datagram.raw_frame_len = static_cast<std::uint32_t>(payload.size());
+                datagram.payload_data = payload.data() + 42U;
+                datagram.payload_len = static_cast<std::uint32_t>(payload.size() - 42U);
                 datagram.ts_ns = rxtech::steady_clock_now_ns();
                 datagram.queue_id = 3;
                 datagram.backend_kind = rxtech::BackendKind::file_replay;
@@ -236,8 +238,10 @@ namespace
             for (const auto &payload : packet_storage_)
             {
                 rxtech::UdpDatagramDesc datagram;
-                datagram.payload_data = payload.data();
-                datagram.payload_len = static_cast<std::uint32_t>(payload.size());
+                datagram.raw_frame_data = payload.data();
+                datagram.raw_frame_len = static_cast<std::uint32_t>(payload.size());
+                datagram.payload_data = payload.data() + 42U;
+                datagram.payload_len = static_cast<std::uint32_t>(payload.size() - 42U);
                 datagram.ts_ns = rxtech::steady_clock_now_ns();
                 datagram.queue_id = 0;
                 datagram.backend_kind = rxtech::BackendKind::file_replay;

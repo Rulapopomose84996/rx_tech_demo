@@ -128,8 +128,9 @@ namespace rxtech
             for (const UdpDatagramDesc &datagram : burst.datagrams)
             {
                 PacketDesc packet;
-                packet.data = const_cast<std::uint8_t *>(datagram.payload_data);
-                packet.len = datagram.payload_len;
+                packet.data = const_cast<std::uint8_t *>(
+                    datagram.raw_frame_data != nullptr ? datagram.raw_frame_data : datagram.payload_data);
+                packet.len = datagram.raw_frame_data != nullptr ? datagram.raw_frame_len : datagram.payload_len;
                 packet.ts_ns = datagram.ts_ns;
                 packet.queue_id = datagram.queue_id;
                 packet.cookie = datagram.cookie;

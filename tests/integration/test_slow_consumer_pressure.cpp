@@ -181,8 +181,10 @@ namespace
                 if (served >= max)
                     break;
                 rxtech::UdpDatagramDesc datagram;
-                datagram.payload_data = f.data();
-                datagram.payload_len = static_cast<std::uint32_t>(f.size());
+                datagram.raw_frame_data = f.data();
+                datagram.raw_frame_len = static_cast<std::uint32_t>(f.size());
+                datagram.payload_data = f.data() + 42U;
+                datagram.payload_len = static_cast<std::uint32_t>(f.size() - 42U);
                 datagram.ts_ns = ts;
                 datagram.backend_kind = rxtech::BackendKind::file_replay;
                 burst.datagrams.push_back(datagram);
