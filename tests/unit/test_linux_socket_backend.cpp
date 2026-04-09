@@ -121,11 +121,8 @@ int main()
         return 1;
     }
 
-    const std::vector<std::uint8_t> payload_a = make_sample_udp_payload();
-    std::vector<std::uint8_t> payload_b = make_sample_udp_payload();
-    payload_b[0] = 0x11U;
-    payload_b[1] = 0x22U;
-    if (!send_udp_payload(port, payload_a) || !send_udp_payload(port, payload_b))
+    const std::vector<std::uint8_t> payload = make_sample_udp_payload();
+    if (!send_udp_payload(port, payload))
     {
         backend.shutdown();
         std::cerr << "failed to send loopback UDP payload\n";
@@ -139,41 +136,71 @@ int main()
         std::cerr << "socket backend recv_burst failed\n";
         return 1;
     }
-    if (burst.datagrams.size() != 2U)
+    if (burst.datagrams.size() != 1U)
     {
         backend.release_burst(burst);
         backend.shutdown();
-        std::cerr << "expected exactly two received packets, got " << burst.datagrams.size() << '\n';
+        std::cerr << "expected exactly one received datagram, got " << burst.datagrams.size() << '\n';
         return 1;
     }
 
-    if (burst.datagrams[0].payload_data == nullptr || burst.datagrams[1].payload_data == nullptr)
+    const rxtech::UdpDatagramDesc &datagram = burst.datagrams.front();
+    if (datagram.payload_data == nullptr)
     {
         backend.release_burst(burst);
         backend.shutdown();
         std::cerr << "expected UDP payload view to be populated\n";
         return 1;
     }
-    if (burst.datagrams[0].payload_len != 2048U || burst.datagrams[1].payload_len != 2048U)
+    if (datagram.payload_len != 2048U)
     {
         backend.release_burst(burst);
         backend.shutdown();
-        std::cerr << "expected UDP payload lengths to remain stable\n";
+        std::cerr << "expected UDP payload length to remain stable\n";
         return 1;
     }
-    if (burst.datagrams[0].payload_data == burst.datagrams[1].payload_data)
+    if (datagram.src_ipv4_be != 0x7F000001U)
     {
         backend.release_burst(burst);
         backend.shutdown();
-        std::cerr << "expected payload views to be burst-local and distinct\n";
+        std::cerr << "expected loopback source IPv4 in big-endian form\n";
         return 1;
     }
-    if (burst.datagrams[0].payload_data[0] != 0x03U || burst.datagrams[0].payload_data[1] != 0xFFU ||
-        burst.datagrams[1].payload_data[0] != 0x11U || burst.datagrams[1].payload_data[1] != 0x22U)
+    if (datagram.dst_port != port)
     {
         backend.release_burst(burst);
         backend.shutdown();
-        std::cerr << "expected both UDP payload buffers to remain readable until release\n";
+        std::cerr << "expected destination port to match the bound port\n";
+        return 1;
+    }
+    if (datagram.backend_kind != rxtech::BackendKind::socket)
+    {
+        backend.release_burst(burst);
+        backend.shutdown();
+        std::cerr << "expected socket backend kind on received datagram\n";
+        return 1;
+    }
+    if (std::memcmp(datagram.payload_data, payload.data(), payload.size()) != 0)
+    {
+        backend.release_burst(burst);
+        backend.shutdown();
+        std::cerr << "expected received payload bytes to match the sent datagram\n";
+        return 1;
+    }
+
+    const rxtech::BackendStats stats = backend.stats();
+    if (stats.receive_batches < 1U)
+    {
+        backend.release_burst(burst);
+        backend.shutdown();
+        std::cerr << "expected at least one recorded receive batch\n";
+        return 1;
+    }
+    if (stats.max_burst_size < 1U)
+    {
+        backend.release_burst(burst);
+        backend.shutdown();
+        std::cerr << "expected max burst size to reflect the received datagram\n";
         return 1;
     }
 

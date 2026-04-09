@@ -1,6 +1,7 @@
 ﻿#include "linux_socket_backend.h"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -27,16 +28,8 @@ namespace rxtech
     namespace
     {
 
-        constexpr std::size_t kEthernetHeaderBytes = 14U;
-        constexpr std::size_t kIpv4HeaderBytes = 20U;
-        constexpr std::size_t kUdpHeaderBytes = 8U;
-        constexpr std::size_t kSyntheticFramePrefixBytes =
-            kEthernetHeaderBytes + kIpv4HeaderBytes + kUdpHeaderBytes;
-        constexpr std::uint16_t kEtherTypeIpv4 = 0x0800U;
-        constexpr std::uint8_t kIpVersionAndIhl = 0x45U;
-        constexpr std::uint8_t kIpTtl = 64U;
-        constexpr std::uint8_t kIpProtocolUdp = 17U;
         constexpr std::size_t kMaxUdpPayloadBytes = 65507U;
+        constexpr std::size_t kSocketControlBytes = CMSG_SPACE(sizeof(in_pktinfo));
 
         BackendInitResult make_socket_result(bool available, const std::string &reason)
         {
@@ -44,20 +37,6 @@ namespace rxtech
             result.available = available;
             result.reason = reason;
             return result;
-        }
-
-        void write_u16_be(std::uint8_t *data, std::uint16_t value)
-        {
-            data[0] = static_cast<std::uint8_t>((value >> 8U) & 0xFFU);
-            data[1] = static_cast<std::uint8_t>(value & 0xFFU);
-        }
-
-        void write_u32_be(std::uint8_t *data, std::uint32_t value)
-        {
-            data[0] = static_cast<std::uint8_t>((value >> 24U) & 0xFFU);
-            data[1] = static_cast<std::uint8_t>((value >> 16U) & 0xFFU);
-            data[2] = static_cast<std::uint8_t>((value >> 8U) & 0xFFU);
-            data[3] = static_cast<std::uint8_t>(value & 0xFFU);
         }
 
         std::string socket_error_message(const std::string &action)
@@ -75,18 +54,71 @@ namespace rxtech
             return config.receiver_ipv4.empty() ? effective_socket_bind_ip(config) : config.receiver_ipv4;
         }
 
+        std::uint32_t socket_dest_ipv4_be(const sockaddr_in &peer,
+                                          const in_pktinfo &pktinfo,
+                                          const std::uint32_t default_dest_ipv4_be)
+        {
+            if (pktinfo.ipi_addr.s_addr != 0)
+            {
+                return ntohl(pktinfo.ipi_addr.s_addr);
+            }
+            return default_dest_ipv4_be != 0U ? default_dest_ipv4_be : ntohl(peer.sin_addr.s_addr);
+        }
+
     } // namespace
 
     struct LinuxSocketIngress::Impl
     {
 #if defined(__linux__)
+        struct SocketSlot
+        {
+            std::array<std::uint8_t, kMaxUdpPayloadBytes> payload{};
+            sockaddr_in peer{};
+            in_pktinfo pktinfo{};
+            std::array<char, kSocketControlBytes> control{};
+            std::uint32_t payload_len = 0;
+            bool truncated = false;
+        };
+
         int socket_fd = -1;
         bool nonblocking = false;
-        std::vector<std::vector<std::uint8_t>> burst_storage;
-        std::vector<std::uint8_t> recv_buffer;
+        std::uint32_t batch_timeout_ms = 0;
+        std::vector<SocketSlot> slots;
+        std::vector<iovec> iovecs;
+        std::vector<mmsghdr> msgs;
         std::uint32_t dest_ipv4_be = 0;
         std::uint16_t bind_port = 0;
-        std::uint16_t next_ip_identification = 1;
+
+        void prepare_batch(const std::uint32_t capacity)
+        {
+            if (capacity == 0U || slots.size() >= capacity)
+            {
+                return;
+            }
+
+            slots.resize(capacity);
+            iovecs.resize(capacity);
+            msgs.resize(capacity);
+            for (std::uint32_t index = 0; index < capacity; ++index)
+            {
+                SocketSlot &slot = slots[index];
+                iovec &iov = iovecs[index];
+                mmsghdr &msg = msgs[index];
+                std::memset(&slot.peer, 0, sizeof(slot.peer));
+                std::memset(&slot.pktinfo, 0, sizeof(slot.pktinfo));
+                std::memset(slot.control.data(), 0, slot.control.size());
+                std::memset(&iov, 0, sizeof(iov));
+                std::memset(&msg, 0, sizeof(msg));
+                iov.iov_base = slot.payload.data();
+                iov.iov_len = slot.payload.size();
+                msg.msg_hdr.msg_name = &slot.peer;
+                msg.msg_hdr.msg_namelen = sizeof(slot.peer);
+                msg.msg_hdr.msg_iov = &iov;
+                msg.msg_hdr.msg_iovlen = 1;
+                msg.msg_hdr.msg_control = slot.control.data();
+                msg.msg_hdr.msg_controllen = slot.control.size();
+            }
+        }
 
         void cleanup()
         {
@@ -96,11 +128,12 @@ namespace rxtech
                 socket_fd = -1;
             }
             nonblocking = false;
-            burst_storage.clear();
-            recv_buffer.clear();
+            batch_timeout_ms = 0;
+            slots.clear();
+            iovecs.clear();
+            msgs.clear();
             dest_ipv4_be = 0;
             bind_port = 0;
-            next_ip_identification = 1;
         }
 #endif
     };
@@ -174,19 +207,6 @@ namespace rxtech
             return make_socket_result(true, socket_error_message("设置 SO_RCVBUF"));
         }
 
-        if (config.socket_batch_timeout_ms > 0U)
-        {
-            timeval timeout{};
-            timeout.tv_sec = static_cast<long>(config.socket_batch_timeout_ms / 1000U);
-            timeout.tv_usec = static_cast<long>((config.socket_batch_timeout_ms % 1000U) * 1000U);
-            if (::setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0)
-            {
-                ++stats_.rx_errors;
-                ::close(socket_fd);
-                return make_socket_result(true, socket_error_message("设置 SO_RCVTIMEO"));
-            }
-        }
-
         if (config.socket_nonblocking)
         {
             const int flags = ::fcntl(socket_fd, F_GETFL, 0);
@@ -196,6 +216,14 @@ namespace rxtech
                 ::close(socket_fd);
                 return make_socket_result(true, socket_error_message("设置 O_NONBLOCK"));
             }
+        }
+
+        int enable_pktinfo = 1;
+        if (::setsockopt(socket_fd, IPPROTO_IP, IP_PKTINFO, &enable_pktinfo, sizeof(enable_pktinfo)) != 0)
+        {
+            ++stats_.rx_errors;
+            ::close(socket_fd);
+            return make_socket_result(true, socket_error_message("设置 IP_PKTINFO"));
         }
 
         if (::bind(socket_fd,
@@ -209,12 +237,12 @@ namespace rxtech
 
         impl_->socket_fd = socket_fd;
         impl_->nonblocking = config.socket_nonblocking;
+        impl_->batch_timeout_ms = config.socket_batch_timeout_ms;
         impl_->dest_ipv4_be = ntohl(frame_dest_addr.s_addr);
         impl_->bind_port = bind_port;
-        impl_->recv_buffer.resize(kMaxUdpPayloadBytes);
 
         stats_.queue_id = config.queue_id;
-        stats_.frame_size = static_cast<std::uint32_t>(kSyntheticFramePrefixBytes + config.protocol_udp_packet_size);
+        stats_.frame_size = config.protocol_udp_packet_size;
 
         BackendInitResult result;
         result.ok = true;
@@ -241,91 +269,102 @@ namespace rxtech
             return true;
         }
 
-        if (impl_->burst_storage.size() < max_burst)
-        {
-            impl_->burst_storage.resize(max_burst);
-        }
-
+        impl_->prepare_batch(max_burst);
         for (std::uint32_t index = 0; index < max_burst; ++index)
         {
-            sockaddr_storage remote_addr{};
-            socklen_t remote_addr_len = sizeof(remote_addr);
-            const int recv_flags = (index == 0U && !impl_->nonblocking) ? 0 : MSG_DONTWAIT;
-            const ssize_t received = ::recvfrom(impl_->socket_fd,
-                                                impl_->recv_buffer.data(),
-                                                impl_->recv_buffer.size(),
-                                                recv_flags,
-                                                reinterpret_cast<sockaddr *>(&remote_addr),
-                                                &remote_addr_len);
-            if (received < 0)
+            Impl::SocketSlot &slot = impl_->slots[index];
+            mmsghdr &msg = impl_->msgs[index];
+            std::memset(&slot.peer, 0, sizeof(slot.peer));
+            std::memset(&slot.pktinfo, 0, sizeof(slot.pktinfo));
+            std::memset(slot.control.data(), 0, slot.control.size());
+            slot.payload_len = 0U;
+            slot.truncated = false;
+            msg.msg_hdr.msg_namelen = sizeof(slot.peer);
+            msg.msg_hdr.msg_controllen = slot.control.size();
+            msg.msg_hdr.msg_flags = 0;
+            msg.msg_len = 0U;
+        }
+
+        timespec timeout{};
+        timespec *timeout_ptr = nullptr;
+        if (!impl_->nonblocking && impl_->batch_timeout_ms > 0U)
+        {
+            timeout.tv_sec = static_cast<time_t>(impl_->batch_timeout_ms / 1000U);
+            timeout.tv_nsec = static_cast<long>((impl_->batch_timeout_ms % 1000U) * 1000000U);
+            timeout_ptr = &timeout;
+        }
+
+        const int recv_flags = impl_->nonblocking ? MSG_DONTWAIT : MSG_WAITFORONE;
+        const int received = ::recvmmsg(impl_->socket_fd,
+                                        impl_->msgs.data(),
+                                        max_burst,
+                                        recv_flags,
+                                        timeout_ptr);
+        if (received < 0)
+        {
+            if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
             {
-                if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
-                {
-                    break;
-                }
-                ++stats_.rx_errors;
-                return false;
+                ++stats_.empty_polls;
+                return true;
             }
-            if (received == 0)
-            {
-                continue;
-            }
-            if (remote_addr.ss_family != AF_INET)
+            ++stats_.rx_errors;
+            return false;
+        }
+
+        if (received == 0)
+        {
+            ++stats_.empty_polls;
+            return true;
+        }
+
+        ++stats_.receive_batches;
+        stats_.max_burst_size = std::max<std::uint32_t>(
+            stats_.max_burst_size,
+            static_cast<std::uint32_t>(received));
+
+        for (int index = 0; index < received; ++index)
+        {
+            Impl::SocketSlot &slot = impl_->slots[static_cast<std::size_t>(index)];
+            const mmsghdr &msg = impl_->msgs[static_cast<std::size_t>(index)];
+            slot.payload_len = static_cast<std::uint32_t>(msg.msg_len);
+            slot.truncated = (msg.msg_hdr.msg_flags & MSG_TRUNC) != 0;
+            if (slot.peer.sin_family != AF_INET)
             {
                 ++stats_.backend_drops;
                 continue;
             }
 
-            const auto *remote_ipv4 = reinterpret_cast<const sockaddr_in *>(&remote_addr);
-            const std::uint32_t source_ipv4_be = ntohl(remote_ipv4->sin_addr.s_addr);
-            const std::uint16_t source_port = ntohs(remote_ipv4->sin_port);
-
-            std::vector<std::uint8_t> &frame = impl_->burst_storage[index];
-            frame.resize(kSyntheticFramePrefixBytes + static_cast<std::size_t>(received));
-            std::fill(frame.begin(), frame.begin() + 12U, 0U);
-            write_u16_be(frame.data() + 12U, kEtherTypeIpv4);
-
-            std::uint8_t *ip_header = frame.data() + kEthernetHeaderBytes;
-            ip_header[0] = kIpVersionAndIhl;
-            ip_header[1] = 0U;
-            write_u16_be(ip_header + 2U,
-                         static_cast<std::uint16_t>(kIpv4HeaderBytes + kUdpHeaderBytes + received));
-            write_u16_be(ip_header + 4U, impl_->next_ip_identification++);
-            write_u16_be(ip_header + 6U, 0U);
-            ip_header[8] = kIpTtl;
-            ip_header[9] = kIpProtocolUdp;
-            write_u16_be(ip_header + 10U, 0U);
-            write_u32_be(ip_header + 12U, source_ipv4_be);
-            write_u32_be(ip_header + 16U, impl_->dest_ipv4_be);
-
-            std::uint8_t *udp_header = ip_header + kIpv4HeaderBytes;
-            write_u16_be(udp_header + 0U, source_port);
-            write_u16_be(udp_header + 2U, impl_->bind_port);
-            write_u16_be(udp_header + 4U,
-                         static_cast<std::uint16_t>(kUdpHeaderBytes + received));
-            write_u16_be(udp_header + 6U, 0U);
-
-            std::memcpy(udp_header + kUdpHeaderBytes,
-                        impl_->recv_buffer.data(),
-                        static_cast<std::size_t>(received));
+            for (cmsghdr *cmsg = CMSG_FIRSTHDR(const_cast<msghdr *>(&msg.msg_hdr));
+                 cmsg != nullptr;
+                 cmsg = CMSG_NXTHDR(const_cast<msghdr *>(&msg.msg_hdr), cmsg))
+            {
+                if (cmsg->cmsg_level == IPPROTO_IP &&
+                    cmsg->cmsg_type == IP_PKTINFO &&
+                    cmsg->cmsg_len >= CMSG_LEN(sizeof(in_pktinfo)))
+                {
+                    std::memcpy(&slot.pktinfo, CMSG_DATA(cmsg), sizeof(slot.pktinfo));
+                    break;
+                }
+            }
 
             UdpDatagramDesc datagram;
-            datagram.raw_frame_data = frame.data();
-            datagram.raw_frame_len = static_cast<std::uint32_t>(frame.size());
-            datagram.payload_data = impl_->recv_buffer.data();
-            datagram.payload_len = static_cast<std::uint32_t>(received);
-            datagram.src_ipv4_be = source_ipv4_be;
-            datagram.dst_ipv4_be = impl_->dest_ipv4_be;
-            datagram.src_port = source_port;
+            datagram.payload_data = slot.payload.data();
+            datagram.payload_len = slot.payload_len;
+            datagram.raw_frame_data = nullptr;
+            datagram.raw_frame_len = 0U;
+            datagram.src_ipv4_be = ntohl(slot.peer.sin_addr.s_addr);
+            datagram.dst_ipv4_be = socket_dest_ipv4_be(slot.peer, slot.pktinfo, impl_->dest_ipv4_be);
+            datagram.src_port = ntohs(slot.peer.sin_port);
             datagram.dst_port = impl_->bind_port;
             datagram.ts_ns = steady_clock_now_ns();
             datagram.queue_id = stats_.queue_id;
             datagram.cookie = static_cast<std::uintptr_t>(index);
             datagram.backend_kind = BackendKind::socket;
+            datagram.truncated = slot.truncated;
             burst.datagrams.push_back(datagram);
 
             ++stats_.rx_packets;
-            stats_.rx_bytes += datagram.raw_frame_len;
+            stats_.rx_bytes += datagram.payload_len;
         }
 
         if (burst.datagrams.empty())
