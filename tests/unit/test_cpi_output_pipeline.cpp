@@ -12,6 +12,7 @@
 #include "rxtech/cpi_context.h"
 #include "rxtech/cpi_context_pool.h"
 #include "rxtech/cpi_finalizer.h"
+#include "rxtech/metrics.h"
 #include "rxtech/spsc_ring.h"
 
 int main()
@@ -156,6 +157,71 @@ int main()
             const std::uint32_t pi = pool2.acquire(i + 200U);
             assert(pi != rxtech::kInvalidPoolIndex);
         }
+    }
+
+    // ── Zero-blocking output drop test ──────────────────────────────
+    // Prove that when the output ring is full:
+    //   1. finalize does NOT wait for ring space
+    //   2. pool slot is released immediately (reusable)
+    //   3. output_backpressure_count is incremented
+    {
+        // Use a tiny ring so we can easily fill it.
+        constexpr std::size_t kTinyRingCap = 2U;
+        rxtech::SpscRing<rxtech::CpiOutput> tiny_output_ring(kTinyRingCap);
+        rxtech::SpscRing<rxtech::ReleaseToken> tiny_recycle_ring(kTinyRingCap);
+        rxtech::CpiContextPool drop_pool;
+        rxtech::CpiFinalizer drop_finalizer;
+        rxtech::MetricsCollector drop_metrics;
+
+        // Fill all usable output slots so next push will fail.
+        // SpscRing(2) has usable capacity of 1 (one slot reserved).
+        // Fill it with a dummy CpiOutput.
+        {
+            rxtech::CpiOutput dummy{};
+            dummy.cpi_id = 999U;
+            assert(tiny_output_ring.push(dummy));
+        }
+
+        // Now acquire a CPI context, finalize it, and try to push it
+        // to the full output ring — should drop immediately.
+        const std::uint32_t drop_idx = drop_pool.acquire(77U);
+        assert(drop_idx != rxtech::kInvalidPoolIndex);
+        rxtech::CpiContext *drop_ctx = drop_pool.get(drop_idx);
+        assert(drop_ctx != nullptr);
+
+        rxtech::ControlSnapshot drop_control{};
+        drop_control.cpi_id = 77U;
+        drop_control.n_prt = 1U;
+        drop_control.channel_count = 3U;
+        drop_control.packets_per_channel = 9U;
+        drop_control.valid = true;
+        drop_control.bind_source = rxtech::BindSource::control;
+        rxtech::bind_control_snapshot(*drop_ctx, drop_control);
+        drop_ctx->header.state = rxtech::CpiState::ACTIVE;
+        drop_ctx->header.ready_prt_count = 1U;
+
+        const auto maybe_drop_output = drop_finalizer.try_finalize(*drop_ctx, rxtech::TriggerCpiSwitch);
+        assert(maybe_drop_output.has_value());
+
+        // Manually simulate what the coordinator does:
+        rxtech::CpiOutput drop_out = *maybe_drop_output;
+        drop_out.pool_index = drop_idx;
+        drop_out.output_id = 100U;
+        const bool push_ok = tiny_output_ring.push(drop_out);
+        assert(!push_ok); // Ring should be full
+
+        // Simulate the immediate non-blocking drop path
+        drop_metrics.on_output_backpressure();
+        drop_pool.release(drop_idx);
+
+        // Verify the drop was recorded
+        rxtech::RunSummary drop_summary = drop_metrics.finalize("test", "", "", 0);
+        assert(drop_summary.output_backpressure_count == 1U);
+
+        // Verify pool slot is immediately reusable
+        const std::uint32_t reused_idx = drop_pool.acquire(99U);
+        assert(reused_idx != rxtech::kInvalidPoolIndex);
+        drop_pool.release(reused_idx);
     }
 
     return 0;

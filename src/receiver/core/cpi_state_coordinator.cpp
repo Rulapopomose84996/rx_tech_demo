@@ -286,9 +286,10 @@ namespace rxtech
                 out.output_id = next_output_id_++;
                 if (!output_ring_->push(out))
                 {
-                    // SPSC full — backpressure: discard and release immediately
+                    // SPSC full — zero-blocking drop: discard and release immediately
                     metrics.on_output_backpressure();
                     ctx_pool_.release(active_ctx_index_);
+                    output_degraded_ = true;
                 }
                 // else: pool slot stays occupied until consumer returns ReleaseToken
             }
@@ -325,6 +326,7 @@ namespace rxtech
                 {
                     metrics.on_output_backpressure();
                     ctx_pool_.release(previous_ctx_index_);
+                    output_degraded_ = true;
                 }
             }
             else
@@ -455,6 +457,23 @@ namespace rxtech
             active_ctx_index_ = kInvalidPoolIndex;
             active_ctx_ = nullptr;
         }
+    }
+
+    void CpiStateCoordinator::configure_output_policy(const std::string &policy)
+    {
+        if (policy == "error")
+        {
+            output_drop_policy_ = "error";
+        }
+        else
+        {
+            output_drop_policy_ = "degrade";
+        }
+    }
+
+    bool CpiStateCoordinator::output_drop_is_error() const
+    {
+        return output_drop_policy_ == "error";
     }
 
 } // namespace rxtech

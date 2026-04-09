@@ -140,6 +140,30 @@ namespace rxtech
         void finalize_active_for_shutdown(IMetricsCollector &metrics);
 
         /**
+         * @brief 配置输出丢弃策略
+         *
+         * 设置 finalize 后输出 push 失败时的运行结论策略。
+         * "degrade" 表示降级（默认），"error" 表示错误。
+         *
+         * @param policy 策略字符串，"degrade" 或 "error"
+         */
+        void configure_output_policy(const std::string &policy);
+
+        /**
+         * @brief 查询输出丢弃是否视为错误
+         *
+         * @return true 如果 output_drop_policy 为 "error"
+         */
+        bool output_drop_is_error() const;
+
+        /**
+         * @brief 查询是否已发生输出退化
+         *
+         * @return true 如果至少有一次输出丢弃
+         */
+        bool output_degraded() const { return output_degraded_; }
+
+        /**
          * @brief 释放活动CPI上下文
          *
          * 立即释放当前活动的CPI上下文，将其返回到上下文池中。
@@ -211,6 +235,8 @@ namespace rxtech
         CpiContext *active_ctx_ = nullptr;                     ///< 指向活动CPI上下文的指针
         std::uint32_t previous_ctx_index_ = kInvalidPoolIndex; ///< 前一个CPI上下文在池中的索引，用于延迟清理
         CpiContext *previous_ctx_ = nullptr;                   ///< 指向前一个CPI上下文的指针
+        std::string output_drop_policy_ = "degrade";           ///< 输出丢弃策略：degrade 或 error
+        bool output_degraded_ = false;                         ///< 是否已发生输出退化
     };
 
 } // namespace rxtech
