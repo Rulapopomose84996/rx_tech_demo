@@ -91,7 +91,7 @@ int main()
 
     // Multi-CPI stress: acquire, finalize, push multiple → all recycled.
     {
-        constexpr std::uint16_t kCount = 4U; // pool depth
+        constexpr std::uint16_t kCount = static_cast<std::uint16_t>(rxtech::kCpiContextPoolDepth);
         rxtech::SpscRing<rxtech::CpiOutput> out2(16U);
         rxtech::SpscRing<rxtech::ReleaseToken> rec2(16U);
         rxtech::CpiContextPool pool2;
