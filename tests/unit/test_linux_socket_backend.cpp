@@ -121,8 +121,11 @@ int main()
         return 1;
     }
 
-    const std::vector<std::uint8_t> payload = make_sample_udp_payload();
-    if (!send_udp_payload(port, payload))
+    const std::vector<std::uint8_t> payload_a = make_sample_udp_payload();
+    std::vector<std::uint8_t> payload_b = make_sample_udp_payload();
+    payload_b[0] = 0x11U;
+    payload_b[1] = 0x22U;
+    if (!send_udp_payload(port, payload_a) || !send_udp_payload(port, payload_b))
     {
         backend.shutdown();
         std::cerr << "failed to send loopback UDP payload\n";
@@ -136,26 +139,41 @@ int main()
         std::cerr << "socket backend recv_burst failed\n";
         return 1;
     }
-    if (burst.datagrams.size() != 1U)
+    if (burst.datagrams.size() != 2U)
     {
         backend.release_burst(burst);
         backend.shutdown();
-        std::cerr << "expected exactly one received packet, got " << burst.datagrams.size() << '\n';
+        std::cerr << "expected exactly two received packets, got " << burst.datagrams.size() << '\n';
         return 1;
     }
 
-    if (burst.datagrams.front().payload_data == nullptr || burst.datagrams.front().payload_len != 2048U)
+    if (burst.datagrams[0].payload_data == nullptr || burst.datagrams[1].payload_data == nullptr)
     {
         backend.release_burst(burst);
         backend.shutdown();
         std::cerr << "expected UDP payload view to be populated\n";
         return 1;
     }
-    if (burst.datagrams.front().payload_data[0] != 0x03U || burst.datagrams.front().payload_data[1] != 0xFFU)
+    if (burst.datagrams[0].payload_len != 2048U || burst.datagrams[1].payload_len != 2048U)
     {
         backend.release_burst(burst);
         backend.shutdown();
-        std::cerr << "expected UDP payload bytes to match sample payload\n";
+        std::cerr << "expected UDP payload lengths to remain stable\n";
+        return 1;
+    }
+    if (burst.datagrams[0].payload_data == burst.datagrams[1].payload_data)
+    {
+        backend.release_burst(burst);
+        backend.shutdown();
+        std::cerr << "expected payload views to be burst-local and distinct\n";
+        return 1;
+    }
+    if (burst.datagrams[0].payload_data[0] != 0x03U || burst.datagrams[0].payload_data[1] != 0xFFU ||
+        burst.datagrams[1].payload_data[0] != 0x11U || burst.datagrams[1].payload_data[1] != 0x22U)
+    {
+        backend.release_burst(burst);
+        backend.shutdown();
+        std::cerr << "expected both UDP payload buffers to remain readable until release\n";
         return 1;
     }
 

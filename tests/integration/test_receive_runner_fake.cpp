@@ -124,8 +124,12 @@ namespace
                 rxtech::UdpDatagramDesc datagram;
                 datagram.raw_frame_data = payload.data();
                 datagram.raw_frame_len = static_cast<std::uint32_t>(payload.size());
-                datagram.payload_data = payload.data() + 42U;
-                datagram.payload_len = static_cast<std::uint32_t>(payload.size() - 42U);
+                datagram.payload_data = nullptr;
+                datagram.payload_len = 0U;
+                datagram.src_ipv4_be = 0U;
+                datagram.dst_ipv4_be = 0U;
+                datagram.src_port = 0U;
+                datagram.dst_port = 0U;
                 datagram.ts_ns = rxtech::steady_clock_now_ns();
                 datagram.queue_id = 3;
                 datagram.backend_kind = rxtech::BackendKind::file_replay;
@@ -135,7 +139,7 @@ namespace
             stats_.rx_packets += burst.datagrams.size();
             for (const auto &datagram : burst.datagrams)
             {
-                stats_.rx_bytes += datagram.payload_len;
+                stats_.rx_bytes += datagram.raw_frame_len;
             }
             return true;
         }
@@ -240,14 +244,18 @@ namespace
                 rxtech::UdpDatagramDesc datagram;
                 datagram.raw_frame_data = payload.data();
                 datagram.raw_frame_len = static_cast<std::uint32_t>(payload.size());
-                datagram.payload_data = payload.data() + 42U;
-                datagram.payload_len = static_cast<std::uint32_t>(payload.size() - 42U);
+                datagram.payload_data = nullptr;
+                datagram.payload_len = 0U;
+                datagram.src_ipv4_be = 0U;
+                datagram.dst_ipv4_be = 0U;
+                datagram.src_port = 0U;
+                datagram.dst_port = 0U;
                 datagram.ts_ns = rxtech::steady_clock_now_ns();
                 datagram.queue_id = 0;
                 datagram.backend_kind = rxtech::BackendKind::file_replay;
                 burst.datagrams.push_back(datagram);
                 ++stats_.rx_packets;
-                stats_.rx_bytes += datagram.payload_len;
+                stats_.rx_bytes += datagram.raw_frame_len;
             }
             ++stats_.rx_polls;
             return true;
