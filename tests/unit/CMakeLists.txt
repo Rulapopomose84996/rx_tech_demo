@@ -119,6 +119,13 @@ add_test(NAME test_dpdk_eal_args COMMAND test_dpdk_eal_args)
 set_tests_properties(test_dpdk_eal_args PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(test_dpdk_eal_args)
 
+add_executable(test_dpdk_datagram_adapter test_dpdk_datagram_adapter.cpp)
+target_link_libraries(test_dpdk_datagram_adapter PRIVATE rx_receiver_dpdk_ingress)
+target_include_directories(test_dpdk_datagram_adapter PRIVATE ${CMAKE_SOURCE_DIR}/src/receiver/ingress/dpdk/internal)
+add_test(NAME test_dpdk_datagram_adapter COMMAND test_dpdk_datagram_adapter)
+set_tests_properties(test_dpdk_datagram_adapter PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+rxtech_apply_warnings(test_dpdk_datagram_adapter)
+
 add_executable(test_cpi_output_pipeline test_cpi_output_pipeline.cpp)
 target_link_libraries(test_cpi_output_pipeline PRIVATE rx_receiver_core)
 add_test(NAME test_cpi_output_pipeline COMMAND test_cpi_output_pipeline)

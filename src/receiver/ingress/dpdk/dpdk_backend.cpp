@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstring>
 #include <vector>
 
@@ -51,6 +52,27 @@ namespace rxtech
 
     namespace
     {
+        constexpr std::size_t kEthernetHeaderBytes = 14U;
+        constexpr std::size_t kIpv4MinimumHeaderBytes = 20U;
+        constexpr std::size_t kUdpHeaderBytes = 8U;
+        constexpr std::uint16_t kEtherTypeIpv4 = 0x0800U;
+        constexpr std::uint16_t kEtherTypeArp = 0x0806U;
+        constexpr std::uint8_t kIpv4Version = 4U;
+        constexpr std::uint8_t kIpProtoUdp = 17U;
+
+        std::uint16_t read_u16_be(const std::uint8_t *data)
+        {
+            return static_cast<std::uint16_t>((static_cast<std::uint16_t>(data[0]) << 8U) |
+                                              static_cast<std::uint16_t>(data[1]));
+        }
+
+        std::uint32_t read_u32_be(const std::uint8_t *data)
+        {
+            return (static_cast<std::uint32_t>(data[0]) << 24U) |
+                   (static_cast<std::uint32_t>(data[1]) << 16U) |
+                   (static_cast<std::uint32_t>(data[2]) << 8U) |
+                   static_cast<std::uint32_t>(data[3]);
+        }
 
         BackendInitResult make_dpdk_result(bool available, const std::string &reason)
         {
@@ -124,6 +146,95 @@ namespace rxtech
 
     } // namespace
 
+    DpdkDatagramAdapter::DpdkDatagramAdapter(const std::uint32_t local_ip_be)
+        : local_ip_be_(local_ip_be)
+    {
+    }
+
+    bool DpdkDatagramAdapter::adapt_frame(const PacketDesc &packet,
+                                          BackendStats &stats,
+                                          UdpDatagramBurst &burst) const
+    {
+        if (packet.data == nullptr || packet.len < kEthernetHeaderBytes)
+        {
+            return false;
+        }
+
+        const std::uint16_t ether_type = read_u16_be(packet.data + 12U);
+        if (ether_type == kEtherTypeArp)
+        {
+            ArpRequestInfo request{};
+            if (parse_arp_request(packet.data, packet.len, local_ip_be_, request))
+            {
+                ++stats.arp_request_packets;
+            }
+            return false;
+        }
+
+        if (ether_type != kEtherTypeIpv4 || packet.len < kEthernetHeaderBytes + kIpv4MinimumHeaderBytes)
+        {
+            return false;
+        }
+
+        const std::size_t ip_offset = kEthernetHeaderBytes;
+        const std::uint8_t version_ihl = packet.data[ip_offset];
+        const std::uint8_t version = static_cast<std::uint8_t>(version_ihl >> 4U);
+        const std::uint8_t ihl_words = static_cast<std::uint8_t>(version_ihl & 0x0FU);
+        const std::size_t ip_header_bytes = static_cast<std::size_t>(ihl_words) * 4U;
+        if (version != kIpv4Version || ihl_words < 5U || packet.len < ip_offset + ip_header_bytes)
+        {
+            return false;
+        }
+
+        const std::uint16_t total_length = read_u16_be(packet.data + ip_offset + 2U);
+        if (total_length < ip_header_bytes || packet.len < ip_offset + total_length)
+        {
+            return false;
+        }
+
+        const std::uint16_t flags_and_offset = read_u16_be(packet.data + ip_offset + 6U);
+        if ((flags_and_offset & 0x3FFFU) != 0U)
+        {
+            return false;
+        }
+
+        if (packet.data[ip_offset + 9U] != kIpProtoUdp)
+        {
+            return false;
+        }
+
+        const std::uint8_t *udp_header = packet.data + ip_offset + ip_header_bytes;
+        const std::size_t ip_payload_bytes = static_cast<std::size_t>(total_length) - ip_header_bytes;
+        if (ip_payload_bytes < kUdpHeaderBytes)
+        {
+            return false;
+        }
+
+        const std::uint16_t udp_length = read_u16_be(udp_header + 4U);
+        if (udp_length < kUdpHeaderBytes || ip_payload_bytes < udp_length)
+        {
+            return false;
+        }
+
+        UdpDatagramDesc datagram;
+        datagram.payload_data = udp_header + kUdpHeaderBytes;
+        datagram.payload_len = static_cast<std::uint32_t>(udp_length - kUdpHeaderBytes);
+        datagram.raw_frame_data = packet.data;
+        datagram.raw_frame_len = packet.len;
+        datagram.src_ipv4_be = read_u32_be(packet.data + ip_offset + 12U);
+        datagram.dst_ipv4_be = read_u32_be(packet.data + ip_offset + 16U);
+        datagram.src_port = read_u16_be(udp_header + 0U);
+        datagram.dst_port = read_u16_be(udp_header + 2U);
+        datagram.ts_ns = packet.ts_ns;
+        datagram.queue_id = packet.queue_id;
+        datagram.cookie = packet.cookie;
+        datagram.backend_kind = BackendKind::dpdk;
+        burst.datagrams.push_back(datagram);
+        ++stats.rx_packets;
+        stats.rx_bytes += datagram.payload_len;
+        return true;
+    }
+
     struct DpdkIngress::Impl
     {
 #if defined(__linux__) && defined(RXTECH_HAS_DPDK_RUNTIME)
@@ -132,8 +243,6 @@ namespace rxtech
         bool started = false;
         std::array<std::uint8_t, 6> local_mac{};
         std::uint32_t local_ip_be = 0;
-        std::uint64_t arp_request_packets = 0;
-        std::uint64_t arp_reply_packets = 0;
 
         void cleanup()
         {
@@ -146,7 +255,7 @@ namespace rxtech
             mempool = nullptr;
         }
 
-        bool maybe_reply_arp(rte_mbuf *mbuf)
+        bool maybe_reply_arp(rte_mbuf *mbuf, BackendStats &stats)
         {
             if (mbuf == nullptr)
             {
@@ -160,8 +269,7 @@ namespace rxtech
             {
                 return false;
             }
-
-            ++arp_request_packets;
+            ++stats.arp_request_packets;
 
             const std::vector<std::uint8_t> reply = build_arp_reply(request, local_mac);
             rte_mbuf *tx = rte_pktmbuf_alloc(mempool);
@@ -188,8 +296,34 @@ namespace rxtech
             }
             else
             {
-                ++arp_reply_packets;
+                ++stats.arp_reply_packets;
             }
+            return true;
+        }
+
+        bool extract_udp_datagram(rte_mbuf *mbuf, UdpDatagramDesc &datagram) const
+        {
+            if (mbuf == nullptr)
+            {
+                return false;
+            }
+
+            UdpDatagramBurst burst;
+            PacketDesc packet;
+            packet.data = rte_pktmbuf_mtod(mbuf, std::uint8_t *);
+            packet.len = rte_pktmbuf_pkt_len(mbuf);
+            packet.ts_ns = steady_clock_now_ns();
+            packet.queue_id = 0U;
+            packet.cookie = reinterpret_cast<std::uintptr_t>(mbuf);
+
+            BackendStats ignored_stats;
+            DpdkDatagramAdapter adapter(local_ip_be);
+            if (!adapter.adapt_frame(packet, ignored_stats, burst) || burst.datagrams.empty())
+            {
+                return false;
+            }
+
+            datagram = burst.datagrams.front();
             return true;
         }
 #endif
@@ -219,8 +353,6 @@ namespace rxtech
         }
 
         impl_->cleanup();
-        impl_->arp_request_packets = 0;
-        impl_->arp_reply_packets = 0;
 
         std::vector<std::string> eal_args = build_dpdk_eal_args(config);
 
@@ -352,28 +484,21 @@ namespace rxtech
         for (std::uint16_t index = 0; index < received; ++index)
         {
             rte_mbuf *mbuf = mbufs[index];
-            if (impl_->maybe_reply_arp(mbuf))
+            if (impl_->maybe_reply_arp(mbuf, stats_))
             {
                 rte_pktmbuf_free(mbuf);
                 continue;
             }
-            const std::uint32_t frame_len = rte_pktmbuf_pkt_len(mbuf);
             UdpDatagramDesc datagram;
-            datagram.raw_frame_data = rte_pktmbuf_mtod(mbuf, std::uint8_t *);
-            datagram.raw_frame_len = frame_len;
-            datagram.payload_data = nullptr;
-            datagram.payload_len = 0U;
-            datagram.src_ipv4_be = 0U;
-            datagram.dst_ipv4_be = 0U;
-            datagram.src_port = 0U;
-            datagram.dst_port = 0U;
-            datagram.ts_ns = steady_clock_now_ns();
-            datagram.queue_id = 0;
-            datagram.cookie = reinterpret_cast<std::uintptr_t>(mbuf);
-            datagram.backend_kind = BackendKind::dpdk;
+            if (!impl_->extract_udp_datagram(mbuf, datagram))
+            {
+                rte_pktmbuf_free(mbuf);
+                continue;
+            }
+
             burst.datagrams.push_back(datagram);
             ++stats_.rx_packets;
-            stats_.rx_bytes += datagram.raw_frame_len;
+            stats_.rx_bytes += datagram.payload_len;
         }
         return true;
 #else
@@ -399,15 +524,7 @@ namespace rxtech
 
     BackendStats DpdkIngress::stats() const
     {
-        BackendStats snapshot = stats_;
-#if defined(__linux__) && defined(RXTECH_HAS_DPDK_RUNTIME)
-        if (impl_ != nullptr)
-        {
-            snapshot.arp_request_packets = impl_->arp_request_packets;
-            snapshot.arp_reply_packets = impl_->arp_reply_packets;
-        }
-#endif
-        return snapshot;
+        return stats_;
     }
 
     void DpdkIngress::shutdown()
