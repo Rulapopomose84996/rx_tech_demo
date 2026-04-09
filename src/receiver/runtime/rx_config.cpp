@@ -342,6 +342,27 @@ namespace rxtech
                      {"protocol.max_n_prt", "protocol_max_n_prt"},
                      [](RxConfig &c, const std::string &v)
                      { c.protocol_max_n_prt = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"output_drop_policy",
+                     {"output_drop_policy", "runtime.output_drop_policy"},
+                     [](RxConfig &c, const std::string &v)
+                     {
+                         const std::string normalized = to_lower(v);
+                         if (normalized == "error")
+                             c.output_drop_policy = "error";
+                         else
+                             c.output_drop_policy = "degrade";
+                     }},
+
+                    {"output_ring_capacity",
+                     {"output_ring_capacity", "runtime.output_ring_capacity"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.output_ring_capacity = static_cast<std::uint32_t>(std::stoul(v)); }},
+
+                    {"recycle_ring_capacity",
+                     {"recycle_ring_capacity", "runtime.recycle_ring_capacity"},
+                     [](RxConfig &c, const std::string &v)
+                     { c.recycle_ring_capacity = static_cast<std::uint32_t>(std::stoul(v)); }},
                 };
 
                 ConfigDispatch m;
@@ -580,6 +601,12 @@ namespace rxtech
             base.run_until_stopped = overrides.run_until_stopped;
         if (!overrides.cpu_cores.empty())
             base.cpu_cores = overrides.cpu_cores;
+        if (overrides.output_drop_policy != defaults.output_drop_policy)
+            base.output_drop_policy = overrides.output_drop_policy;
+        if (overrides.output_ring_capacity != defaults.output_ring_capacity)
+            base.output_ring_capacity = overrides.output_ring_capacity;
+        if (overrides.recycle_ring_capacity != defaults.recycle_ring_capacity)
+            base.recycle_ring_capacity = overrides.recycle_ring_capacity;
     }
 
     std::string effective_socket_bind_ip(const RxConfig &config)
