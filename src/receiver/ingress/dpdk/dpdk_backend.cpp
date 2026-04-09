@@ -329,9 +329,9 @@ namespace rxtech
 #endif
     }
 
-    bool DpdkIngress::recv_burst(RxBurst &burst, std::uint32_t max_burst)
+    bool DpdkIngress::recv_burst(UdpDatagramBurst &burst, std::uint32_t max_burst)
     {
-        burst.packets.clear();
+        burst.datagrams.clear();
 #if defined(__linux__) && defined(RXTECH_HAS_DPDK_RUNTIME)
         if (impl_ == nullptr || !impl_->started)
         {
@@ -348,7 +348,7 @@ namespace rxtech
             return true;
         }
 
-        burst.packets.reserve(received);
+        burst.datagrams.reserve(received);
         for (std::uint16_t index = 0; index < received; ++index)
         {
             rte_mbuf *mbuf = mbufs[index];
@@ -357,15 +357,16 @@ namespace rxtech
                 rte_pktmbuf_free(mbuf);
                 continue;
             }
-            PacketDesc packet;
-            packet.data = rte_pktmbuf_mtod(mbuf, std::uint8_t *);
-            packet.len = rte_pktmbuf_pkt_len(mbuf);
-            packet.ts_ns = steady_clock_now_ns();
-            packet.queue_id = 0;
-            packet.cookie = reinterpret_cast<std::uintptr_t>(mbuf);
-            burst.packets.push_back(packet);
+            UdpDatagramDesc datagram;
+            datagram.payload_data = rte_pktmbuf_mtod(mbuf, std::uint8_t *);
+            datagram.payload_len = rte_pktmbuf_pkt_len(mbuf);
+            datagram.ts_ns = steady_clock_now_ns();
+            datagram.queue_id = 0;
+            datagram.cookie = reinterpret_cast<std::uintptr_t>(mbuf);
+            datagram.backend_kind = BackendKind::dpdk;
+            burst.datagrams.push_back(datagram);
             ++stats_.rx_packets;
-            stats_.rx_bytes += packet.len;
+            stats_.rx_bytes += datagram.payload_len;
         }
         return true;
 #else
@@ -374,19 +375,19 @@ namespace rxtech
 #endif
     }
 
-    void DpdkIngress::release_burst(RxBurst &burst)
+    void DpdkIngress::release_burst(UdpDatagramBurst &burst)
     {
 #if defined(__linux__) && defined(RXTECH_HAS_DPDK_RUNTIME)
-        for (const PacketDesc &packet : burst.packets)
+        for (const UdpDatagramDesc &datagram : burst.datagrams)
         {
-            auto *mbuf = reinterpret_cast<rte_mbuf *>(packet.cookie);
+            auto *mbuf = reinterpret_cast<rte_mbuf *>(datagram.cookie);
             if (mbuf != nullptr)
             {
                 rte_pktmbuf_free(mbuf);
             }
         }
 #endif
-        burst.packets.clear();
+        burst.datagrams.clear();
     }
 
     BackendStats DpdkIngress::stats() const

@@ -4,7 +4,7 @@
 #include <memory>
 #include <string>
 
-#include "rxtech/packet_desc.h"
+#include "rxtech/udp_datagram.h"
 
 namespace rxtech
 {
@@ -42,8 +42,8 @@ namespace rxtech
 
         virtual std::string name() const = 0;
         virtual BackendInitResult init(const RxConfig &config) = 0;
-        virtual bool recv_burst(RxBurst &burst, std::uint32_t max_burst) = 0;
-        virtual void release_burst(RxBurst &burst) = 0;
+        virtual bool recv_burst(UdpDatagramBurst &burst, std::uint32_t max_burst) = 0;
+        virtual void release_burst(UdpDatagramBurst &burst) = 0;
         virtual BackendStats stats() const = 0;
         virtual void shutdown() = 0;
     };

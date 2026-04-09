@@ -24,6 +24,10 @@ namespace rxtech
     struct FileReplayBackend::Impl
     {
         FileReplayOptions opts;
+        std::uint32_t src_ipv4_be = 0;
+        std::uint32_t dst_ipv4_be = 0;
+        std::uint16_t src_port = 0;
+        std::uint16_t dst_port = 0;
 
         // Pre-built Ethernet frames, one per replay entry.
         // Each inner vector owns its bytes for pointer stability.
@@ -140,6 +144,11 @@ namespace rxtech
             return result;
         }
 
+        impl_->src_ipv4_be = fcfg.src_ipv4_be;
+        impl_->dst_ipv4_be = fcfg.dst_ipv4_be;
+        impl_->src_port = fcfg.src_port;
+        impl_->dst_port = fcfg.dst_port;
+
         // Rate limiting setup
         if (impl_->opts.pps > 0)
             impl_->ns_per_packet = 1'000'000'000ULL / impl_->opts.pps;
@@ -151,9 +160,9 @@ namespace rxtech
 
     // ── IRxBackend::recv_burst ───────────────────────────────────────────────
 
-    bool FileReplayBackend::recv_burst(RxBurst &burst, std::uint32_t max_burst)
+    bool FileReplayBackend::recv_burst(UdpDatagramBurst &burst, std::uint32_t max_burst)
     {
-        burst.packets.clear();
+        burst.datagrams.clear();
         if (impl_->stopped || impl_->frames.empty())
             return true;
 
@@ -186,16 +195,23 @@ namespace rxtech
         std::uint32_t served = 0;
         while (served < max_burst && impl_->cursor < impl_->frames.size())
         {
+            const std::size_t frame_index = impl_->cursor;
             const auto &frame = impl_->frames[impl_->cursor];
-            PacketDesc pkt;
-            pkt.data = const_cast<std::uint8_t *>(frame.data());
-            pkt.len = static_cast<std::uint32_t>(frame.size());
-            pkt.ts_ns = ts;
-            burst.packets.push_back(pkt);
+            UdpDatagramDesc datagram;
+            datagram.payload_data = frame.data();
+            datagram.payload_len = static_cast<std::uint32_t>(frame.size());
+            datagram.src_ipv4_be = impl_->src_ipv4_be;
+            datagram.dst_ipv4_be = impl_->dst_ipv4_be;
+            datagram.src_port = impl_->src_port;
+            datagram.dst_port = impl_->dst_port;
+            datagram.ts_ns = ts;
+            datagram.cookie = static_cast<std::uintptr_t>(frame_index);
+            datagram.backend_kind = BackendKind::file_replay;
+            burst.datagrams.push_back(datagram);
             ++impl_->cursor;
             ++served;
             ++impl_->stats.rx_packets;
-            impl_->stats.rx_bytes += pkt.len;
+            impl_->stats.rx_bytes += datagram.payload_len;
         }
 
         ++impl_->stats.rx_polls;
@@ -211,9 +227,9 @@ namespace rxtech
 
     // ── IRxBackend::release_burst / stats / shutdown ─────────────────────────
 
-    void FileReplayBackend::release_burst(RxBurst &burst)
+    void FileReplayBackend::release_burst(UdpDatagramBurst &burst)
     {
-        burst.packets.clear();
+        burst.datagrams.clear();
     }
 
     BackendStats FileReplayBackend::stats() const

@@ -51,10 +51,10 @@ namespace
         std::string name() const override { return inner_.name(); }
         rxtech::BackendInitResult init(const rxtech::RxConfig &cfg) override { return inner_.init(cfg); }
 
-        bool recv_burst(rxtech::RxBurst &burst, std::uint32_t max) override
+        bool recv_burst(rxtech::UdpDatagramBurst &burst, std::uint32_t max) override
         {
             const bool ok = inner_.recv_burst(burst, max);
-            if (ok && burst.packets.empty())
+            if (ok && burst.datagrams.empty())
             {
                 if (++empty_streak_ >= 3)
                 {
@@ -68,7 +68,7 @@ namespace
             return ok;
         }
 
-        void release_burst(rxtech::RxBurst &burst) override { inner_.release_burst(burst); }
+        void release_burst(rxtech::UdpDatagramBurst &burst) override { inner_.release_burst(burst); }
         rxtech::BackendStats stats() const override { return inner_.stats(); }
         void shutdown() override { inner_.shutdown(); }
 

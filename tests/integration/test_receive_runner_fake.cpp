@@ -103,9 +103,9 @@ namespace
             return result;
         }
 
-        bool recv_burst(rxtech::RxBurst &burst, std::uint32_t) override
+        bool recv_burst(rxtech::UdpDatagramBurst &burst, std::uint32_t) override
         {
-            burst.packets.clear();
+            burst.datagrams.clear();
             ++calls_;
             ++stats_.rx_polls;
             if (served_)
@@ -121,25 +121,26 @@ namespace
 
             for (const auto &payload : packet_storage_)
             {
-                rxtech::PacketDesc packet;
-                packet.data = const_cast<std::uint8_t *>(payload.data());
-                packet.len = static_cast<std::uint32_t>(payload.size());
-                packet.ts_ns = rxtech::steady_clock_now_ns();
-                packet.queue_id = 3;
-                burst.packets.push_back(packet);
+                rxtech::UdpDatagramDesc datagram;
+                datagram.payload_data = payload.data();
+                datagram.payload_len = static_cast<std::uint32_t>(payload.size());
+                datagram.ts_ns = rxtech::steady_clock_now_ns();
+                datagram.queue_id = 3;
+                datagram.backend_kind = rxtech::BackendKind::file_replay;
+                burst.datagrams.push_back(datagram);
             }
 
-            stats_.rx_packets += burst.packets.size();
-            for (const auto &packet : burst.packets)
+            stats_.rx_packets += burst.datagrams.size();
+            for (const auto &datagram : burst.datagrams)
             {
-                stats_.rx_bytes += packet.len;
+                stats_.rx_bytes += datagram.payload_len;
             }
             return true;
         }
 
-        void release_burst(rxtech::RxBurst &burst) override
+        void release_burst(rxtech::UdpDatagramBurst &burst) override
         {
-            burst.packets.clear();
+            burst.datagrams.clear();
             packet_storage_.clear();
         }
 
@@ -175,14 +176,14 @@ namespace
             return result;
         }
 
-        bool recv_burst(rxtech::RxBurst &, std::uint32_t) override
+        bool recv_burst(rxtech::UdpDatagramBurst &, std::uint32_t) override
         {
             return false;
         }
 
-        void release_burst(rxtech::RxBurst &burst) override
+        void release_burst(rxtech::UdpDatagramBurst &burst) override
         {
-            burst.packets.clear();
+            burst.datagrams.clear();
         }
 
         rxtech::BackendStats stats() const override
@@ -210,9 +211,9 @@ namespace
             return result;
         }
 
-        bool recv_burst(rxtech::RxBurst &burst, std::uint32_t) override
+        bool recv_burst(rxtech::UdpDatagramBurst &burst, std::uint32_t) override
         {
-            burst.packets.clear();
+            burst.datagrams.clear();
             if (served_)
             {
                 ++stats_.rx_polls;
@@ -234,22 +235,23 @@ namespace
 
             for (const auto &payload : packet_storage_)
             {
-                rxtech::PacketDesc packet;
-                packet.data = const_cast<std::uint8_t *>(payload.data());
-                packet.len = static_cast<std::uint32_t>(payload.size());
-                packet.ts_ns = rxtech::steady_clock_now_ns();
-                packet.queue_id = 0;
-                burst.packets.push_back(packet);
+                rxtech::UdpDatagramDesc datagram;
+                datagram.payload_data = payload.data();
+                datagram.payload_len = static_cast<std::uint32_t>(payload.size());
+                datagram.ts_ns = rxtech::steady_clock_now_ns();
+                datagram.queue_id = 0;
+                datagram.backend_kind = rxtech::BackendKind::file_replay;
+                burst.datagrams.push_back(datagram);
                 ++stats_.rx_packets;
-                stats_.rx_bytes += packet.len;
+                stats_.rx_bytes += datagram.payload_len;
             }
             ++stats_.rx_polls;
             return true;
         }
 
-        void release_burst(rxtech::RxBurst &burst) override
+        void release_burst(rxtech::UdpDatagramBurst &burst) override
         {
-            burst.packets.clear();
+            burst.datagrams.clear();
             packet_storage_.clear();
         }
 
