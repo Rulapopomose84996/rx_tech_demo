@@ -81,6 +81,8 @@ int main()
     assert(human.find("原始帧已写： 5 帧，5000 字节") != std::string::npos);
     assert(human.find("协议丢弃： 2 包") != std::string::npos);
     assert(human.find("后端丢弃： 3 包") != std::string::npos);
+    assert(human.find("后端接收批次： 12") != std::string::npos);
+    assert(human.find("后端最大突发批次： 6") != std::string::npos);
     assert(human.find("内核丢弃： 9 包") != std::string::npos);
     assert(human.find("接收顺序： 偏离按 PRT 推进顺序，当前捕获更像按通道分批到达") != std::string::npos);
     assert(human.find("首个顺序偏差： 第 10 个数据包开始偏离") != std::string::npos);
@@ -96,6 +98,7 @@ int main()
     bool saw_protocol_section = false;
     bool saw_result_section = false;
     bool saw_drop_rate = false;
+    bool saw_exact_drop_rate = false;
     bool saw_debug_lines = false;
     bool saw_receive_batches = false;
     bool saw_max_burst_size = false;
@@ -125,6 +128,10 @@ int main()
         if (line.find("丢包率") != std::string::npos)
         {
             saw_drop_rate = true;
+            if (line.find("0.583333") != std::string::npos)
+            {
+                saw_exact_drop_rate = true;
+            }
         }
         if (line.find("接收批次") != std::string::npos && line.find("12") != std::string::npos)
         {
@@ -152,6 +159,7 @@ int main()
     assert(saw_protocol_section);
     assert(saw_result_section);
     assert(saw_drop_rate);
+    assert(saw_exact_drop_rate);
     assert(saw_receive_batches);
     assert(saw_max_burst_size);
     assert(saw_kernel_drops);

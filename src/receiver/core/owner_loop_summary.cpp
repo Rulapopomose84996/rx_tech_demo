@@ -52,12 +52,14 @@ namespace rxtech
     double calculate_drop_rate(const RunSummary &summary)
     {
         const double total = static_cast<double>(
-            summary.rx_packets + summary.dropped_packets + summary.backend_dropped_packets);
+            summary.rx_packets + summary.dropped_packets + summary.backend_dropped_packets + summary.backend_kernel_drops);
         if (total <= 0.0)
         {
             return 0.0;
         }
-        return static_cast<double>(summary.dropped_packets + summary.backend_dropped_packets) / total;
+        return static_cast<double>(
+                   summary.dropped_packets + summary.backend_dropped_packets + summary.backend_kernel_drops) /
+               total;
     }
 
     const char *protocol_channel_name(std::uint16_t channel)

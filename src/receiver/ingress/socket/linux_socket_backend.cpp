@@ -32,7 +32,8 @@ namespace rxtech
     {
 
         constexpr std::size_t kMaxUdpPayloadBytes = 65507U;
-        constexpr std::size_t kSocketControlBytes = CMSG_SPACE(sizeof(in_pktinfo));
+        constexpr std::size_t kSocketControlBytes =
+            CMSG_SPACE(sizeof(in_pktinfo)) + CMSG_SPACE(sizeof(std::uint32_t));
 
         BackendInitResult make_socket_result(bool available, const std::string &reason)
         {
@@ -100,6 +101,11 @@ namespace rxtech
         }
 
         return 0U;
+    }
+
+    std::size_t socket_control_bytes_for_tests()
+    {
+        return kSocketControlBytes;
     }
 #endif
 
@@ -382,24 +388,34 @@ namespace rxtech
             const mmsghdr &msg = impl_->msgs[static_cast<std::size_t>(index)];
             slot.payload_len = static_cast<std::uint32_t>(msg.msg_len);
             slot.truncated = (msg.msg_hdr.msg_flags & MSG_TRUNC) != 0;
-            stats_.kernel_drop_count += update_kernel_drop_count_from_cmsg(msg.msg_hdr,
-                                                                           impl_->last_seen_kernel_drop_count);
+            if ((msg.msg_hdr.msg_flags & MSG_CTRUNC) != 0)
+            {
+                ++stats_.rx_errors;
+            }
+            else
+            {
+                stats_.kernel_drop_count += update_kernel_drop_count_from_cmsg(msg.msg_hdr,
+                                                                               impl_->last_seen_kernel_drop_count);
+            }
             if (slot.peer.sin_family != AF_INET)
             {
                 ++stats_.backend_drops;
                 continue;
             }
 
-            for (cmsghdr *cmsg = CMSG_FIRSTHDR(const_cast<msghdr *>(&msg.msg_hdr));
-                 cmsg != nullptr;
-                 cmsg = CMSG_NXTHDR(const_cast<msghdr *>(&msg.msg_hdr), cmsg))
+            if ((msg.msg_hdr.msg_flags & MSG_CTRUNC) == 0)
             {
-                if (cmsg->cmsg_level == IPPROTO_IP &&
-                    cmsg->cmsg_type == IP_PKTINFO &&
-                    cmsg->cmsg_len >= CMSG_LEN(sizeof(in_pktinfo)))
+                for (cmsghdr *cmsg = CMSG_FIRSTHDR(const_cast<msghdr *>(&msg.msg_hdr));
+                     cmsg != nullptr;
+                     cmsg = CMSG_NXTHDR(const_cast<msghdr *>(&msg.msg_hdr), cmsg))
                 {
-                    std::memcpy(&slot.pktinfo, CMSG_DATA(cmsg), sizeof(slot.pktinfo));
-                    break;
+                    if (cmsg->cmsg_level == IPPROTO_IP &&
+                        cmsg->cmsg_type == IP_PKTINFO &&
+                        cmsg->cmsg_len >= CMSG_LEN(sizeof(in_pktinfo)))
+                    {
+                        std::memcpy(&slot.pktinfo, CMSG_DATA(cmsg), sizeof(slot.pktinfo));
+                        break;
+                    }
                 }
             }
 

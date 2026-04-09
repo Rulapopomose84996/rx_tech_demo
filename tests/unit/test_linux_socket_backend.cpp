@@ -1,4 +1,5 @@
 ﻿#include <cstdint>
+#include <array>
 #include <cstring>
 #include <iostream>
 #include <vector>
@@ -16,6 +17,18 @@ namespace
 {
 
 #if defined(__linux__)
+    constexpr std::size_t kFullAncillaryControlBytes =
+        CMSG_SPACE(sizeof(in_pktinfo)) + CMSG_SPACE(sizeof(std::uint32_t));
+
+    struct AncillarySample
+    {
+        bool ok = false;
+        bool saw_pktinfo = false;
+        bool saw_kernel_drop = false;
+        std::uint32_t kernel_drop_total = 0U;
+        int msg_flags = 0;
+    };
+
     std::uint16_t reserve_loopback_port()
     {
         const int socket_fd = ::socket(AF_INET, SOCK_DGRAM, 0);
@@ -89,6 +102,102 @@ namespace
                                       sizeof(target));
         ::close(socket_fd);
         return sent == static_cast<ssize_t>(payload.size());
+    }
+
+    int create_ancillary_socket(std::uint16_t port, int rcvbuf_bytes)
+    {
+        const int socket_fd = ::socket(AF_INET, SOCK_DGRAM, 0);
+        if (socket_fd < 0)
+        {
+            return -1;
+        }
+
+        int reuse_addr = 1;
+        (void)::setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &reuse_addr, sizeof(reuse_addr));
+        if (::setsockopt(socket_fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf_bytes, sizeof(rcvbuf_bytes)) != 0)
+        {
+            ::close(socket_fd);
+            return -1;
+        }
+
+        int enable_pktinfo = 1;
+        if (::setsockopt(socket_fd, IPPROTO_IP, IP_PKTINFO, &enable_pktinfo, sizeof(enable_pktinfo)) != 0)
+        {
+            ::close(socket_fd);
+            return -1;
+        }
+
+        int enable_kernel_drop_count = 1;
+        if (::setsockopt(socket_fd, SOL_SOCKET, SO_RXQ_OVFL, &enable_kernel_drop_count, sizeof(enable_kernel_drop_count)) != 0)
+        {
+            ::close(socket_fd);
+            return -1;
+        }
+
+        timeval timeout{};
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 200000;
+        (void)::setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+
+        sockaddr_in address{};
+        address.sin_family = AF_INET;
+        address.sin_port = htons(port);
+        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        if (::bind(socket_fd, reinterpret_cast<const sockaddr *>(&address), sizeof(address)) != 0)
+        {
+            ::close(socket_fd);
+            return -1;
+        }
+
+        return socket_fd;
+    }
+
+    AncillarySample receive_udp_with_control(int socket_fd, std::size_t control_bytes)
+    {
+        AncillarySample sample;
+        std::array<std::uint8_t, 256U> payload{};
+        std::vector<char> control(control_bytes, 0);
+        sockaddr_in peer{};
+        iovec iov{};
+        iov.iov_base = payload.data();
+        iov.iov_len = payload.size();
+
+        msghdr msg{};
+        msg.msg_name = &peer;
+        msg.msg_namelen = sizeof(peer);
+        msg.msg_iov = &iov;
+        msg.msg_iovlen = 1;
+        msg.msg_control = control.data();
+        msg.msg_controllen = control.size();
+
+        const ssize_t received = ::recvmsg(socket_fd, &msg, 0);
+        if (received < 0)
+        {
+            return sample;
+        }
+
+        sample.ok = true;
+        sample.msg_flags = msg.msg_flags;
+        for (cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
+             cmsg != nullptr;
+             cmsg = CMSG_NXTHDR(&msg, cmsg))
+        {
+            if (cmsg->cmsg_level == IPPROTO_IP &&
+                cmsg->cmsg_type == IP_PKTINFO &&
+                cmsg->cmsg_len >= CMSG_LEN(sizeof(in_pktinfo)))
+            {
+                sample.saw_pktinfo = true;
+            }
+            if (cmsg->cmsg_level == SOL_SOCKET &&
+                cmsg->cmsg_type == SO_RXQ_OVFL &&
+                cmsg->cmsg_len >= CMSG_LEN(sizeof(std::uint32_t)))
+            {
+                sample.saw_kernel_drop = true;
+                std::memcpy(&sample.kernel_drop_total, CMSG_DATA(cmsg), sizeof(sample.kernel_drop_total));
+            }
+        }
+
+        return sample;
     }
 
     rxtech::RxConfig make_socket_config(const std::uint16_t port)
@@ -337,6 +446,69 @@ int main()
 
     full_burst_backend.release_burst(full_burst);
     full_burst_backend.shutdown();
+
+    if (rxtech::socket_control_bytes_for_tests() < kFullAncillaryControlBytes)
+    {
+        std::cerr << "expected socket ancillary control buffer to reserve space for both pktinfo and kernel-drop metadata\n";
+        return 1;
+    }
+
+    const std::uint16_t ancillary_port = reserve_loopback_port();
+    if (ancillary_port == 0U)
+    {
+        std::cerr << "failed to reserve loopback UDP port for ancillary receive\n";
+        return 1;
+    }
+    const int ancillary_socket_fd = create_ancillary_socket(ancillary_port, 1 << 20);
+    if (ancillary_socket_fd < 0)
+    {
+        std::cerr << "failed to create ancillary test socket\n";
+        return 1;
+    }
+    std::vector<std::uint8_t> small_payload(64U, 0x5AU);
+    if (!send_udp_payload(ancillary_port, small_payload))
+    {
+        ::close(ancillary_socket_fd);
+        std::cerr << "failed to send ancillary loopback UDP payload\n";
+        return 1;
+    }
+    const AncillarySample ancillary_sample =
+        receive_udp_with_control(ancillary_socket_fd, kFullAncillaryControlBytes);
+    if (!ancillary_sample.ok ||
+        !ancillary_sample.saw_pktinfo ||
+        (ancillary_sample.msg_flags & MSG_CTRUNC) != 0)
+    {
+        ::close(ancillary_socket_fd);
+        std::cerr << "expected full ancillary buffer to carry pktinfo without control truncation\n";
+        return 1;
+    }
+    ::close(ancillary_socket_fd);
+
+    const std::uint16_t ctrunc_port = reserve_loopback_port();
+    if (ctrunc_port == 0U)
+    {
+        std::cerr << "failed to reserve loopback UDP port for control truncation receive\n";
+        return 1;
+    }
+    const int ctrunc_socket_fd = create_ancillary_socket(ctrunc_port, 1 << 20);
+    if (ctrunc_socket_fd < 0)
+    {
+        std::cerr << "failed to create control truncation test socket\n";
+        return 1;
+    }
+    if (!send_udp_payload(ctrunc_port, small_payload))
+    {
+        ::close(ctrunc_socket_fd);
+        std::cerr << "failed to send control truncation test payload\n";
+        return 1;
+    }
+    const AncillarySample ctrunc_sample = receive_udp_with_control(ctrunc_socket_fd, 1U);
+    ::close(ctrunc_socket_fd);
+    if (!ctrunc_sample.ok || (ctrunc_sample.msg_flags & MSG_CTRUNC) == 0)
+    {
+        std::cerr << "expected undersized live ancillary buffer to report MSG_CTRUNC\n";
+        return 1;
+    }
 
     std::array<char, CMSG_SPACE(sizeof(std::uint32_t))> drop_control{};
     msghdr drop_msg{};
