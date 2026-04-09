@@ -138,18 +138,18 @@ int main()
         return 1;
     }
 
-    rxtech::RxBurst burst;
+    rxtech::UdpDatagramBurst burst;
     if (!backend.recv_burst(burst, 4U))
     {
         backend.shutdown();
         std::cerr << "socket backend recv_burst failed\n";
         return 1;
     }
-    if (burst.packets.size() != 1U)
+    if (burst.datagrams.size() != 1U)
     {
         backend.release_burst(burst);
         backend.shutdown();
-        std::cerr << "expected exactly one received packet, got " << burst.packets.size() << '\n';
+        std::cerr << "expected exactly one received packet, got " << burst.datagrams.size() << '\n';
         return 1;
     }
 
@@ -161,8 +161,14 @@ int main()
     std::size_t callback_count = 0U;
     rxtech::PacketKind packet_kind = rxtech::PacketKind::unknown;
     std::size_t udp_payload_size = 0U;
+    rxtech::PacketDesc packet;
+    packet.data = const_cast<std::uint8_t *>(burst.datagrams.front().payload_data);
+    packet.len = burst.datagrams.front().payload_len;
+    packet.ts_ns = burst.datagrams.front().ts_ns;
+    packet.queue_id = burst.datagrams.front().queue_id;
+    packet.cookie = burst.datagrams.front().cookie;
     const rxtech::PacketProcessStats stats = pipeline.process_packet(
-        burst.packets.front(),
+        packet,
         metrics,
         nullptr,
         invalid_dumped,

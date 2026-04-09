@@ -39,8 +39,8 @@ namespace rxtech
 
         std::string name() const override { return "file_replay"; }
         BackendInitResult init(const RxConfig &config) override;
-        bool recv_burst(RxBurst &burst, std::uint32_t max_burst) override;
-        void release_burst(RxBurst &burst) override;
+        bool recv_burst(UdpDatagramBurst &burst, std::uint32_t max_burst) override;
+        void release_burst(UdpDatagramBurst &burst) override;
         BackendStats stats() const override;
         void shutdown() override;
 

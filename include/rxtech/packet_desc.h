@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "rxtech/udp_datagram.h"
+
 namespace rxtech {
 
 struct PacketDesc {

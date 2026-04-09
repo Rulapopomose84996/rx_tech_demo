@@ -71,6 +71,12 @@ add_test(NAME test_udp_payload_assembler COMMAND test_udp_payload_assembler)
 set_tests_properties(test_udp_payload_assembler PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(test_udp_payload_assembler)
 
+add_executable(test_udp_datagram_pipeline test_udp_datagram_pipeline.cpp)
+target_link_libraries(test_udp_datagram_pipeline PRIVATE rx_receiver_core)
+add_test(NAME test_udp_datagram_pipeline COMMAND test_udp_datagram_pipeline)
+set_tests_properties(test_udp_datagram_pipeline PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+rxtech_apply_warnings(test_udp_datagram_pipeline)
+
 if(UNIX AND NOT APPLE)
     add_executable(test_linux_socket_backend test_linux_socket_backend.cpp)
     target_link_libraries(test_linux_socket_backend PRIVATE rx_receiver_core rx_receiver_socket_ingress)

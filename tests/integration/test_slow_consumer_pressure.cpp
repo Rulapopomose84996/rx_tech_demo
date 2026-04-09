@@ -136,9 +136,9 @@ namespace
             return r;
         }
 
-        bool recv_burst(rxtech::RxBurst &burst, std::uint32_t max) override
+        bool recv_burst(rxtech::UdpDatagramBurst &burst, std::uint32_t max) override
         {
-            burst.packets.clear();
+            burst.datagrams.clear();
             frame_storage_.clear();
 
             if (done_)
@@ -180,11 +180,12 @@ namespace
             {
                 if (served >= max)
                     break;
-                rxtech::PacketDesc pkt;
-                pkt.data = const_cast<std::uint8_t *>(f.data());
-                pkt.len = static_cast<std::uint32_t>(f.size());
-                pkt.ts_ns = ts;
-                burst.packets.push_back(pkt);
+                rxtech::UdpDatagramDesc datagram;
+                datagram.payload_data = f.data();
+                datagram.payload_len = static_cast<std::uint32_t>(f.size());
+                datagram.ts_ns = ts;
+                datagram.backend_kind = rxtech::BackendKind::file_replay;
+                burst.datagrams.push_back(datagram);
                 ++served;
             }
             ++stats_.rx_polls;
@@ -192,9 +193,9 @@ namespace
             return true;
         }
 
-        void release_burst(rxtech::RxBurst &burst) override
+        void release_burst(rxtech::UdpDatagramBurst &burst) override
         {
-            burst.packets.clear();
+            burst.datagrams.clear();
             frame_storage_.clear();
         }
 

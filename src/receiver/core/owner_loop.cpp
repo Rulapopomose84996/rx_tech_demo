@@ -14,6 +14,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <ostream>
 #include <thread>
 
@@ -111,7 +112,7 @@ namespace rxtech
         while (!should_stop())
         {
             // 从后端接收数据包 burst
-            RxBurst burst;
+            UdpDatagramBurst burst;
             if (!context.backend->recv_burst(burst, context.config.max_burst))
             {
                 runtime_state.run_status = "error";
@@ -124,8 +125,15 @@ namespace rxtech
             std::size_t accepted_packets = 0U;
             
             // 处理 burst 中的每个数据包
-            for (const PacketDesc &packet : burst.packets)
+            for (const UdpDatagramDesc &datagram : burst.datagrams)
             {
+                PacketDesc packet;
+                packet.data = const_cast<std::uint8_t *>(datagram.payload_data);
+                packet.len = datagram.payload_len;
+                packet.ts_ns = datagram.ts_ns;
+                packet.queue_id = datagram.queue_id;
+                packet.cookie = datagram.cookie;
+
                 // 如果启用了原始帧录制，提交数据包到录制器
                 if (artifacts.raw_frame_recorder != nullptr)
                 {

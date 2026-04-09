@@ -225,9 +225,9 @@ namespace rxtech
 #endif
     }
 
-    bool LinuxSocketIngress::recv_burst(RxBurst &burst, std::uint32_t max_burst)
+    bool LinuxSocketIngress::recv_burst(UdpDatagramBurst &burst, std::uint32_t max_burst)
     {
-        burst.packets.clear();
+        burst.datagrams.clear();
 #if defined(__linux__)
         if (impl_ == nullptr || impl_->socket_fd < 0)
         {
@@ -309,19 +309,24 @@ namespace rxtech
                         impl_->recv_buffer.data(),
                         static_cast<std::size_t>(received));
 
-            PacketDesc packet;
-            packet.data = frame.data();
-            packet.len = static_cast<std::uint32_t>(frame.size());
-            packet.ts_ns = steady_clock_now_ns();
-            packet.queue_id = stats_.queue_id;
-            packet.cookie = static_cast<std::uintptr_t>(index);
-            burst.packets.push_back(packet);
+            UdpDatagramDesc datagram;
+            datagram.payload_data = frame.data();
+            datagram.payload_len = static_cast<std::uint32_t>(frame.size());
+            datagram.src_ipv4_be = source_ipv4_be;
+            datagram.dst_ipv4_be = impl_->dest_ipv4_be;
+            datagram.src_port = source_port;
+            datagram.dst_port = impl_->bind_port;
+            datagram.ts_ns = steady_clock_now_ns();
+            datagram.queue_id = stats_.queue_id;
+            datagram.cookie = static_cast<std::uintptr_t>(index);
+            datagram.backend_kind = BackendKind::socket;
+            burst.datagrams.push_back(datagram);
 
             ++stats_.rx_packets;
-            stats_.rx_bytes += packet.len;
+            stats_.rx_bytes += datagram.payload_len;
         }
 
-        if (burst.packets.empty())
+        if (burst.datagrams.empty())
         {
             ++stats_.empty_polls;
         }
@@ -332,9 +337,9 @@ namespace rxtech
 #endif
     }
 
-    void LinuxSocketIngress::release_burst(RxBurst &burst)
+    void LinuxSocketIngress::release_burst(UdpDatagramBurst &burst)
     {
-        burst.packets.clear();
+        burst.datagrams.clear();
     }
 
     BackendStats LinuxSocketIngress::stats() const
