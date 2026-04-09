@@ -183,8 +183,12 @@ namespace
                 rxtech::UdpDatagramDesc datagram;
                 datagram.raw_frame_data = f.data();
                 datagram.raw_frame_len = static_cast<std::uint32_t>(f.size());
-                datagram.payload_data = f.data() + 42U;
-                datagram.payload_len = static_cast<std::uint32_t>(f.size() - 42U);
+                datagram.payload_data = nullptr;
+                datagram.payload_len = 0U;
+                datagram.src_ipv4_be = 0U;
+                datagram.dst_ipv4_be = 0U;
+                datagram.src_port = 0U;
+                datagram.dst_port = 0U;
                 datagram.ts_ns = ts;
                 datagram.backend_kind = rxtech::BackendKind::file_replay;
                 burst.datagrams.push_back(datagram);

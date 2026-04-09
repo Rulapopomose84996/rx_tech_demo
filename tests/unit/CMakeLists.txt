@@ -77,6 +77,12 @@ add_test(NAME test_udp_datagram_pipeline COMMAND test_udp_datagram_pipeline)
 set_tests_properties(test_udp_datagram_pipeline PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(test_udp_datagram_pipeline)
 
+add_executable(test_owner_loop_bridge_safety test_owner_loop_bridge_safety.cpp)
+target_link_libraries(test_owner_loop_bridge_safety PRIVATE rx_receiver_core)
+add_test(NAME test_owner_loop_bridge_safety COMMAND test_owner_loop_bridge_safety)
+set_tests_properties(test_owner_loop_bridge_safety PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+rxtech_apply_warnings(test_owner_loop_bridge_safety)
+
 if(UNIX AND NOT APPLE)
     add_executable(test_linux_socket_backend test_linux_socket_backend.cpp)
     target_link_libraries(test_linux_socket_backend PRIVATE rx_receiver_core rx_receiver_socket_ingress)

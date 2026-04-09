@@ -20,14 +20,6 @@
 namespace rxtech
 {
 
-    namespace
-    {
-        constexpr std::size_t kEthernetHeaderBytes = 14U;
-        constexpr std::size_t kIpv4HeaderBytes = 20U;
-        constexpr std::size_t kUdpHeaderBytes = 8U;
-        constexpr std::size_t kUdpPayloadOffset = kEthernetHeaderBytes + kIpv4HeaderBytes + kUdpHeaderBytes;
-    }
-
     std::vector<std::string> build_dpdk_eal_args(const RxConfig &config)
     {
         std::vector<std::string> eal_args;
@@ -366,17 +358,15 @@ namespace rxtech
                 continue;
             }
             const std::uint32_t frame_len = rte_pktmbuf_pkt_len(mbuf);
-            if (frame_len < kUdpPayloadOffset)
-            {
-                rte_pktmbuf_free(mbuf);
-                ++stats_.backend_drops;
-                continue;
-            }
             UdpDatagramDesc datagram;
             datagram.raw_frame_data = rte_pktmbuf_mtod(mbuf, std::uint8_t *);
             datagram.raw_frame_len = frame_len;
-            datagram.payload_data = datagram.raw_frame_data + kUdpPayloadOffset;
-            datagram.payload_len = frame_len - static_cast<std::uint32_t>(kUdpPayloadOffset);
+            datagram.payload_data = nullptr;
+            datagram.payload_len = 0U;
+            datagram.src_ipv4_be = 0U;
+            datagram.dst_ipv4_be = 0U;
+            datagram.src_port = 0U;
+            datagram.dst_port = 0U;
             datagram.ts_ns = steady_clock_now_ns();
             datagram.queue_id = 0;
             datagram.cookie = reinterpret_cast<std::uintptr_t>(mbuf);

@@ -127,10 +127,17 @@ namespace rxtech
             // 处理 burst 中的每个数据包
             for (const UdpDatagramDesc &datagram : burst.datagrams)
             {
+                if (datagram.raw_frame_data == nullptr || datagram.raw_frame_len == 0U)
+                {
+                    runtime_state.run_status = "error";
+                    runtime_state.run_error = "legacy bridge requires raw_frame_data/raw_frame_len";
+                    context.backend->release_burst(burst);
+                    break;
+                }
+
                 PacketDesc packet;
-                packet.data = const_cast<std::uint8_t *>(
-                    datagram.raw_frame_data != nullptr ? datagram.raw_frame_data : datagram.payload_data);
-                packet.len = datagram.raw_frame_data != nullptr ? datagram.raw_frame_len : datagram.payload_len;
+                packet.data = const_cast<std::uint8_t *>(datagram.raw_frame_data);
+                packet.len = datagram.raw_frame_len;
                 packet.ts_ns = datagram.ts_ns;
                 packet.queue_id = datagram.queue_id;
                 packet.cookie = datagram.cookie;
@@ -209,10 +216,20 @@ namespace rxtech
                         ++artifacts.captured_packets;
                     });
 
+                if (runtime_state.run_status != "success")
+                {
+                    break;
+                }
+
                 // 累积 burst 统计信息
                 burst_bytes += process_stats.accepted_bytes;
                 accepted_packets += process_stats.accepted_packets;
                 runtime_state.filtered_packets += process_stats.filtered_packets;
+            }
+
+            if (runtime_state.run_status != "success")
+            {
+                break;
             }
 
             // 如果有接受的数据包，更新性能指标
