@@ -114,6 +114,28 @@ namespace rxtech
             lines.push_back(build_metric_line("最大突发批次", std::to_string(summary.backend_max_burst_size)));
             lines.push_back(build_metric_line("内核丢弃报文", std::to_string(summary.backend_kernel_drops) + " 报文"));
             lines.push_back("");
+            lines.push_back("[输出链路统计]");
+            if (summary.output_backpressure_count > 0U)
+            {
+                lines.push_back(build_metric_line("输出退化次数", std::to_string(summary.output_backpressure_count)));
+            }
+            else
+            {
+                lines.push_back(build_metric_line("输出退化次数", "0"));
+            }
+            {
+                const char *run_result_label = "成功";
+                if (summary.run_status == "degraded")
+                {
+                    run_result_label = "退化";
+                }
+                else if (summary.run_status != "success")
+                {
+                    run_result_label = "失败";
+                }
+                lines.push_back(build_metric_line("运行结论", run_result_label));
+            }
+            lines.push_back("");
             lines.push_back("[结果层统计]");
             lines.push_back(build_metric_line("全局 CPI 数", std::to_string(summary.cpi_count)));
             lines.push_back(build_metric_line("全局 PRT 数", std::to_string(summary.prt_count)));

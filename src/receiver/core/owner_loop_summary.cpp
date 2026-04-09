@@ -205,7 +205,17 @@ namespace rxtech
     {
         std::ostringstream out;
         out << "\n========== 接收结束汇总 ==========\n";
-        out << "运行结果： " << (summary.run_status == "success" ? "成功" : "失败") << "\n";
+
+        const char *run_result_label = "成功";
+        if (summary.run_status == "degraded")
+        {
+            run_result_label = "退化";
+        }
+        else if (summary.run_status != "success")
+        {
+            run_result_label = "失败";
+        }
+        out << "运行结果： " << run_result_label << "\n";
         out << "后端类型： " << summary.backend << "\n";
         out << "接收队列： " << summary.queue_id << "\n";
         out << "原始收包： " << summary.raw_rx_packets << " 包，" << summary.raw_rx_bytes << " 字节\n";
@@ -221,6 +231,10 @@ namespace rxtech
         out << "后端接收批次： " << summary.backend_receive_batches << "\n";
         out << "后端最大突发批次： " << summary.backend_max_burst_size << "\n";
         out << "内核丢弃： " << summary.backend_kernel_drops << " 包\n";
+        if (summary.output_backpressure_count > 0U)
+        {
+            out << "输出退化次数： " << summary.output_backpressure_count << "\n";
+        }
         out << "CPI 数： " << summary.cpi_count << "\n";
         out << "PRT 数： " << summary.prt_count << "\n";
         out << "完整 PRT 数： " << summary.complete_prt_count << "\n";
