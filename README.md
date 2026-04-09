@@ -1,6 +1,6 @@
 # rx_tech_demo
 
-`rx_tech_demo` 是一个 Linux-only 的雷达接收端演示工程。当前唯一主线位于 `src/receiver`，默认叙述和权威验证仍以 DPDK 接收路径为准；同时仓库现在提供一个最小 Linux socket ingress，用于在不改主线的前提下验证第二种接入策略。
+`rx_tech_demo` 是一个 Linux-only 的雷达接收端演示工程。当前唯一主线位于 `src/receiver`，默认叙述和权威验证仍以 DPDK 接收路径为准；同时仓库现在提供一个正式的 Linux socket datagram ingress，用于与 DPDK 共用统一的 UDP datagram 协议主线。
 
 ## 当前定位
 
@@ -8,7 +8,7 @@
 - 当前并不宣称已经完成完整业务接收模块；它仍是分阶段演进中的主线 demo（Phase 3）。
 - 当前统一主线位于 `src/receiver`，通过 `IRxBackend` 同时接入两种 ingress 策略：
   - `dpdk`：当前权威的真实网卡主路径
-  - `socket`：最小 Linux UDP socket ingress，用于在不改 `PacketPipeline -> OwnerLoop -> CpiStateCoordinator -> CpiOutput` 主线的前提下验证第二种接入方式
+  - `socket`：Linux UDP datagram ingress，通过统一 `UdpDatagramPipeline -> OwnerLoop -> CpiStateCoordinator -> CpiOutput` 主线接入
 - 当前代码已经完成 Phase 3 的模块化收平：
   - 公共头统一到 `include/rxtech`
   - `src/receiver` 模块实现文件已收平到模块根目录
@@ -32,10 +32,11 @@ src/
     ingress/
       dpdk/                   # DPDK 后端：收包、ARP 应答
         internal/
-      socket/                 # Linux UDP socket 后端：最小可用 ingress 适配
+      socket/                 # Linux UDP socket 后端：datagram-first ingress
         internal/
-    protocol/                 # 协议处理模块（新增流水线设计）
-      packet_pipeline.cpp/h           # 包处理流水线（新增）
+    protocol/                 # 协议处理模块（datagram-first 主线）
+      udp_datagram_pipeline.cpp/h     # datagram-first 协议入口
+      packet_pipeline.cpp/h           # legacy frame adapter
       data_order_tracker.cpp/h        # 数据顺序追踪器（新增）
       udp_payload_assembler.cpp       # UDP payload 组装
       sample_packet_parser.cpp        # 包解析器
@@ -66,17 +67,17 @@ docs/
 2. 解析 CLI，支持 `--config`、`--dry-run`、`--run-until-stopped`、`--duration`、`--status-interval`、`--help`。
 3. 加载默认配置和 section 化配置文件，随后准备本次运行的时间戳输出目录。
 4. 校验配置并初始化所选 backend：
-   - `dpdk`：当前权威主运行路径
-   - `socket`：最小 Linux UDP socket ingress，仅作为第二种接入策略接入统一主线
+   - `dpdk`：当前权威主运行路径，内部完成 `raw frame -> UDP datagram` 适配
+   - `socket`：Linux UDP datagram ingress，直接交付 UDP datagram 视图
 5. **创建模块化组件**：PacketPipeline、CpiStateCoordinator、DataOrderTracker、RuntimeStatusReporter，以及基于 SPSC ring 的 CPI 输出流水线。
 6. 批量收包。
    - `dpdk` 路径会在 ingress 层按需应答 ARP
-   - `socket` 路径用 `recvfrom()` 收 UDP 包，并在后端内部包装成最小 Ethernet/IPv4/UDP synthetic frame，保证上层流水线无需区分后端
-7. **通过 PacketPipeline 处理每个数据包**：
-   - UdpPayloadAssembler：提取 IPv4/UDP payload，完成 IP 分片重组
+   - `socket` 路径用 `recvmmsg()` 批量收 UDP datagram，并使用固定 slot 保存 burst 生命周期
+7. **通过 UdpDatagramPipeline 处理每个 datagram**：
    - PacketParser：按当前协议头解析
    - PacketValidator：校验 channel / packet_index / tail / payload 长度
    - ProtocolSequenceInterpreter：序列解释
+   - `PacketPipeline` 只在 frame-native 适配路径中保留为 legacy frame adapter
 8. **数据包过滤和指标收集**
 9. **对于业务协议包**：
    - DataOrderTracker：监控数据顺序完整性
@@ -206,25 +207,34 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 
 ## 当前已验证结果
 
-最近一轮与 socket ingress 相关的 Linux 服务器复验分成两部分：
+最近一轮 datagram-first 主线的 Linux 服务器复验采用隔离目录完成，以避免共享服务器工作区漂移影响结果：
 
-- 代码构建与测试：`/home/devuser/WorkSpace/rx_tech_demo_socket_validation_20260409`
-  - 构建通过
-  - unit tests 通过：20/20
-  - integration tests：1/2 通过
-  - 未通过项：`rxtech_integration_slow_consumer_tests`
-  - 这条失败路径使用 fake backend，不经过 `LinuxSocketIngress`，因此它是当前仓库里的既有集成问题，不是本次 socket 接入直接引入的回归证据
-- socket 运行态验证：`/home/devuser/WorkSpace/rx_tech_demo_socket_runtime_validation_20260409`
-  - `rx_receiver_socket` 已在 Linux 服务器上完成真实进程级 loopback 收包
-  - 接收端汇总：原始收包 246 包，解析有效包 246 包，控制表包 3 包，数据包 243 包，CPI 数 3，完整 PRT 数 9，通道数 3
-  - 落盘结果：`capture_index.csv` 为 246 条记录加表头，`capture_packets.bin` 为 503808 字节
+- 代码构建与定向权威验证：
+  - `/home/devuser/WorkSpace/rx_tech_demo_task4_validation`
+    - `test_linux_socket_backend`
+    - `test_udp_datagram_pipeline`
+    - 通过
+  - `/home/devuser/WorkSpace/rx_tech_demo_task5_validation`
+    - `test_owner_loop_summary`
+    - `test_linux_socket_backend`
+    - `test_metrics`
+    - 通过
+- 最终 Task 6 权威验证：
+  - `/home/devuser/WorkSpace/rx_tech_demo_task6_validation`
+    - full unit suite：23/23 通过
+    - `rx_receiver_socket --config configs/socket_loopback.conf --duration 5 --status-interval 1`：退出码 `0`
+    - 运行态总结显示：
+      - 后端类型：`socket`
+      - 后端接收批次：`0`
+      - 后端最大突发批次：`0`
+      - 内核丢弃：`0`
 
 当前对 socket 路径已经确认的事实是：
 
 - `--dry-run` 能打印 `backend=socket`
 - `make_backend("socket")` 能创建 `LinuxSocketIngress`
-- `ReceiveRunner -> OwnerLoop -> PacketPipeline` 主流程无需分叉即可跑通 socket backend
-- socket 路径已在 Linux 服务器上完成真实进程级业务流落盘
+- `ReceiveRunner -> OwnerLoop -> UdpDatagramPipeline` 主流程无需按 backend 分叉即可跑通 socket backend
+- socket 路径已在 Linux 服务器上完成真实进程级业务流落盘，并验证了空闲 loopback 条件下也会按 `duration` 正常退出
 
 ## 运行产物目录约定
 
