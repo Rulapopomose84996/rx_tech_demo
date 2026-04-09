@@ -371,7 +371,6 @@ namespace rxtech
             datagram.cookie = static_cast<std::uintptr_t>(index);
             datagram.backend_kind = BackendKind::socket;
             datagram.truncated = slot.truncated;
-            burst.datagrams.push_back(datagram);
 
             ++stats_.rx_packets;
             stats_.rx_bytes += datagram.payload_len;

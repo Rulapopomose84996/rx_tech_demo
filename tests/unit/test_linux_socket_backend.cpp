@@ -90,6 +90,17 @@ namespace
         ::close(socket_fd);
         return sent == static_cast<ssize_t>(payload.size());
     }
+
+    rxtech::RxConfig make_socket_config(const std::uint16_t port)
+    {
+        rxtech::RxConfig config = rxtech::load_default_config();
+        config.backend_name = "socket";
+        config.receiver_ipv4 = "127.0.0.1";
+        config.allowed_source_ipv4 = "127.0.0.1";
+        config.allowed_dest_port = port;
+        config.protocol_udp_packet_size = 2048U;
+        return config;
+    }
 #endif
 
 } // namespace
@@ -106,12 +117,7 @@ int main()
         return 1;
     }
 
-    rxtech::RxConfig config = rxtech::load_default_config();
-    config.backend_name = "socket";
-    config.receiver_ipv4 = "127.0.0.1";
-    config.allowed_source_ipv4 = "127.0.0.1";
-    config.allowed_dest_port = port;
-    config.protocol_udp_packet_size = 2048U;
+    rxtech::RxConfig config = make_socket_config(port);
 
     rxtech::LinuxSocketIngress backend;
     const rxtech::BackendInitResult init_result = backend.init(config);
@@ -228,6 +234,103 @@ int main()
     backend.release_burst(burst);
     backend.shutdown();
 
+    constexpr std::uint32_t full_burst_budget = 4U;
+    const std::uint16_t full_burst_port = reserve_loopback_port();
+    if (full_burst_port == 0U)
+    {
+        std::cerr << "failed to reserve loopback UDP port for full burst\n";
+        return 1;
+    }
+
+    rxtech::LinuxSocketIngress full_burst_backend;
+    const rxtech::BackendInitResult full_burst_init = full_burst_backend.init(make_socket_config(full_burst_port));
+    if (!full_burst_init.ok)
+    {
+        std::cerr << "socket backend init for full burst failed: " << full_burst_init.reason << '\n';
+        return 1;
+    }
+
+    std::vector<std::vector<std::uint8_t>> full_burst_payloads;
+    full_burst_payloads.reserve(full_burst_budget);
+    for (std::uint32_t index = 0; index < full_burst_budget; ++index)
+    {
+        std::vector<std::uint8_t> payload = make_sample_udp_payload();
+        payload[0] = static_cast<std::uint8_t>(0x30U + index);
+        payload[1] = static_cast<std::uint8_t>(0x40U + index);
+        full_burst_payloads.push_back(payload);
+        if (!send_udp_payload(full_burst_port, full_burst_payloads.back()))
+        {
+            full_burst_backend.shutdown();
+            std::cerr << "failed to send full-burst UDP payload\n";
+            return 1;
+        }
+    }
+
+    rxtech::UdpDatagramBurst full_burst;
+    if (!full_burst_backend.recv_burst(full_burst, full_burst_budget))
+    {
+        full_burst_backend.shutdown();
+        std::cerr << "socket backend full-burst recv_burst failed\n";
+        return 1;
+    }
+    if (full_burst.datagrams.size() != full_burst_budget)
+    {
+        full_burst_backend.release_burst(full_burst);
+        full_burst_backend.shutdown();
+        std::cerr << "expected exactly " << full_burst_budget << " received datagrams in full burst, got "
+                  << full_burst.datagrams.size() << '\n';
+        return 1;
+    }
+    if (full_burst.datagrams.capacity() != full_burst_budget)
+    {
+        full_burst_backend.release_burst(full_burst);
+        full_burst_backend.shutdown();
+        std::cerr << "expected full burst descriptor storage to stay within the reserved max_burst capacity\n";
+        return 1;
+    }
+    for (std::uint32_t index = 0; index < full_burst_budget; ++index)
+    {
+        const rxtech::UdpDatagramDesc &datagram = full_burst.datagrams[index];
+        if (datagram.payload_data == nullptr ||
+            datagram.payload_len != full_burst_payloads[index].size() ||
+            datagram.raw_frame_data != nullptr ||
+            datagram.raw_frame_len != 0U)
+        {
+            full_burst_backend.release_burst(full_burst);
+            full_burst_backend.shutdown();
+            std::cerr << "expected full-burst datagram slot " << index << " to expose datagram-only storage\n";
+            return 1;
+        }
+        if (std::memcmp(datagram.payload_data,
+                        full_burst_payloads[index].data(),
+                        full_burst_payloads[index].size()) != 0)
+        {
+            full_burst_backend.release_burst(full_burst);
+            full_burst_backend.shutdown();
+            std::cerr << "expected full-burst payload bytes to remain readable until release\n";
+            return 1;
+        }
+        if (index > 0U && datagram.payload_data == full_burst.datagrams[index - 1U].payload_data)
+        {
+            full_burst_backend.release_burst(full_burst);
+            full_burst_backend.shutdown();
+            std::cerr << "expected full-burst payload_data pointers to remain slot-distinct\n";
+            return 1;
+        }
+    }
+
+    const rxtech::BackendStats full_burst_stats = full_burst_backend.stats();
+    if (full_burst_stats.max_burst_size != full_burst_budget)
+    {
+        full_burst_backend.release_burst(full_burst);
+        full_burst_backend.shutdown();
+        std::cerr << "expected max_burst_size to equal the full burst budget\n";
+        return 1;
+    }
+
+    full_burst_backend.release_burst(full_burst);
+    full_burst_backend.shutdown();
+
     const std::uint16_t empty_poll_port = reserve_loopback_port();
     if (empty_poll_port == 0U)
     {
@@ -235,12 +338,7 @@ int main()
         return 1;
     }
 
-    rxtech::RxConfig empty_poll_config = rxtech::load_default_config();
-    empty_poll_config.backend_name = "socket";
-    empty_poll_config.receiver_ipv4 = "127.0.0.1";
-    empty_poll_config.allowed_source_ipv4 = "127.0.0.1";
-    empty_poll_config.allowed_dest_port = empty_poll_port;
-    empty_poll_config.protocol_udp_packet_size = 2048U;
+    rxtech::RxConfig empty_poll_config = make_socket_config(empty_poll_port);
     empty_poll_config.socket_nonblocking = true;
 
     rxtech::LinuxSocketIngress empty_poll_backend;
