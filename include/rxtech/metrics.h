@@ -130,9 +130,12 @@ namespace rxtech
         std::uint64_t ring_high_watermark = 0;
         std::uint64_t rx_polls = 0;
         std::uint64_t empty_polls = 0;
+        std::uint64_t backend_receive_batches = 0;
+        std::uint64_t backend_kernel_drops = 0;
         std::uint32_t queue_id = 0;
         std::uint64_t umem_size = 0;
         std::uint32_t frame_size = 0;
+        std::uint32_t backend_max_burst_size = 0;
         std::uint32_t fill_ring_size = 0;
         std::uint32_t completion_ring_size = 0;
         std::uint32_t total_step_count = 0;

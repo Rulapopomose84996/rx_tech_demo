@@ -24,6 +24,7 @@ namespace rxtech
         std::uint64_t rx_bytes = 0;
         std::uint64_t rx_errors = 0;
         std::uint64_t backend_drops = 0;
+        std::uint64_t kernel_drop_count = 0;
         std::uint64_t rx_polls = 0;
         std::uint64_t empty_polls = 0;
         std::uint64_t receive_batches = 0;

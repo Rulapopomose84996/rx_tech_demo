@@ -106,6 +106,9 @@ namespace rxtech
             lines.push_back(build_metric_line("控制表报文", std::to_string(summary.control_table_packets) + " 报文"));
             lines.push_back(build_metric_line("数据报文", std::to_string(summary.data_packets) + " 报文"));
             lines.push_back(build_metric_line("协议丢弃报文", std::to_string(summary.dropped_packets) + " 报文"));
+            lines.push_back(build_metric_line("接收批次", std::to_string(summary.backend_receive_batches)));
+            lines.push_back(build_metric_line("最大突发批次", std::to_string(summary.backend_max_burst_size)));
+            lines.push_back(build_metric_line("内核丢弃报文", std::to_string(summary.backend_kernel_drops) + " 报文"));
             lines.push_back("");
             lines.push_back("[结果层统计]");
             lines.push_back(build_metric_line("全局 CPI 数", std::to_string(summary.cpi_count)));
