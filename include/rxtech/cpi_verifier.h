@@ -37,8 +37,7 @@ namespace rxtech
 
     inline CpiVerifyError operator|(CpiVerifyError a, CpiVerifyError b) noexcept
     {
-        return static_cast<CpiVerifyError>(
-            static_cast<std::uint32_t>(a) | static_cast<std::uint32_t>(b));
+        return static_cast<CpiVerifyError>(static_cast<std::uint32_t>(a) | static_cast<std::uint32_t>(b));
     }
 
     inline CpiVerifyError &operator|=(CpiVerifyError &a, CpiVerifyError b) noexcept
@@ -82,9 +81,8 @@ namespace rxtech
     /// no errors are found.
     class CpiVerifier
     {
-    public:
-        CpiVerificationResult verify(const CpiOutput &output,
-                                     const ProtocolSpec &spec) const noexcept;
+      public:
+        CpiVerificationResult verify(const CpiOutput &output, const ProtocolSpec &spec) const noexcept;
     };
 
 } // namespace rxtech

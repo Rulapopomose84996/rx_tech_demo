@@ -7,6 +7,14 @@
 namespace rxtech
 {
 
+    enum class OutputDropPolicy
+    {
+        degrade,
+        error,
+    };
+
+    inline constexpr std::uint32_t kDpdkMaxBurstSize = 64U;
+
     struct RxConfig
     {
         // ========== 基础配置 ==========
@@ -39,7 +47,7 @@ namespace rxtech
         std::uint32_t dpdk_tx_desc = 256;         ///< DPDK 发送描述符数量，默认为 256
 
         // ========== 数据接收配置 ==========
-        std::uint32_t max_burst = 64;        ///< 最大突发数据包数量，默认为 64
+        std::uint32_t max_burst = 64;        ///< 最大突发数据包数量，DPDK 路径还会受 kDpdkMaxBurstSize 限制
         std::uint32_t packet_size_bytes = 0; ///< 数据包大小（字节），0 表示自动
         std::uint32_t duration_seconds = 0;  ///< 运行持续时间（秒），0 表示无限
         bool run_until_stopped = false;      ///< 是否持续运行直到手动停止，默认为 false
@@ -63,11 +71,11 @@ namespace rxtech
         bool raw_record_enabled = false;                                     ///< 是否启用原始帧记录，默认为 false
         std::string raw_record_output_dir = "/data/rx_tech_demo/raw_frames"; ///< 原始帧记录输出目录
         std::string raw_record_file_prefix = "radar_raw";                    ///< 原始帧记录文件前缀
-        std::uint32_t raw_record_ring_slots = 4096;                          ///< 原始帧记录环形缓冲区槽位数，默认为 4096
-        std::uint32_t raw_record_writer_batch_size = 64;                     ///< 原始帧写入器批量大小，默认为 64
-        std::uint32_t raw_record_max_frame_bytes = 16384;                    ///< 原始帧最大字节数，默认为 16384
-        std::uint64_t raw_record_segment_bytes = 5368709120ULL / 10ULL;      ///< 原始帧分段大小（字节），默认为 512MB
-        std::uint64_t raw_record_max_total_bytes = 5368709120ULL;            ///< 原始帧最大总大小（字节），默认为 5GB
+        std::uint32_t raw_record_ring_slots = 4096;                     ///< 原始帧记录环形缓冲区槽位数，默认为 4096
+        std::uint32_t raw_record_writer_batch_size = 64;                ///< 原始帧写入器批量大小，默认为 64
+        std::uint32_t raw_record_max_frame_bytes = 16384;               ///< 原始帧最大字节数，默认为 16384
+        std::uint64_t raw_record_segment_bytes = 5368709120ULL / 10ULL; ///< 原始帧分段大小（字节），默认为 512MB
+        std::uint64_t raw_record_max_total_bytes = 5368709120ULL;       ///< 原始帧最大总大小（字节），默认为 5GB
 
         // ========== 反馈系统配置 ==========
         bool feedback_enabled = false;               ///< 是否启用反馈功能，默认为 false
@@ -82,20 +90,22 @@ namespace rxtech
         std::string log_file_path;         ///< 日志文件路径
 
         // ========== 输出与监控配置 ==========
-        std::string output_dir = "results";                ///< 输出目录，默认为 results
-        std::string output_drop_policy = "degrade";        ///< 输出丢弃策略，degrade 或 error
-        std::uint32_t output_ring_capacity = 32U;          ///< 输出环形缓冲区容量，默认为 32
-        std::uint32_t recycle_ring_capacity = 32U;         ///< 回收环形缓冲区容量，默认为 32
-        std::uint32_t status_interval_seconds = 10;        ///< 状态报告间隔（秒），默认为 10
-        bool metrics_detail_enabled = false;               ///< 是否启用详细指标，默认为 false
-        bool run_artifacts_prepared = false;               ///< 运行产物是否已准备，默认为 false
+        std::string output_dir = "results";                              ///< 输出目录，默认为 results
+        OutputDropPolicy output_drop_policy = OutputDropPolicy::degrade; ///< 输出丢弃策略
+        std::uint32_t output_ring_capacity = 32U;                        ///< 输出环形缓冲区容量，默认为 32
+        std::uint32_t recycle_ring_capacity = 32U;                       ///< 回收环形缓冲区容量，默认为 32
+        std::uint32_t status_interval_seconds = 10;                      ///< 状态报告间隔（秒），默认为 10
+        bool metrics_detail_enabled = false;                             ///< 是否启用详细指标，默认为 false
+        bool run_artifacts_prepared = false;                             ///< 运行产物是否已准备，默认为 false
     };
 
     // ========== 配置管理接口 ==========
-    RxConfig load_default_config();                                   ///< 加载默认配置
-    RxConfig load_config_file(const std::string &path);               ///< 从文件加载配置
-    void merge_config(RxConfig &base, const RxConfig &overrides);     ///< 合并配置（覆盖模式）
-    std::string effective_socket_bind_ip(const RxConfig &config);     ///< 计算 Linux socket 的实际绑定 IPv4
-    std::uint16_t effective_socket_bind_port(const RxConfig &config); ///< 计算 Linux socket 的实际绑定端口
+    RxConfig load_default_config();                                        ///< 加载默认配置
+    RxConfig load_config_file(const std::string &path);                    ///< 从文件加载配置
+    void merge_config(RxConfig &base, const RxConfig &overrides);          ///< 合并配置（覆盖模式）
+    OutputDropPolicy parse_output_drop_policy(const std::string &value);   ///< 解析输出丢弃策略字符串
+    const char *output_drop_policy_name(OutputDropPolicy policy) noexcept; ///< 输出丢弃策略名称
+    std::string effective_socket_bind_ip(const RxConfig &config);          ///< 计算 Linux socket 的实际绑定 IPv4
+    std::uint16_t effective_socket_bind_port(const RxConfig &config);      ///< 计算 Linux socket 的实际绑定端口
 
 } // namespace rxtech

@@ -134,11 +134,8 @@ namespace rxtech
         std::uint64_t backend_receive_batches = 0;
         std::uint64_t backend_kernel_drops = 0;
         std::uint32_t queue_id = 0;
-        std::uint64_t umem_size = 0;
         std::uint32_t frame_size = 0;
         std::uint32_t backend_max_burst_size = 0;
-        std::uint32_t fill_ring_size = 0;
-        std::uint32_t completion_ring_size = 0;
         std::uint32_t total_step_count = 0;
         std::uint32_t measure_step_count = 0;
         std::uint32_t scenario_duration_seconds = 0;
@@ -167,12 +164,12 @@ namespace rxtech
         std::vector<ProtocolCpiSummary> protocol_cpis;
         std::vector<ProtocolPrtChannelCoverageSummary> active_prt_channels;
         std::vector<StepSummary> steps;
-        std::array<std::uint64_t, 8> reject_by_reason{};
+        std::array<std::uint64_t, kRejectReasonCount> reject_by_reason{};
     };
 
     class IMetricsCollector
     {
-    public:
+      public:
         virtual ~IMetricsCollector() = default;
 
         virtual void on_burst(std::size_t burst_size, std::uint64_t bytes) = 0;
@@ -188,15 +185,13 @@ namespace rxtech
         virtual void on_ring_depth(std::size_t depth) = 0;
         virtual std::unique_ptr<IMetricsCollector> clone_empty() const = 0;
         virtual bool absorb(const IMetricsCollector &other) = 0;
-        virtual RunSummary finalize(const std::string &backend,
-                                    const std::string &mode,
-                                    const std::string &scenario,
+        virtual RunSummary finalize(const std::string &backend, const std::string &mode, const std::string &scenario,
                                     std::uint32_t duration_seconds) = 0;
     };
 
     class MetricsCollector final : public IMetricsCollector
     {
-    public:
+      public:
         void on_burst(std::size_t burst_size, std::uint64_t bytes) override;
         void on_valid_packet(PacketKind kind) override;
         void on_reject(RejectReason reason) override;
@@ -210,12 +205,10 @@ namespace rxtech
         void on_ring_depth(std::size_t depth) override;
         std::unique_ptr<IMetricsCollector> clone_empty() const override;
         bool absorb(const IMetricsCollector &other) override;
-        RunSummary finalize(const std::string &backend,
-                            const std::string &mode,
-                            const std::string &scenario,
+        RunSummary finalize(const std::string &backend, const std::string &mode, const std::string &scenario,
                             std::uint32_t duration_seconds) override;
 
-    private:
+      private:
         std::uint64_t rx_packets_ = 0;
         std::uint64_t rx_bytes_ = 0;
         std::uint64_t parsed_packets_ = 0;
@@ -231,7 +224,7 @@ namespace rxtech
         std::uint64_t burst_sum_ = 0;
         std::uint64_t burst_max_ = 0;
         std::uint64_t ring_high_watermark_ = 0;
-        std::array<std::uint64_t, 8> reject_counts_{};
+        std::array<std::uint64_t, kRejectReasonCount> reject_counts_{};
         std::vector<std::size_t> bursts_;
         std::vector<std::uint64_t> latencies_ns_;
     };

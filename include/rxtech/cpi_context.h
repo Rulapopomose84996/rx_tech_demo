@@ -100,7 +100,6 @@ namespace rxtech
             control = {};
             prt_summary.fill({});
             slot_valid_bytes.fill(0U);
-            payload.fill(0U);
         }
 
         std::uint8_t *slot_payload(std::uint32_t index)
@@ -117,8 +116,7 @@ namespace rxtech
     inline bool is_valid_slot_coord(std::uint16_t prt, std::uint16_t channel, std::uint16_t packet_index,
                                     std::uint16_t channels_per_prt, std::uint16_t packets_per_channel)
     {
-        return prt >= 1U && prt <= kCpiPrtMax &&
-               channel < channels_per_prt && channel < kCpiMaxChannelCount &&
+        return prt >= 1U && prt <= kCpiPrtMax && channel < channels_per_prt && channel < kCpiMaxChannelCount &&
                packet_index >= 1U && packet_index <= packets_per_channel;
     }
 
@@ -134,8 +132,8 @@ namespace rxtech
         return static_cast<std::uint16_t>(1U << (packet_index - 1U));
     }
 
-    inline void set_expected_prt_count(CpiContext &ctx, std::uint16_t count,
-                                       std::uint16_t channels_per_prt, std::uint16_t packets_per_channel)
+    inline void set_expected_prt_count(CpiContext &ctx, std::uint16_t count, std::uint16_t channels_per_prt,
+                                       std::uint16_t packets_per_channel)
     {
         ctx.header.expected_n_prt = count;
         ctx.header.channels_per_prt = channels_per_prt;
@@ -151,9 +149,7 @@ namespace rxtech
         ctx.header.packets_per_channel = control.packets_per_channel;
         if (control.valid && control.n_prt > 0U)
         {
-            set_expected_prt_count(ctx, control.n_prt,
-                                   control.channel_count,
-                                   control.packets_per_channel);
+            set_expected_prt_count(ctx, control.n_prt, control.channel_count, control.packets_per_channel);
             return;
         }
 

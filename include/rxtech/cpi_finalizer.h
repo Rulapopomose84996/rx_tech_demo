@@ -10,9 +10,11 @@ namespace rxtech
 
     struct CpiReadOnlyView
     {
-        const std::uint8_t *payload_base = nullptr;
-        const std::uint16_t *slot_valid_bytes = nullptr;
-        const PrtSummary *prt_summary = nullptr;
+        const std::uint8_t *payload_base =
+            nullptr; ///< 生存期绑定到源 CpiContext；matching ReleaseToken 被回收后立即失效
+        const std::uint16_t *slot_valid_bytes =
+            nullptr;                             ///< 生存期绑定到源 CpiContext；matching ReleaseToken 被回收后立即失效
+        const PrtSummary *prt_summary = nullptr; ///< 生存期绑定到源 CpiContext；matching ReleaseToken 被回收后立即失效
         std::uint32_t n_prt = 0;
         std::uint32_t slot_count = 0;
         std::uint32_t payload_stride = kCpiSlotStride;
@@ -44,7 +46,7 @@ namespace rxtech
 
     class CpiFinalizer
     {
-    public:
+      public:
         std::optional<CpiOutput> try_finalize(CpiContext &ctx, std::uint32_t trigger) const;
     };
 

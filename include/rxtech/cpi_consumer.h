@@ -17,13 +17,11 @@ namespace rxtech
     /// and pushes a ReleaseToken back through the recycle ring.
     class CpiConsumer
     {
-    public:
-        CpiConsumer(SpscRing<CpiOutput> &output_ring,
-                    SpscRing<ReleaseToken> &recycle_ring,
-                    CpiOutputHandler handler)
-            : output_ring_(output_ring),
-              recycle_ring_(recycle_ring),
-              handler_(std::move(handler)) {}
+      public:
+        CpiConsumer(SpscRing<CpiOutput> &output_ring, SpscRing<ReleaseToken> &recycle_ring, CpiOutputHandler handler)
+            : output_ring_(output_ring), recycle_ring_(recycle_ring), handler_(std::move(handler))
+        {
+        }
 
         /// Run the consumer loop (blocks until stop() is called).
         void run(const std::atomic<bool> &stop_flag);
@@ -34,7 +32,7 @@ namespace rxtech
             return processed_count_.load(std::memory_order_acquire);
         }
 
-    private:
+      private:
         SpscRing<CpiOutput> &output_ring_;
         SpscRing<ReleaseToken> &recycle_ring_;
         CpiOutputHandler handler_;

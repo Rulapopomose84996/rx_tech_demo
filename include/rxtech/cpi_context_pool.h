@@ -15,7 +15,7 @@ namespace rxtech
 
     class CpiContextPool
     {
-    public:
+      public:
         CpiContextPool() : pool_(std::make_unique<CpiContext[]>(kCpiContextPoolDepth))
         {
             for (std::size_t index = 0; index < kCpiContextPoolDepth; ++index)
@@ -31,8 +31,7 @@ namespace rxtech
             for (std::size_t index = 0; index < in_use_.size(); ++index)
             {
                 bool expected = false;
-                if (in_use_[index].compare_exchange_strong(expected, true,
-                                                           std::memory_order_acq_rel,
+                if (in_use_[index].compare_exchange_strong(expected, true, std::memory_order_acq_rel,
                                                            std::memory_order_relaxed))
                 {
                     pool_[index].reset(cpi_id, static_cast<std::uint32_t>(index));
@@ -63,7 +62,7 @@ namespace rxtech
             return index < kCpiContextPoolDepth ? &pool_[index] : nullptr;
         }
 
-    private:
+      private:
         std::unique_ptr<CpiContext[]> pool_;
         std::array<std::atomic<bool>, kCpiContextPoolDepth> in_use_{};
     };

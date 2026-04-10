@@ -33,18 +33,21 @@ namespace rxtech
     /// a window of the preloaded frames, optionally rate-limiting via pps.
     class FileReplayBackend final : public IRxBackend
     {
-    public:
+      public:
         explicit FileReplayBackend(FileReplayOptions opts);
         ~FileReplayBackend() override;
 
-        std::string name() const override { return "file_replay"; }
+        std::string name() const override
+        {
+            return "file_replay";
+        }
         BackendInitResult init(const RxConfig &config) override;
         bool recv_burst(UdpDatagramBurst &burst, std::uint32_t max_burst) override;
         void release_burst(UdpDatagramBurst &burst) override;
         BackendStats stats() const override;
         void shutdown() override;
 
-    private:
+      private:
         struct Impl;
         std::unique_ptr<Impl> impl_;
     };

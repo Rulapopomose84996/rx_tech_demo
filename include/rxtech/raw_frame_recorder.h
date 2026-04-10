@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include <cstdint>
+#include <memory>
 #include <string>
 
 #include "rxtech/packet_desc.h"
@@ -23,7 +24,7 @@ namespace rxtech
 
     class RawFrameRecorder
     {
-    public:
+      public:
         explicit RawFrameRecorder(const RxConfig &config);
         ~RawFrameRecorder();
 
@@ -35,9 +36,9 @@ namespace rxtech
         RawFrameRecorderStats snapshot() const;
         std::string error_message() const;
 
-    private:
+      private:
         struct Impl;
-        Impl *impl_ = nullptr;
+        std::unique_ptr<Impl> impl_;
     };
 
 } // namespace rxtech

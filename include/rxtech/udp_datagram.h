@@ -1,10 +1,13 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
-#include <vector>
 
 namespace rxtech
 {
+
+    constexpr std::size_t kUdpDatagramBurstCapacity = 1024U;
 
     enum class BackendKind : std::uint8_t
     {
@@ -31,9 +34,92 @@ namespace rxtech
         bool truncated = false;
     };
 
+    class UdpDatagramBurstStorage
+    {
+      public:
+        using value_type = UdpDatagramDesc;
+        using iterator = value_type *;
+        using const_iterator = const value_type *;
+
+        void clear() noexcept
+        {
+            size_ = 0U;
+        }
+
+        void reserve(std::size_t) noexcept {}
+
+        void resize(std::size_t new_size) noexcept
+        {
+            size_ = new_size <= storage_.size() ? new_size : storage_.size();
+        }
+
+        void push_back(const value_type &value) noexcept
+        {
+            if (size_ >= storage_.size())
+            {
+                return;
+            }
+            storage_[size_++] = value;
+        }
+
+        std::size_t size() const noexcept
+        {
+            return size_;
+        }
+
+        constexpr std::size_t capacity() const noexcept
+        {
+            return kUdpDatagramBurstCapacity;
+        }
+
+        constexpr std::size_t max_size() const noexcept
+        {
+            return kUdpDatagramBurstCapacity;
+        }
+
+        bool empty() const noexcept
+        {
+            return size_ == 0U;
+        }
+
+        value_type &operator[](std::size_t index) noexcept
+        {
+            return storage_[index];
+        }
+
+        const value_type &operator[](std::size_t index) const noexcept
+        {
+            return storage_[index];
+        }
+
+        iterator begin() noexcept
+        {
+            return storage_.data();
+        }
+
+        iterator end() noexcept
+        {
+            return storage_.data() + size_;
+        }
+
+        const_iterator begin() const noexcept
+        {
+            return storage_.data();
+        }
+
+        const_iterator end() const noexcept
+        {
+            return storage_.data() + size_;
+        }
+
+      private:
+        std::array<value_type, kUdpDatagramBurstCapacity> storage_{};
+        std::size_t size_ = 0U;
+    };
+
     struct UdpDatagramBurst
     {
-        std::vector<UdpDatagramDesc> datagrams;
+        UdpDatagramBurstStorage datagrams;
     };
 
 } // namespace rxtech
