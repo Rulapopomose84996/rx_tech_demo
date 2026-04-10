@@ -17,6 +17,22 @@ int main()
     spec.channels_per_prt = 3U;
     spec.packets_per_channel = 9U;
 
+    {
+        rxtech::CpiContext lazy_reset_context;
+        lazy_reset_context.payload[0] = 0xA5U;
+        lazy_reset_context.slot_valid_bytes[0] = 128U;
+        lazy_reset_context.prt_summary[0].recv_packet_count = 1U;
+
+        lazy_reset_context.reset(7U, 3U);
+
+        assert(lazy_reset_context.header.cpi_id == 7U);
+        assert(lazy_reset_context.header.pool_index == 3U);
+        assert(lazy_reset_context.header.state == rxtech::CpiState::ACTIVE);
+        assert(lazy_reset_context.slot_valid_bytes[0] == 0U);
+        assert(lazy_reset_context.prt_summary[0].recv_packet_count == 0U);
+        assert(lazy_reset_context.payload[0] == 0xA5U);
+    }
+
     auto context_ptr = std::make_unique<rxtech::CpiContext>();
     rxtech::CpiContext &context = *context_ptr;
     context.reset(42U, 0U);
@@ -49,8 +65,7 @@ int main()
     assert(duplicate_result.duplicate);
     assert(context.header.duplicate_count == 1U);
 
-    rxtech::set_expected_prt_count(context, 1U,
-                                   static_cast<std::uint16_t>(spec.channels_per_prt),
+    rxtech::set_expected_prt_count(context, 1U, static_cast<std::uint16_t>(spec.channels_per_prt),
                                    static_cast<std::uint16_t>(spec.packets_per_channel));
     rxtech::ProgressTracker tracker(spec);
     for (std::uint16_t channel = 0; channel < spec.channels_per_prt; ++channel)
@@ -80,8 +95,7 @@ int main()
         ctx2.reset(99U, 0U);
         ctx2.header.channels_per_prt = static_cast<std::uint16_t>(spec.channels_per_prt);
         ctx2.header.packets_per_channel = static_cast<std::uint16_t>(spec.packets_per_channel);
-        rxtech::set_expected_prt_count(ctx2, 4U,
-                                       static_cast<std::uint16_t>(spec.channels_per_prt),
+        rxtech::set_expected_prt_count(ctx2, 4U, static_cast<std::uint16_t>(spec.channels_per_prt),
                                        static_cast<std::uint16_t>(spec.packets_per_channel));
         assert(ctx2.header.expected_n_prt == 4U);
 
@@ -112,8 +126,7 @@ int main()
         ctx3.reset(200U, 0U);
         ctx3.header.channels_per_prt = static_cast<std::uint16_t>(spec.channels_per_prt);
         ctx3.header.packets_per_channel = static_cast<std::uint16_t>(spec.packets_per_channel);
-        rxtech::set_expected_prt_count(ctx3, 2U,
-                                       static_cast<std::uint16_t>(spec.channels_per_prt),
+        rxtech::set_expected_prt_count(ctx3, 2U, static_cast<std::uint16_t>(spec.channels_per_prt),
                                        static_cast<std::uint16_t>(spec.packets_per_channel));
         rxtech::ProgressTracker tracker3(spec);
 

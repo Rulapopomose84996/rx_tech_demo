@@ -61,13 +61,8 @@ namespace
 
     std::vector<std::uint8_t> make_sample_udp_payload()
     {
-        std::vector<std::uint8_t> payload = {
-            0x03U, 0xFFU, 0xAAU, 0x55U,
-            0x01U, 0x00U,
-            0x00U, 0x00U,
-            0x22U, 0x00U,
-            0x02U, 0x00U,
-            0x00U, 0x00U, 0x00U, 0x00U};
+        std::vector<std::uint8_t> payload = {0x03U, 0xFFU, 0xAAU, 0x55U, 0x01U, 0x00U, 0x00U, 0x00U,
+                                             0x22U, 0x00U, 0x02U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U};
         payload.resize(2048U, 0xABU);
         return payload;
     }
@@ -94,12 +89,8 @@ namespace
         target.sin_family = AF_INET;
         target.sin_port = htons(port);
         target.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        const ssize_t sent = ::sendto(socket_fd,
-                                      payload.data(),
-                                      payload.size(),
-                                      0,
-                                      reinterpret_cast<const sockaddr *>(&target),
-                                      sizeof(target));
+        const ssize_t sent = ::sendto(socket_fd, payload.data(), payload.size(), 0,
+                                      reinterpret_cast<const sockaddr *>(&target), sizeof(target));
         ::close(socket_fd);
         return sent == static_cast<ssize_t>(payload.size());
     }
@@ -128,7 +119,8 @@ namespace
         }
 
         int enable_kernel_drop_count = 1;
-        if (::setsockopt(socket_fd, SOL_SOCKET, SO_RXQ_OVFL, &enable_kernel_drop_count, sizeof(enable_kernel_drop_count)) != 0)
+        if (::setsockopt(socket_fd, SOL_SOCKET, SO_RXQ_OVFL, &enable_kernel_drop_count,
+                         sizeof(enable_kernel_drop_count)) != 0)
         {
             ::close(socket_fd);
             return -1;
@@ -178,18 +170,14 @@ namespace
 
         sample.ok = true;
         sample.msg_flags = msg.msg_flags;
-        for (cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
-             cmsg != nullptr;
-             cmsg = CMSG_NXTHDR(&msg, cmsg))
+        for (cmsghdr *cmsg = CMSG_FIRSTHDR(&msg); cmsg != nullptr; cmsg = CMSG_NXTHDR(&msg, cmsg))
         {
-            if (cmsg->cmsg_level == IPPROTO_IP &&
-                cmsg->cmsg_type == IP_PKTINFO &&
+            if (cmsg->cmsg_level == IPPROTO_IP && cmsg->cmsg_type == IP_PKTINFO &&
                 cmsg->cmsg_len >= CMSG_LEN(sizeof(in_pktinfo)))
             {
                 sample.saw_pktinfo = true;
             }
-            if (cmsg->cmsg_level == SOL_SOCKET &&
-                cmsg->cmsg_type == SO_RXQ_OVFL &&
+            if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SO_RXQ_OVFL &&
                 cmsg->cmsg_len >= CMSG_LEN(sizeof(std::uint32_t)))
             {
                 sample.saw_kernel_drop = true;
@@ -439,29 +427,26 @@ int main()
                   << full_burst.datagrams.size() << '\n';
         return 1;
     }
-    if (full_burst.datagrams.capacity() != full_burst_budget)
+    if (full_burst.datagrams.capacity() < full_burst_budget)
     {
         full_burst_backend.release_burst(full_burst);
         full_burst_backend.shutdown();
-        std::cerr << "expected full burst descriptor storage to stay within the reserved max_burst capacity\n";
+        std::cerr << "expected fixed-capacity descriptor storage to cover the requested full burst\n";
         return 1;
     }
     for (std::uint32_t index = 0; index < full_burst_budget; ++index)
     {
         const rxtech::UdpDatagramDesc &datagram = full_burst.datagrams[index];
-        if (datagram.payload_data == nullptr ||
-            datagram.payload_len != full_burst_payloads[index].size() ||
-            datagram.raw_frame_data != nullptr ||
-            datagram.raw_frame_len != 0U)
+        if (datagram.payload_data == nullptr || datagram.payload_len != full_burst_payloads[index].size() ||
+            datagram.raw_frame_data != nullptr || datagram.raw_frame_len != 0U)
         {
             full_burst_backend.release_burst(full_burst);
             full_burst_backend.shutdown();
             std::cerr << "expected full-burst datagram slot " << index << " to expose datagram-only storage\n";
             return 1;
         }
-        if (std::memcmp(datagram.payload_data,
-                        full_burst_payloads[index].data(),
-                        full_burst_payloads[index].size()) != 0)
+        if (std::memcmp(datagram.payload_data, full_burst_payloads[index].data(), full_burst_payloads[index].size()) !=
+            0)
         {
             full_burst_backend.release_burst(full_burst);
             full_burst_backend.shutdown();
@@ -491,7 +476,8 @@ int main()
 
     if (rxtech::socket_control_bytes_for_tests() < kFullAncillaryControlBytes)
     {
-        std::cerr << "expected socket ancillary control buffer to reserve space for both pktinfo and kernel-drop metadata\n";
+        std::cerr
+            << "expected socket ancillary control buffer to reserve space for both pktinfo and kernel-drop metadata\n";
         return 1;
     }
 
@@ -514,11 +500,8 @@ int main()
         std::cerr << "failed to send ancillary loopback UDP payload\n";
         return 1;
     }
-    const AncillarySample ancillary_sample =
-        receive_udp_with_control(ancillary_socket_fd, kFullAncillaryControlBytes);
-    if (!ancillary_sample.ok ||
-        !ancillary_sample.saw_pktinfo ||
-        (ancillary_sample.msg_flags & MSG_CTRUNC) != 0)
+    const AncillarySample ancillary_sample = receive_udp_with_control(ancillary_socket_fd, kFullAncillaryControlBytes);
+    if (!ancillary_sample.ok || !ancillary_sample.saw_pktinfo || (ancillary_sample.msg_flags & MSG_CTRUNC) != 0)
     {
         ::close(ancillary_socket_fd);
         std::cerr << "expected full ancillary buffer to carry pktinfo without control truncation\n";

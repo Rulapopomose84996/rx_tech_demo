@@ -59,12 +59,8 @@ int main()
     std::vector<std::uint16_t> consumed_cpi_ids;
     std::atomic<bool> stop{false};
     rxtech::CpiConsumer consumer(output_ring, recycle_ring,
-                                 [&](const rxtech::CpiOutput &out)
-                                 {
-                                     consumed_cpi_ids.push_back(out.cpi_id);
-                                 });
-    std::thread consumer_thread([&]
-                                { consumer.run(stop); });
+                                 [&](const rxtech::CpiOutput &out) { consumed_cpi_ids.push_back(out.cpi_id); });
+    std::thread consumer_thread([&] { consumer.run(stop); });
 
     // Wait for consumer to process.
     while (consumer.processed_count() == 0)
@@ -125,13 +121,8 @@ int main()
         assert(pool2.acquire(100U) == rxtech::kInvalidPoolIndex);
 
         std::atomic<bool> stop2{false};
-        rxtech::CpiConsumer consumer2(out2, rec2,
-                                      [&](const rxtech::CpiOutput &o)
-                                      {
-                                          ids.push_back(o.cpi_id);
-                                      });
-        std::thread t([&]
-                      { consumer2.run(stop2); });
+        rxtech::CpiConsumer consumer2(out2, rec2, [&](const rxtech::CpiOutput &o) { ids.push_back(o.cpi_id); });
+        std::thread t([&] { consumer2.run(stop2); });
 
         while (consumer2.processed_count() < kCount)
         {
@@ -223,6 +214,38 @@ int main()
         const std::uint32_t reused_idx = drop_pool.acquire(99U);
         assert(reused_idx != rxtech::kInvalidPoolIndex);
         drop_pool.release(reused_idx);
+    }
+
+    // ── Timeout finalization should still emit diagnosable output ──────────────────────────────
+    {
+        rxtech::CpiContextPool timeout_pool;
+        const std::uint32_t timeout_idx = timeout_pool.acquire(55U);
+        assert(timeout_idx != rxtech::kInvalidPoolIndex);
+
+        rxtech::CpiContext *timeout_ctx = timeout_pool.get(timeout_idx);
+        assert(timeout_ctx != nullptr);
+        timeout_ctx->header.state = rxtech::CpiState::ACTIVE;
+        timeout_ctx->header.received_slot_count = 1U;
+        timeout_ctx->header.first_rx_tsc = 123U;
+
+        rxtech::ControlSnapshot timeout_control{};
+        timeout_control.cpi_id = 55U;
+        timeout_control.n_prt = 1U;
+        timeout_control.channel_count = 3U;
+        timeout_control.packets_per_channel = 9U;
+        timeout_control.valid = true;
+        timeout_control.bind_source = rxtech::BindSource::control;
+        rxtech::bind_control_snapshot(*timeout_ctx, timeout_control);
+
+        const auto timeout_output = finalizer.try_finalize(*timeout_ctx, rxtech::TriggerTimeout);
+        assert(timeout_output.has_value());
+        assert(timeout_output->decision == rxtech::CpiDecision::ABNORMAL_CUTOFF_COMMIT);
+        assert((timeout_output->trigger_bits & rxtech::TriggerTimeout) != 0U);
+        assert(timeout_output->view.payload_base != nullptr);
+        assert(timeout_output->view.slot_valid_bytes != nullptr);
+        assert(timeout_output->view.prt_summary != nullptr);
+
+        timeout_pool.release(timeout_idx);
     }
 
     return 0;

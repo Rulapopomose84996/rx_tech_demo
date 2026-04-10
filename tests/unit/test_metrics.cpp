@@ -12,6 +12,7 @@ int main()
     metrics.on_valid_packet(rxtech::PacketKind::control_table);
     metrics.on_valid_packet(rxtech::PacketKind::data_packet);
     metrics.on_reject(rxtech::RejectReason::invalid_len);
+    metrics.on_reject(rxtech::RejectReason::truncated_datagram);
     metrics.on_drop();
     metrics.on_error();
     metrics.on_pool_exhaustion();
@@ -28,13 +29,14 @@ int main()
     assert(summary.parsed_packets == 2U);
     assert(summary.control_table_packets == 1U);
     assert(summary.data_packets == 1U);
-    assert(summary.dropped_packets == 2U);
+    assert(summary.dropped_packets == 3U);
     assert(summary.backend_errors == 1U);
     assert(summary.pool_exhaustion_count == 1U);
     assert(summary.output_backpressure_count == 1U);
     assert(summary.late_packet_accepted_count == 1U);
     assert(summary.late_packet_rejected_count == 1U);
     assert(summary.reject_by_reason[static_cast<std::size_t>(rxtech::RejectReason::invalid_len)] == 1U);
+    assert(summary.reject_by_reason[static_cast<std::size_t>(rxtech::RejectReason::truncated_datagram)] == 1U);
 #if defined(RXTECH_DEBUG_DIAGNOSTICS) && RXTECH_DEBUG_DIAGNOSTICS
     assert(summary.batch_p99 == 4U);
     assert(summary.latency_p50_us > 0.0);
@@ -50,6 +52,6 @@ int main()
     assert(merged.rx_packets == 6U);
     assert(merged.parsed_packets == 3U);
     assert(merged.data_packets == 2U);
-    assert(merged.dropped_packets == 3U);
+    assert(merged.dropped_packets == 4U);
     return 0;
 }

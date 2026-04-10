@@ -43,30 +43,47 @@ namespace
     std::vector<std::uint8_t> make_ctrl(std::uint16_t cpi)
     {
         // magic = 0x55AAFF00 little-endian → bytes: 0x00, 0xFF, 0xAA, 0x55
-        std::vector<std::uint8_t> b = {
-            0x00, 0xFF, 0xAA, 0x55,
-            static_cast<std::uint8_t>(cpi & 0xFFU),
-            static_cast<std::uint8_t>((cpi >> 8U) & 0xFFU),
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        std::vector<std::uint8_t> b = {0x00,
+                                       0xFF,
+                                       0xAA,
+                                       0x55,
+                                       static_cast<std::uint8_t>(cpi & 0xFFU),
+                                       static_cast<std::uint8_t>((cpi >> 8U) & 0xFFU),
+                                       0,
+                                       0,
+                                       0,
+                                       0,
+                                       0,
+                                       0,
+                                       0,
+                                       0,
+                                       0,
+                                       0};
         b.resize(2048U, 0);
         return b;
     }
 
-    std::vector<std::uint8_t> make_data(std::uint16_t cpi,
-                                        std::uint16_t ch,
-                                        std::uint16_t prt,
-                                        std::uint16_t pi,
+    std::vector<std::uint8_t> make_data(std::uint16_t cpi, std::uint16_t ch, std::uint16_t prt, std::uint16_t pi,
                                         bool final_pkt)
     {
         // magic = 0x55AAFF03 LE → 0x03, 0xFF, 0xAA, 0x55
         const bool is_tail = (pi == 9U);
-        std::vector<std::uint8_t> b = {
-            0x03, 0xFF, 0xAA, 0x55,
-            static_cast<std::uint8_t>(cpi & 0xFFU), static_cast<std::uint8_t>((cpi >> 8U) & 0xFFU),
-            static_cast<std::uint8_t>(ch & 0xFFU), static_cast<std::uint8_t>((ch >> 8U) & 0xFFU),
-            static_cast<std::uint8_t>(prt & 0xFFU), static_cast<std::uint8_t>((prt >> 8U) & 0xFFU),
-            static_cast<std::uint8_t>(pi & 0xFFU), static_cast<std::uint8_t>((pi >> 8U) & 0xFFU),
-            static_cast<std::uint8_t>(is_tail ? 0x30U : 0x00U), 0xFF, 0xAA, 0x55};
+        std::vector<std::uint8_t> b = {0x03,
+                                       0xFF,
+                                       0xAA,
+                                       0x55,
+                                       static_cast<std::uint8_t>(cpi & 0xFFU),
+                                       static_cast<std::uint8_t>((cpi >> 8U) & 0xFFU),
+                                       static_cast<std::uint8_t>(ch & 0xFFU),
+                                       static_cast<std::uint8_t>((ch >> 8U) & 0xFFU),
+                                       static_cast<std::uint8_t>(prt & 0xFFU),
+                                       static_cast<std::uint8_t>((prt >> 8U) & 0xFFU),
+                                       static_cast<std::uint8_t>(pi & 0xFFU),
+                                       static_cast<std::uint8_t>((pi >> 8U) & 0xFFU),
+                                       static_cast<std::uint8_t>(is_tail ? 0x30U : 0x00U),
+                                       0xFF,
+                                       0xAA,
+                                       0x55};
         b.resize(2048U, 0xABU);
         if (!is_tail)
         {
@@ -88,18 +105,17 @@ namespace
 
     class MultiCpiFakeBackend final : public rxtech::IRxBackend
     {
-    public:
-        explicit MultiCpiFakeBackend(std::uint16_t n_cpi,
-                                     std::uint16_t n_prt,
-                                     std::uint16_t channels,
-                                     std::uint16_t pkts,
-                                     std::atomic<bool> &stop_flag)
-            : n_cpi_(n_cpi), n_prt_(n_prt), channels_(channels), pkts_(pkts),
-              stop_flag_(stop_flag)
+      public:
+        explicit MultiCpiFakeBackend(std::uint16_t n_cpi, std::uint16_t n_prt, std::uint16_t channels,
+                                     std::uint16_t pkts, std::atomic<bool> &stop_flag)
+            : n_cpi_(n_cpi), n_prt_(n_prt), channels_(channels), pkts_(pkts), stop_flag_(stop_flag)
         {
         }
 
-        std::string name() const override { return "multi_cpi_fake"; }
+        std::string name() const override
+        {
+            return "multi_cpi_fake";
+        }
 
         rxtech::BackendInitResult init(const rxtech::RxConfig &) override
         {
@@ -179,10 +195,16 @@ namespace
             payload_storage_.clear();
         }
 
-        rxtech::BackendStats stats() const override { return stats_; }
-        void shutdown() override { done_ = true; }
+        rxtech::BackendStats stats() const override
+        {
+            return stats_;
+        }
+        void shutdown() override
+        {
+            done_ = true;
+        }
 
-    private:
+      private:
         std::uint16_t n_cpi_;
         std::uint16_t n_prt_;
         std::uint16_t channels_;
@@ -209,7 +231,7 @@ namespace
         cfg.capture_enabled = false;
         cfg.raw_record_enabled = false;
         cfg.max_burst = 1024;
-        cfg.output_drop_policy = "degrade";
+        cfg.output_drop_policy = rxtech::OutputDropPolicy::degrade;
         return cfg;
     }
 
@@ -245,21 +267,25 @@ int main()
     std::mutex mu;
 
     rxtech::OwnerLoop loop;
-    loop.set_output_handler([&](const rxtech::CpiOutput &out)
-                            {
-        // Simulate slow consumer
-        std::this_thread::sleep_for(std::chrono::microseconds(kSlowDelayUs));
-        std::lock_guard<std::mutex> lk(mu);
-        decisions.push_back(out.decision); });
+    loop.set_output_handler(
+        [&](const rxtech::CpiOutput &out)
+        {
+            // Simulate slow consumer
+            std::this_thread::sleep_for(std::chrono::microseconds(kSlowDelayUs));
+            std::lock_guard<std::mutex> lk(mu);
+            decisions.push_back(out.decision);
+        });
 
     // Impose a hard timeout so the test cannot hang forever.
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(120);
 
-    rxtech::RunSummary run_summary = loop.run(ctx, artifacts, [&stop, &deadline]()
+    rxtech::RunSummary run_summary = loop.run(ctx, artifacts,
+                                              [&stop, &deadline]()
                                               {
-        if (std::chrono::steady_clock::now() >= deadline)
-            return true;
-        return stop.load(std::memory_order_relaxed); });
+                                                  if (std::chrono::steady_clock::now() >= deadline)
+                                                      return true;
+                                                  return stop.load(std::memory_order_relaxed);
+                                              });
 
     // ── Assertions ────────────────────────────────────────────────────────────
 

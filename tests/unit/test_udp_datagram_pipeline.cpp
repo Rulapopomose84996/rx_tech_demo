@@ -46,13 +46,8 @@ namespace
 
     std::vector<std::uint8_t> make_valid_payload()
     {
-        std::vector<std::uint8_t> payload = {
-            0x03, 0xff, 0xaa, 0x55,
-            0x01, 0x00,
-            0x00, 0x00,
-            0x22, 0x00,
-            0x02, 0x00,
-            0x00, 0x00, 0x00, 0x00};
+        std::vector<std::uint8_t> payload = {0x03, 0xff, 0xaa, 0x55, 0x01, 0x00, 0x00, 0x00,
+                                             0x22, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00};
         payload.resize(2048U, 0xABU);
         return payload;
     }
@@ -66,11 +61,48 @@ namespace
     {
         const std::uint16_t udp_length = static_cast<std::uint16_t>(8U + payload.size());
         const std::uint16_t ip_total_length = static_cast<std::uint16_t>(20U + udp_length);
-        std::vector<std::uint8_t> bytes = {
-            0x9c, 0x47, 0x82, 0xe1, 0x36, 0xd0, 0x9c, 0x47, 0x82, 0xe1, 0x36, 0xdc, 0x08, 0x00,
-            0x45, 0x00, static_cast<std::uint8_t>((ip_total_length >> 8U) & 0xffU), static_cast<std::uint8_t>(ip_total_length & 0xffU), 0x00, 0x00, 0x00, 0x00, 0x40, 0x11, 0x00, 0x00,
-            0xac, 0x14, 0x0b, 0xde, 0xac, 0x14, 0x0b, 0x64,
-            0xe4, 0x79, 0x27, 0x0f, static_cast<std::uint8_t>((udp_length >> 8U) & 0xffU), static_cast<std::uint8_t>(udp_length & 0xffU), 0x00, 0x00};
+        std::vector<std::uint8_t> bytes = {0x9c,
+                                           0x47,
+                                           0x82,
+                                           0xe1,
+                                           0x36,
+                                           0xd0,
+                                           0x9c,
+                                           0x47,
+                                           0x82,
+                                           0xe1,
+                                           0x36,
+                                           0xdc,
+                                           0x08,
+                                           0x00,
+                                           0x45,
+                                           0x00,
+                                           static_cast<std::uint8_t>((ip_total_length >> 8U) & 0xffU),
+                                           static_cast<std::uint8_t>(ip_total_length & 0xffU),
+                                           0x00,
+                                           0x00,
+                                           0x00,
+                                           0x00,
+                                           0x40,
+                                           0x11,
+                                           0x00,
+                                           0x00,
+                                           0xac,
+                                           0x14,
+                                           0x0b,
+                                           0xde,
+                                           0xac,
+                                           0x14,
+                                           0x0b,
+                                           0x64,
+                                           0xe4,
+                                           0x79,
+                                           0x27,
+                                           0x0f,
+                                           static_cast<std::uint8_t>((udp_length >> 8U) & 0xffU),
+                                           static_cast<std::uint8_t>(udp_length & 0xffU),
+                                           0x00,
+                                           0x00};
         bytes.insert(bytes.end(), payload.begin(), payload.end());
         return bytes;
     }
@@ -102,15 +134,9 @@ namespace
         packet.cookie = kCookie;
 
         PipelineRunResult result;
-        result.stats = pipeline.process_packet(
-            packet,
-            metrics,
-            nullptr,
-            result.invalid_dumped,
-            [&](const rxtech::ProcessedPacket &processed)
-            {
-                record_callback(result.callback, processed);
-            });
+        result.stats = pipeline.process_packet(packet, metrics, nullptr, result.invalid_dumped,
+                                               [&](const rxtech::ProcessedPacket &processed)
+                                               { record_callback(result.callback, processed); });
         result.summary = metrics.finalize("legacy", "unit", "udp_datagram_pipeline", 1U);
         return result;
     }
@@ -122,15 +148,9 @@ namespace
         rxtech::MetricsCollector metrics;
 
         PipelineRunResult result;
-        result.stats = pipeline.process_datagram(
-            datagram,
-            metrics,
-            nullptr,
-            result.invalid_dumped,
-            [&](const rxtech::ProcessedPacket &processed)
-            {
-                record_callback(result.callback, processed);
-            });
+        result.stats = pipeline.process_datagram(datagram, metrics, nullptr, result.invalid_dumped,
+                                                 [&](const rxtech::ProcessedPacket &processed)
+                                                 { record_callback(result.callback, processed); });
         result.summary = metrics.finalize("datagram", "unit", "udp_datagram_pipeline", 1U);
         return result;
     }
@@ -239,7 +259,7 @@ int main()
         malformed.backend_kind = rxtech::BackendKind::socket;
 
         const PipelineRunResult datagram = run_datagram(rxtech::load_default_config(), malformed);
-        const std::array<std::uint64_t, 8> empty_rejects{};
+        const std::array<std::uint64_t, rxtech::kRejectReasonCount> empty_rejects{};
         assert(datagram.stats.accepted_packets == 0U);
         assert(datagram.stats.accepted_bytes == 0U);
         assert(datagram.stats.filtered_packets == 0U);
@@ -247,6 +267,22 @@ int main()
         assert(datagram.summary.backend_errors == 1U);
         assert(datagram.summary.dropped_packets == 0U);
         assert(datagram.summary.reject_by_reason == empty_rejects);
+    }
+
+    {
+        const std::vector<std::uint8_t> payload = make_valid_payload();
+        rxtech::UdpDatagramDesc datagram = make_datagram(payload);
+        datagram.truncated = true;
+
+        const PipelineRunResult result = run_datagram(rxtech::load_default_config(), datagram);
+        assert(result.stats.accepted_packets == 0U);
+        assert(result.stats.accepted_bytes == 0U);
+        assert(result.stats.filtered_packets == 0U);
+        assert(result.callback.count == 0U);
+        assert(result.summary.backend_errors == 0U);
+        assert(result.summary.dropped_packets == 1U);
+        assert(result.summary.reject_by_reason[static_cast<std::size_t>(rxtech::RejectReason::truncated_datagram)] ==
+               1U);
     }
 
     return 0;

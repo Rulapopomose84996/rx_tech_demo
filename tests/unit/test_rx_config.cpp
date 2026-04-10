@@ -9,8 +9,7 @@ int main()
     const rxtech::RxConfig default_config = rxtech::load_default_config();
     if (default_config.interface_name != "receiver0")
     {
-        std::cerr << "expected default interface receiver0, got "
-                  << default_config.interface_name << '\n';
+        std::cerr << "expected default interface receiver0, got " << default_config.interface_name << '\n';
         return 1;
     }
     if (default_config.capture_output_dir != "results" ||
@@ -22,9 +21,8 @@ int main()
     }
 
     // Verify output policy defaults
-    if (default_config.output_drop_policy != "degrade" ||
-        default_config.output_ring_capacity != 32U ||
-        default_config.recycle_ring_capacity != 32U)
+    if (default_config.output_drop_policy != rxtech::OutputDropPolicy::degrade ||
+        default_config.output_ring_capacity != 32U || default_config.recycle_ring_capacity != 32U)
     {
         std::cerr << "unexpected default output policy configuration\n";
         return 1;
@@ -88,23 +86,17 @@ int main()
 
     const rxtech::RxConfig config = rxtech::load_config_file(path);
     if (config.backend_name != "socket" || config.capture_output_dir != "results/config_case" ||
-        config.output_dir != "results/config_case" ||
-        !config.capture_enabled || config.capture_index_filename != "parsed.csv" ||
-        config.capture_data_filename != "parsed.bin" ||
+        config.output_dir != "results/config_case" || !config.capture_enabled ||
+        config.capture_index_filename != "parsed.csv" || config.capture_data_filename != "parsed.bin" ||
         !config.raw_record_enabled || config.raw_record_output_dir != "/data/rx_tech_demo/test_raw_frames" ||
-        config.raw_record_file_prefix != "phase3_raw" ||
-        config.raw_record_ring_slots != 2048U || config.raw_record_writer_batch_size != 32U ||
-        config.raw_record_max_frame_bytes != 12288U ||
-        config.raw_record_segment_bytes != 268435456ULL ||
-        config.raw_record_max_total_bytes != 5368709120ULL ||
-        config.interface_name != "receiver1" || config.queue_id != 22U ||
-        config.socket_bind_ip != "0.0.0.0" || config.socket_bind_port != 10000U ||
-        config.socket_rcvbuf_bytes != 8388608U || !config.socket_nonblocking ||
-        config.socket_batch_timeout_ms != 25U ||
-        config.duration_seconds != 12U || config.max_burst != 32U ||
-        config.packet_size_bytes != 1024U || config.cpu_cores.size() != 3U ||
-        config.cpu_cores[0] != 16 || !config.run_until_stopped ||
-        config.status_interval_seconds != 10U ||
+        config.raw_record_file_prefix != "phase3_raw" || config.raw_record_ring_slots != 2048U ||
+        config.raw_record_writer_batch_size != 32U || config.raw_record_max_frame_bytes != 12288U ||
+        config.raw_record_segment_bytes != 268435456ULL || config.raw_record_max_total_bytes != 5368709120ULL ||
+        config.interface_name != "receiver1" || config.queue_id != 22U || config.socket_bind_ip != "0.0.0.0" ||
+        config.socket_bind_port != 10000U || config.socket_rcvbuf_bytes != 8388608U || !config.socket_nonblocking ||
+        config.socket_batch_timeout_ms != 25U || config.duration_seconds != 12U || config.max_burst != 32U ||
+        config.packet_size_bytes != 1024U || config.cpu_cores.size() != 3U || config.cpu_cores[0] != 16 ||
+        !config.run_until_stopped || config.status_interval_seconds != 10U ||
         config.allowed_source_ipv4 != "172.20.11.222" || config.allowed_dest_port != 9999U ||
         config.log_level != "debug" || config.log_output != "file" || config.log_file_path != "logs/rx.log" ||
         config.protocol_udp_packet_size != 2048U || config.protocol_channels_per_prt != 3U ||
@@ -113,8 +105,7 @@ int main()
         std::cerr << "config parsing regression in test_rx_config\n";
         return 1;
     }
-    if (rxtech::effective_socket_bind_ip(config) != "0.0.0.0" ||
-        rxtech::effective_socket_bind_port(config) != 10000U)
+    if (rxtech::effective_socket_bind_ip(config) != "0.0.0.0" || rxtech::effective_socket_bind_port(config) != 10000U)
     {
         std::cerr << "socket bind override regression in test_rx_config\n";
         return 1;
@@ -122,12 +113,11 @@ int main()
 
     const rxtech::RxConfig dpdk_config = rxtech::load_config_file("configs/dpdk_single_face.conf");
     if (dpdk_config.backend_name != "dpdk" || dpdk_config.interface_name != "receiver0" ||
-        dpdk_config.receiver_ipv4 != "172.20.11.100" ||
-        dpdk_config.allowed_source_ipv4 != "172.20.11.222" ||
-        dpdk_config.allowed_dest_port != 9999U ||
-        dpdk_config.dpdk_pci_addr != "0001:05:00.0")
+        dpdk_config.receiver_ipv4 != "172.20.11.100" || dpdk_config.allowed_source_ipv4 != "172.20.11.222" ||
+        dpdk_config.allowed_dest_port != 9999U || dpdk_config.dpdk_pci_addr != "0001:05:00.0")
     {
-        std::cerr << "dpdk single face config should point at receiver0 / 172.20.11.100 / 172.20.11.222 / 9999 / 0001:05:00.0\n";
+        std::cerr << "dpdk single face config should point at receiver0 / 172.20.11.100 / 172.20.11.222 / 9999 / "
+                     "0001:05:00.0\n";
         return 1;
     }
     if (rxtech::effective_socket_bind_ip(dpdk_config) != "172.20.11.100" ||
@@ -140,8 +130,7 @@ int main()
     // Verify output policy config file parsing
     {
         const rxtech::RxConfig loaded = rxtech::load_config_file("tests/data/output_policy.conf");
-        if (loaded.output_drop_policy != "error" ||
-            loaded.output_ring_capacity != 64U ||
+        if (loaded.output_drop_policy != rxtech::OutputDropPolicy::error || loaded.output_ring_capacity != 64U ||
             loaded.recycle_ring_capacity != 128U)
         {
             std::cerr << "output policy config parsing regression\n";

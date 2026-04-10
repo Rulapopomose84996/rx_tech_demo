@@ -28,7 +28,7 @@ namespace
         spec.dynamic_prt_enabled = dynamic_prt;
         spec.expected_n_prt = expected_n_prt;
         spec.max_n_prt = max_n_prt;
-        spec.cpi_timeout_ns = 0U;
+        spec.protocol_cpi_timeout_ns = 0U;
         return spec;
     }
 
@@ -43,7 +43,8 @@ namespace
         return pv;
     }
 
-    rxtech::ParsedPacketView make_data(std::uint16_t cpi, std::uint16_t prt, std::uint16_t channel, std::uint16_t packet_index)
+    rxtech::ParsedPacketView make_data(std::uint16_t cpi, std::uint16_t prt, std::uint16_t channel,
+                                       std::uint16_t packet_index)
     {
         rxtech::ParsedPacketView pv;
         pv.valid = true;
@@ -57,7 +58,8 @@ namespace
         return pv;
     }
 
-    rxtech::InterpretedPacketView make_interpreted_data(std::uint16_t cpi, std::uint16_t prt, std::uint16_t channel, std::uint16_t packet_index)
+    rxtech::InterpretedPacketView make_interpreted_data(std::uint16_t cpi, std::uint16_t prt, std::uint16_t channel,
+                                                        std::uint16_t packet_index)
     {
         rxtech::InterpretedPacketView iv;
         iv.valid = true;
@@ -72,27 +74,16 @@ namespace
 
     rxtech::CpiOutput finalize_via_switch(rxtech::CpiStateCoordinator &coord,
                                           rxtech::SpscRing<rxtech::CpiOutput> &output_ring,
-                                          const rxtech::ProtocolSpec &spec,
-                                          rxtech::MetricsCollector &metrics,
-                                          std::string &status,
-                                          std::string &error,
-                                          std::uint16_t next_cpi,
+                                          const rxtech::ProtocolSpec &spec, rxtech::MetricsCollector &metrics,
+                                          std::string &status, std::string &error, std::uint16_t next_cpi,
                                           std::uint16_t tail_cpi)
     {
-        const auto next_result = coord.process_data_packet(make_data(next_cpi, 1U, 0U, 1U),
-                                                           make_interpreted_data(next_cpi, 1U, 0U, 1U),
-                                                           spec,
-                                                           metrics,
-                                                           status,
-                                                           error);
+        const auto next_result = coord.process_data_packet(
+            make_data(next_cpi, 1U, 0U, 1U), make_interpreted_data(next_cpi, 1U, 0U, 1U), spec, metrics, status, error);
         assert(next_result.accepted);
 
-        const auto tail_result = coord.process_data_packet(make_data(tail_cpi, 1U, 0U, 1U),
-                                                           make_interpreted_data(tail_cpi, 1U, 0U, 1U),
-                                                           spec,
-                                                           metrics,
-                                                           status,
-                                                           error);
+        const auto tail_result = coord.process_data_packet(
+            make_data(tail_cpi, 1U, 0U, 1U), make_interpreted_data(tail_cpi, 1U, 0U, 1U), spec, metrics, status, error);
         assert(tail_result.accepted);
 
         rxtech::CpiOutput output;
@@ -243,12 +234,8 @@ int main()
         // Control packet with n_prt=0 (invalid)
         coord.process_control_packet(make_control(1U, 0U));
 
-        const auto first = coord.process_data_packet(make_data(1U, 1U, 0U, 1U),
-                                                     make_interpreted_data(1U, 1U, 0U, 1U),
-                                                     spec,
-                                                     metrics,
-                                                     status,
-                                                     error);
+        const auto first = coord.process_data_packet(make_data(1U, 1U, 0U, 1U), make_interpreted_data(1U, 1U, 0U, 1U),
+                                                     spec, metrics, status, error);
         assert(first.accepted);
 
         const auto output = finalize_via_switch(coord, output_ring, spec, metrics, status, error, 2U, 3U);
@@ -310,12 +297,8 @@ int main()
         std::string status = "success";
         std::string error;
 
-        const auto first = coord.process_data_packet(make_data(1U, 1U, 0U, 1U),
-                                                     make_interpreted_data(1U, 1U, 0U, 1U),
-                                                     spec,
-                                                     metrics,
-                                                     status,
-                                                     error);
+        const auto first = coord.process_data_packet(make_data(1U, 1U, 0U, 1U), make_interpreted_data(1U, 1U, 0U, 1U),
+                                                     spec, metrics, status, error);
         assert(first.accepted);
 
         rxtech::CpiOutput first_output;
@@ -326,12 +309,8 @@ int main()
         // must be treated as late-to-closed/drop rather than opening a new active context.
         for (int i = 0; i < 8; ++i)
         {
-            const auto late = coord.process_data_packet(make_data(1U, 1U, 0U, 1U),
-                                                        make_interpreted_data(1U, 1U, 0U, 1U),
-                                                        spec,
-                                                        metrics,
-                                                        status,
-                                                        error);
+            const auto late = coord.process_data_packet(
+                make_data(1U, 1U, 0U, 1U), make_interpreted_data(1U, 1U, 0U, 1U), spec, metrics, status, error);
             assert(!late.accepted);
             assert(status == "success");
             assert(error.empty());
