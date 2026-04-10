@@ -32,8 +32,7 @@ namespace rxtech
     {
 
         constexpr std::size_t kMaxUdpPayloadBytes = 65507U;
-        constexpr std::size_t kSocketControlBytes =
-            CMSG_SPACE(sizeof(in_pktinfo)) + CMSG_SPACE(sizeof(std::uint32_t));
+        constexpr std::size_t kSocketControlBytes = CMSG_SPACE(sizeof(in_pktinfo)) + CMSG_SPACE(sizeof(std::uint32_t));
 
         BackendInitResult make_socket_result(bool available, const std::string &reason)
         {
@@ -58,8 +57,7 @@ namespace rxtech
             return config.receiver_ipv4.empty() ? effective_socket_bind_ip(config) : config.receiver_ipv4;
         }
 
-        std::uint32_t socket_dest_ipv4_be(const sockaddr_in &peer,
-                                          const in_pktinfo &pktinfo,
+        std::uint32_t socket_dest_ipv4_be(const sockaddr_in &peer, const in_pktinfo &pktinfo,
                                           const std::uint32_t default_dest_ipv4_be)
         {
             if (pktinfo.ipi_addr.s_addr != 0)
@@ -72,15 +70,12 @@ namespace rxtech
     } // namespace
 
 #if defined(__linux__)
-    std::uint64_t update_kernel_drop_count_from_cmsg(const msghdr &msg,
-                                                     std::uint32_t &last_seen_kernel_drop_count)
+    std::uint64_t update_kernel_drop_count_from_cmsg(const msghdr &msg, std::uint32_t &last_seen_kernel_drop_count)
     {
-        for (cmsghdr *cmsg = CMSG_FIRSTHDR(const_cast<msghdr *>(&msg));
-             cmsg != nullptr;
+        for (cmsghdr *cmsg = CMSG_FIRSTHDR(const_cast<msghdr *>(&msg)); cmsg != nullptr;
              cmsg = CMSG_NXTHDR(const_cast<msghdr *>(&msg), cmsg))
         {
-            if (cmsg->cmsg_level != SOL_SOCKET ||
-                cmsg->cmsg_type != SO_RXQ_OVFL ||
+            if (cmsg->cmsg_level != SOL_SOCKET || cmsg->cmsg_type != SO_RXQ_OVFL ||
                 cmsg->cmsg_len < CMSG_LEN(sizeof(std::uint32_t)))
             {
                 continue;
@@ -94,8 +89,7 @@ namespace rxtech
                 return 0U;
             }
 
-            const std::uint64_t delta =
-                static_cast<std::uint64_t>(kernel_drop_total - last_seen_kernel_drop_count);
+            const std::uint64_t delta = static_cast<std::uint64_t>(kernel_drop_total - last_seen_kernel_drop_count);
             last_seen_kernel_drop_count = kernel_drop_total;
             return delta;
         }
@@ -182,9 +176,7 @@ namespace rxtech
 #endif
     };
 
-    LinuxSocketIngress::LinuxSocketIngress() : impl_(new Impl())
-    {
-    }
+    LinuxSocketIngress::LinuxSocketIngress() : impl_(new Impl()) {}
 
     LinuxSocketIngress::~LinuxSocketIngress()
     {
@@ -242,8 +234,7 @@ namespace rxtech
         (void)::setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &reuse_addr, sizeof(reuse_addr));
 
         const int rcvbuf = static_cast<int>(std::min<std::uint32_t>(
-            config.socket_rcvbuf_bytes,
-            static_cast<std::uint32_t>(std::numeric_limits<int>::max())));
+            config.socket_rcvbuf_bytes, static_cast<std::uint32_t>(std::numeric_limits<int>::max())));
         if (::setsockopt(socket_fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf)) != 0)
         {
             ++stats_.rx_errors;
@@ -284,16 +275,15 @@ namespace rxtech
         }
 
         int enable_kernel_drop_count = 1;
-        if (::setsockopt(socket_fd, SOL_SOCKET, SO_RXQ_OVFL, &enable_kernel_drop_count, sizeof(enable_kernel_drop_count)) != 0)
+        if (::setsockopt(socket_fd, SOL_SOCKET, SO_RXQ_OVFL, &enable_kernel_drop_count,
+                         sizeof(enable_kernel_drop_count)) != 0)
         {
             ++stats_.rx_errors;
             ::close(socket_fd);
             return make_socket_result(true, socket_error_message("设置 SO_RXQ_OVFL"));
         }
 
-        if (::bind(socket_fd,
-                   reinterpret_cast<const sockaddr *>(&bind_addr),
-                   sizeof(bind_addr)) != 0)
+        if (::bind(socket_fd, reinterpret_cast<const sockaddr *>(&bind_addr), sizeof(bind_addr)) != 0)
         {
             ++stats_.rx_errors;
             ::close(socket_fd);
@@ -329,19 +319,16 @@ namespace rxtech
         }
 
         ++stats_.rx_polls;
-        if (max_burst == 0U)
+        const std::uint32_t budget =
+            std::min<std::uint32_t>(max_burst, static_cast<std::uint32_t>(burst.datagrams.max_size()));
+        if (budget == 0U)
         {
             ++stats_.empty_polls;
             return true;
         }
 
-        if (burst.datagrams.capacity() < max_burst)
-        {
-            burst.datagrams.reserve(max_burst);
-        }
-
-        impl_->prepare_batch(max_burst);
-        for (std::uint32_t index = 0; index < max_burst; ++index)
+        impl_->prepare_batch(budget);
+        for (std::uint32_t index = 0; index < budget; ++index)
         {
             Impl::SocketSlot &slot = impl_->slots[index];
             mmsghdr &msg = impl_->msgs[index];
@@ -357,11 +344,7 @@ namespace rxtech
         }
 
         const int recv_flags = impl_->nonblocking ? MSG_DONTWAIT : MSG_WAITFORONE;
-        const int received = ::recvmmsg(impl_->socket_fd,
-                                        impl_->msgs.data(),
-                                        max_burst,
-                                        recv_flags,
-                                        nullptr);
+        const int received = ::recvmmsg(impl_->socket_fd, impl_->msgs.data(), budget, recv_flags, nullptr);
         if (received < 0)
         {
             if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
@@ -380,9 +363,7 @@ namespace rxtech
         }
 
         ++stats_.receive_batches;
-        stats_.max_burst_size = std::max<std::uint32_t>(
-            stats_.max_burst_size,
-            static_cast<std::uint32_t>(received));
+        stats_.max_burst_size = std::max<std::uint32_t>(stats_.max_burst_size, static_cast<std::uint32_t>(received));
 
         burst.datagrams.resize(static_cast<std::size_t>(received));
         std::size_t datagram_count = 0U;
@@ -398,8 +379,8 @@ namespace rxtech
             }
             else
             {
-                stats_.kernel_drop_count += update_kernel_drop_count_from_cmsg(msg.msg_hdr,
-                                                                               impl_->last_seen_kernel_drop_count);
+                stats_.kernel_drop_count +=
+                    update_kernel_drop_count_from_cmsg(msg.msg_hdr, impl_->last_seen_kernel_drop_count);
             }
             if (slot.peer.sin_family != AF_INET)
             {
@@ -409,12 +390,10 @@ namespace rxtech
 
             if ((msg.msg_hdr.msg_flags & MSG_CTRUNC) == 0)
             {
-                for (cmsghdr *cmsg = CMSG_FIRSTHDR(const_cast<msghdr *>(&msg.msg_hdr));
-                     cmsg != nullptr;
+                for (cmsghdr *cmsg = CMSG_FIRSTHDR(const_cast<msghdr *>(&msg.msg_hdr)); cmsg != nullptr;
                      cmsg = CMSG_NXTHDR(const_cast<msghdr *>(&msg.msg_hdr), cmsg))
                 {
-                    if (cmsg->cmsg_level == IPPROTO_IP &&
-                        cmsg->cmsg_type == IP_PKTINFO &&
+                    if (cmsg->cmsg_level == IPPROTO_IP && cmsg->cmsg_type == IP_PKTINFO &&
                         cmsg->cmsg_len >= CMSG_LEN(sizeof(in_pktinfo)))
                     {
                         std::memcpy(&slot.pktinfo, CMSG_DATA(cmsg), sizeof(slot.pktinfo));

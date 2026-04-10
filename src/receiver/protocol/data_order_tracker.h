@@ -12,13 +12,13 @@ namespace rxtech
 
     class DataOrderTracker
     {
-    public:
+      public:
         explicit DataOrderTracker(const ProtocolSpec &spec);
 
         void observe(const InterpretedPacketView &packet);
         void populate_summary(RunSummary &summary) const;
 
-    private:
+      private:
         struct Cursor
         {
             std::uint16_t cpi = 0;
@@ -29,9 +29,7 @@ namespace rxtech
 
         Cursor build_next_expected(const InterpretedPacketView &packet) const;
         static bool matches_expected(const InterpretedPacketView &packet, const Cursor &expected);
-        static std::string format_point(std::uint16_t cpi,
-                                        std::uint16_t prt,
-                                        std::uint16_t channel,
+        static std::string format_point(std::uint16_t cpi, std::uint16_t prt, std::uint16_t channel,
                                         std::uint16_t packet_index);
 
         ProtocolSpec spec_{};

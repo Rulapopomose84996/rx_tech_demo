@@ -7,9 +7,7 @@
 namespace rxtech
 {
 
-    DataOrderTracker::DataOrderTracker(const ProtocolSpec &spec) : spec_(spec)
-    {
-    }
+    DataOrderTracker::DataOrderTracker(const ProtocolSpec &spec) : spec_(spec) {}
 
     DataOrderTracker::Cursor DataOrderTracker::build_next_expected(const InterpretedPacketView &packet) const
     {
@@ -36,39 +34,29 @@ namespace rxtech
 
     bool DataOrderTracker::matches_expected(const InterpretedPacketView &packet, const Cursor &expected)
     {
-        return packet.cpi == expected.cpi &&
-               packet.prt == expected.prt &&
-               packet.channel == expected.channel &&
+        return packet.cpi == expected.cpi && packet.prt == expected.prt && packet.channel == expected.channel &&
                packet.packet_index == expected.packet_index;
     }
 
-    std::string DataOrderTracker::format_point(std::uint16_t cpi,
-                                               std::uint16_t prt,
-                                               std::uint16_t channel,
+    std::string DataOrderTracker::format_point(std::uint16_t cpi, std::uint16_t prt, std::uint16_t channel,
                                                std::uint16_t packet_index)
     {
         std::ostringstream out;
-        out << "CPI " << cpi
-            << " / PRT " << prt
-            << " / CH " << channel
-            << " / PKT " << packet_index;
+        out << "CPI " << cpi << " / PRT " << prt << " / CH " << channel << " / PKT " << packet_index;
         return out.str();
     }
 
     namespace
     {
         bool is_cpi_rollover(const rxtech::InterpretedPacketView &previous,
-                             const rxtech::InterpretedPacketView &current,
-                             const rxtech::ProtocolSpec &spec)
+                             const rxtech::InterpretedPacketView &current, const rxtech::ProtocolSpec &spec)
         {
             return previous.packet_index == spec.packets_per_channel &&
                    previous.channel + 1U == spec.channels_per_prt &&
-                   current.cpi == static_cast<std::uint16_t>(previous.cpi + 1U) &&
-                   current.prt == 1U &&
-                   current.channel == 0U &&
-                   current.packet_index == 1U;
+                   current.cpi == static_cast<std::uint16_t>(previous.cpi + 1U) && current.prt == 1U &&
+                   current.channel == 0U && current.packet_index == 1U;
         }
-    }
+    } // namespace
 
     void DataOrderTracker::observe(const InterpretedPacketView &packet)
     {
@@ -92,8 +80,7 @@ namespace rxtech
         if (matches_expected_ && !matches_expected(packet, expected_next_))
         {
             matches_expected_ = false;
-            if (previous_packet_.packet_index == spec_.packets_per_channel &&
-                packet.packet_index == 1U &&
+            if (previous_packet_.packet_index == spec_.packets_per_channel && packet.packet_index == 1U &&
                 packet.channel == previous_packet_.channel &&
                 packet.prt == static_cast<std::uint16_t>(previous_packet_.prt + 1U))
             {
@@ -102,15 +89,9 @@ namespace rxtech
 
             std::ostringstream mismatch;
             mismatch << "第 " << checked_packets_ << " 个数据包开始偏离，期望 "
-                     << format_point(expected_next_.cpi,
-                                     expected_next_.prt,
-                                     expected_next_.channel,
+                     << format_point(expected_next_.cpi, expected_next_.prt, expected_next_.channel,
                                      expected_next_.packet_index)
-                     << "，实际 "
-                     << format_point(packet.cpi,
-                                     packet.prt,
-                                     packet.channel,
-                                     packet.packet_index);
+                     << "，实际 " << format_point(packet.cpi, packet.prt, packet.channel, packet.packet_index);
             first_mismatch_ = mismatch.str();
         }
 
@@ -120,11 +101,7 @@ namespace rxtech
 
     void DataOrderTracker::populate_summary(RunSummary &summary) const
     {
-        populate_data_order_summary(summary,
-                                    checked_packets_,
-                                    matches_expected_,
-                                    channel_batched_,
-                                    first_mismatch_);
+        populate_data_order_summary(summary, checked_packets_, matches_expected_, channel_batched_, first_mismatch_);
     }
 
 } // namespace rxtech

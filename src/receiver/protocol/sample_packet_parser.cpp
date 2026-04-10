@@ -1,5 +1,7 @@
 #include "rxtech/sample_packet_parser.h"
 
+#include "rxtech/byte_order.h"
+
 namespace rxtech
 {
 
@@ -9,38 +11,19 @@ namespace rxtech
         constexpr std::uint16_t kEtherTypeIpv4 = 0x0800U;
         constexpr std::uint8_t kIpProtoUdp = 17U;
 
-        std::uint16_t read_u16_le(const std::uint8_t *data)
-        {
-            return static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[0]) |
-                                              (static_cast<std::uint16_t>(data[1]) << 8U));
-        }
-
-        std::uint32_t read_u32_le(const std::uint8_t *data)
-        {
-            return static_cast<std::uint32_t>(data[0]) |
-                   (static_cast<std::uint32_t>(data[1]) << 8U) |
-                   (static_cast<std::uint32_t>(data[2]) << 16U) |
-                   (static_cast<std::uint32_t>(data[3]) << 24U);
-        }
-
-        std::uint16_t read_u16_be(const std::uint8_t *data)
-        {
-            return static_cast<std::uint16_t>((static_cast<std::uint16_t>(data[0]) << 8U) |
-                                              static_cast<std::uint16_t>(data[1]));
-        }
-
         std::uint32_t resolve_payload_offset(const PacketDesc &packet)
         {
             if (packet.len >= 14U)
             {
-                const std::uint16_t ether_type = read_u16_be(packet.data + 12U);
+                const std::uint16_t ether_type = byte_order::read_u16_be(packet.data + 12U);
                 if (ether_type == kEtherTypeIpv4 && packet.len >= 42U)
                 {
                     const std::uint8_t version_ihl = packet.data[14U];
                     const std::uint8_t version = static_cast<std::uint8_t>((version_ihl >> 4U) & 0x0FU);
                     const std::uint8_t ihl_words = static_cast<std::uint8_t>(version_ihl & 0x0FU);
                     const std::uint32_t ip_header_bytes = static_cast<std::uint32_t>(ihl_words) * 4U;
-                    if (version == 4U && ihl_words >= 5U && packet.len >= 14U + ip_header_bytes + 8U && packet.data[23U] == kIpProtoUdp)
+                    if (version == 4U && ihl_words >= 5U && packet.len >= 14U + ip_header_bytes + 8U &&
+                        packet.data[23U] == kIpProtoUdp)
                     {
                         return 14U + ip_header_bytes + 8U;
                     }
@@ -85,6 +68,8 @@ namespace rxtech
             return "invalid_tail";
         case RejectReason::invalid_field_combo:
             return "invalid_field_combo";
+        case RejectReason::truncated_datagram:
+            return "truncated_datagram";
         }
         return "invalid_field_combo";
     }
@@ -111,8 +96,8 @@ namespace rxtech
         }
 
         const std::uint8_t *payload = packet.data + payload_offset;
-        const std::uint32_t magic = read_u32_le(payload + 0U);
-        parsed.cpi = read_u16_le(payload + 4U);
+        const std::uint32_t magic = byte_order::read_u32_le(payload + 0U);
+        parsed.cpi = byte_order::read_u16_le(payload + 4U);
         parsed.rx_tsc = packet.ts_ns;
 
         if (magic == spec_.magic_control)
@@ -127,10 +112,10 @@ namespace rxtech
         if (magic == spec_.magic_data)
         {
             parsed.kind = PacketKind::data_packet;
-            parsed.channel = read_u16_le(payload + 6U);
-            parsed.prt = read_u16_le(payload + 8U);
-            parsed.packet_index = read_u16_le(payload + 10U);
-            parsed.tail = read_u32_le(payload + 12U);
+            parsed.channel = byte_order::read_u16_le(payload + 6U);
+            parsed.prt = byte_order::read_u16_le(payload + 8U);
+            parsed.packet_index = byte_order::read_u16_le(payload + 10U);
+            parsed.tail = byte_order::read_u32_le(payload + 12U);
             parsed.payload_ptr = payload + spec_.packet_header_size;
             parsed.payload_len = packet.len - payload_offset - spec_.packet_header_size;
             parsed.valid = true;
@@ -151,8 +136,8 @@ namespace rxtech
         }
 
         const std::uint8_t *payload = frame.udp_payload.data();
-        const std::uint32_t magic = read_u32_le(payload + 0U);
-        parsed.cpi = read_u16_le(payload + 4U);
+        const std::uint32_t magic = byte_order::read_u32_le(payload + 0U);
+        parsed.cpi = byte_order::read_u16_le(payload + 4U);
 
         if (magic == spec_.magic_control)
         {
@@ -166,10 +151,10 @@ namespace rxtech
         if (magic == spec_.magic_data)
         {
             parsed.kind = PacketKind::data_packet;
-            parsed.channel = read_u16_le(payload + 6U);
-            parsed.prt = read_u16_le(payload + 8U);
-            parsed.packet_index = read_u16_le(payload + 10U);
-            parsed.tail = read_u32_le(payload + 12U);
+            parsed.channel = byte_order::read_u16_le(payload + 6U);
+            parsed.prt = byte_order::read_u16_le(payload + 8U);
+            parsed.packet_index = byte_order::read_u16_le(payload + 10U);
+            parsed.tail = byte_order::read_u32_le(payload + 12U);
             parsed.payload_ptr = payload + spec_.packet_header_size;
             parsed.payload_len = static_cast<std::uint32_t>(frame.udp_payload.size() - spec_.packet_header_size);
             parsed.valid = true;

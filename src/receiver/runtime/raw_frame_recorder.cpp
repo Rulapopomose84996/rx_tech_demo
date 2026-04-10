@@ -2,6 +2,7 @@
 
 #include "rxtech/rx_config.h"
 #include "rxtech/time_utils.h"
+#include "internal/path_utils.h"
 
 #include <algorithm>
 #include <chrono>
@@ -9,19 +10,25 @@
 #include <ctime>
 #include <cstring>
 #include <deque>
-#include <dirent.h>
-#include <errno.h>
+#include <cerrno>
 #include <fstream>
 #include <iomanip>
 #include <memory>
 #include <mutex>
 #include <sstream>
 #include <stdexcept>
-#include <sys/stat.h>
 #include <thread>
-#include <unistd.h>
 #include <utility>
 #include <vector>
+
+#if defined(__unix__) || defined(__linux__) || defined(__APPLE__)
+#define RXTECH_HAS_POSIX_RAW_RECORDER 1
+#include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#else
+#define RXTECH_HAS_POSIX_RAW_RECORDER 0
+#endif
 
 namespace rxtech
 {
@@ -48,15 +55,12 @@ namespace rxtech
 
         std::uint64_t system_clock_now_ns()
         {
-            return static_cast<std::uint64_t>(
-                std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    std::chrono::system_clock::now().time_since_epoch())
-                    .count());
+            return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                                  std::chrono::system_clock::now().time_since_epoch())
+                                                  .count());
         }
 
-        std::string make_segment_name(const std::string &prefix,
-                                      std::uint64_t unix_ns,
-                                      std::uint64_t counter)
+        std::string make_segment_name(const std::string &prefix, std::uint64_t unix_ns, std::uint64_t counter)
         {
             const std::time_t now = static_cast<std::time_t>(unix_ns / 1'000'000'000ULL);
             std::tm local_time{};
@@ -73,50 +77,22 @@ namespace rxtech
             return out.str();
         }
 
-        bool is_path_separator(char ch)
-        {
-            return ch == '/' || ch == '\\';
-        }
-
-        std::string join_path(const std::string &base, const std::string &name)
-        {
-            if (base.empty())
-            {
-                return name;
-            }
-            if (is_path_separator(base.back()))
-            {
-                return base + name;
-            }
-            return base + "/" + name;
-        }
-
-        std::string path_filename(const std::string &path)
-        {
-            const std::size_t pos = path.find_last_of("/\\");
-            return pos == std::string::npos ? path : path.substr(pos + 1U);
-        }
-
         std::string path_extension(const std::string &path)
         {
-            const std::string filename = path_filename(path);
+            const std::string filename = path_utils::path_filename(path);
             const std::size_t pos = filename.find_last_of('.');
             return pos == std::string::npos ? std::string{} : filename.substr(pos);
         }
 
         bool path_is_regular_file(const std::string &path)
         {
-            struct stat st
-            {
-            };
+            struct stat st{};
             return ::stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
         }
 
         std::uint64_t path_file_size(const std::string &path)
         {
-            struct stat st
-            {
-            };
+            struct stat st{};
             if (::stat(path.c_str(), &st) != 0)
             {
                 throw std::runtime_error("获取文件状态失败: " + path);
@@ -133,7 +109,7 @@ namespace rxtech
 
             std::size_t start = 0U;
             std::string current;
-            if (is_path_separator(path[0]))
+            if (path_utils::is_path_separator(path[0]))
             {
                 current = "/";
                 start = 1U;
@@ -141,15 +117,16 @@ namespace rxtech
 
             while (start < path.size())
             {
-                while (start < path.size() && is_path_separator(path[start]))
+                while (start < path.size() && path_utils::is_path_separator(path[start]))
                 {
                     ++start;
                 }
                 const std::size_t next = path.find_first_of("/\\", start);
-                const std::string part = path.substr(start, next == std::string::npos ? std::string::npos : next - start);
+                const std::string part =
+                    path.substr(start, next == std::string::npos ? std::string::npos : next - start);
                 if (!part.empty())
                 {
-                    if (!current.empty() && !is_path_separator(current.back()))
+                    if (!current.empty() && !path_utils::is_path_separator(current.back()))
                     {
                         current.push_back('/');
                     }
@@ -182,7 +159,7 @@ namespace rxtech
             {
                 return false;
             }
-            const std::string filename = path_filename(path);
+            const std::string filename = path_utils::path_filename(path);
             const std::string expected_prefix = prefix + "_";
             return filename.rfind(expected_prefix, 0U) == 0U;
         }
@@ -200,8 +177,7 @@ namespace rxtech
         };
 
         explicit Impl(const RxConfig &config)
-            : enabled(config.raw_record_enabled),
-              output_dir(config.raw_record_output_dir),
+            : enabled(config.raw_record_enabled), output_dir(config.raw_record_output_dir),
               file_prefix(config.raw_record_file_prefix.empty() ? "radar_raw" : config.raw_record_file_prefix),
               ring_slots(std::max<std::uint32_t>(1U, config.raw_record_ring_slots)),
               writer_batch_size(std::max<std::uint32_t>(1U, config.raw_record_writer_batch_size)),
@@ -419,7 +395,8 @@ namespace rxtech
             header.queue_id = buffer.queue_id;
 
             active_stream.write(reinterpret_cast<const char *>(&header), static_cast<std::streamsize>(sizeof(header)));
-            active_stream.write(reinterpret_cast<const char *>(buffer.bytes.data()), static_cast<std::streamsize>(buffer.length));
+            active_stream.write(reinterpret_cast<const char *>(buffer.bytes.data()),
+                                static_cast<std::streamsize>(buffer.length));
             if (!active_stream.good())
             {
                 throw std::runtime_error("写入原始帧分段文件失败: " + active_segment_path);
@@ -447,8 +424,8 @@ namespace rxtech
 
             close_active_segment();
 
-            const std::string segment_path = join_path(output_dir,
-                                                       make_segment_name(file_prefix, system_clock_now_ns(), ++segment_counter));
+            const std::string segment_path = path_utils::join_path(
+                output_dir, make_segment_name(file_prefix, system_clock_now_ns(), ++segment_counter));
             std::ofstream stream(segment_path, std::ios::binary | std::ios::trunc);
             if (!stream.is_open())
             {
@@ -458,7 +435,8 @@ namespace rxtech
             RawFrameFileHeader file_header;
             file_header.created_unix_ns = system_clock_now_ns();
             file_header.max_frame_bytes = max_frame_bytes;
-            stream.write(reinterpret_cast<const char *>(&file_header), static_cast<std::streamsize>(sizeof(file_header)));
+            stream.write(reinterpret_cast<const char *>(&file_header),
+                         static_cast<std::streamsize>(sizeof(file_header)));
             if (!stream.good())
             {
                 throw std::runtime_error("初始化原始帧分段文件失败: " + segment_path);
@@ -504,6 +482,9 @@ namespace rxtech
             retained_bytes = 0U;
             segment_counter = 0U;
 
+#if !RXTECH_HAS_POSIX_RAW_RECORDER
+            return;
+#else
             DIR *dir = ::opendir(output_dir.c_str());
             if (dir == nullptr)
             {
@@ -518,7 +499,7 @@ namespace rxtech
                 {
                     continue;
                 }
-                const std::string path = join_path(output_dir, name);
+                const std::string path = path_utils::join_path(output_dir, name);
                 if (is_managed_segment_file(path, file_prefix))
                 {
                     segment_paths.push_back(path);
@@ -534,6 +515,7 @@ namespace rxtech
                 closed_segments.emplace_back(path, file_size);
                 ++segment_counter;
             }
+#endif
         }
 
         void trim_retention_locked()
@@ -579,18 +561,13 @@ namespace rxtech
         std::string failure_message;
     };
 
-    RawFrameRecorder::RawFrameRecorder(const RxConfig &config)
-        : impl_(new Impl(config))
-    {
-    }
+    RawFrameRecorder::RawFrameRecorder(const RxConfig &config) : impl_(std::make_unique<Impl>(config)) {}
 
     RawFrameRecorder::~RawFrameRecorder()
     {
         if (impl_ != nullptr)
         {
             impl_->stop();
-            delete impl_;
-            impl_ = nullptr;
         }
     }
 

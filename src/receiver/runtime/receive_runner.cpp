@@ -22,12 +22,13 @@ namespace rxtech
     namespace
     {
 
-        std::atomic<bool> g_stop_requested{false};
+        std::atomic<ReceiveRunner *> g_active_receive_runner{nullptr};
 
         class SignalHandlerGuard
         {
-        public:
-            SignalHandlerGuard()
+          public:
+            explicit SignalHandlerGuard(ReceiveRunner &runner)
+                : previous_runner_(g_active_receive_runner.exchange(&runner))
             {
                 previous_sigint_ = std::signal(SIGINT, signal_handler);
                 previous_sigterm_ = std::signal(SIGTERM, signal_handler);
@@ -37,69 +38,50 @@ namespace rxtech
             {
                 std::signal(SIGINT, previous_sigint_);
                 std::signal(SIGTERM, previous_sigterm_);
+                g_active_receive_runner.store(previous_runner_);
             }
 
-        private:
+          private:
             using SignalHandler = void (*)(int);
 
             static void signal_handler(int)
             {
-                g_stop_requested.store(true);
+                ReceiveRunner *runner = g_active_receive_runner.load();
+                if (runner != nullptr)
+                {
+                    runner->request_stop();
+                }
             }
 
             SignalHandler previous_sigint_ = SIG_DFL;
             SignalHandler previous_sigterm_ = SIG_DFL;
+            ReceiveRunner *previous_runner_ = nullptr;
         };
 
-        bool is_path_separator(char ch)
+        void close_stream_or_throw(std::ofstream &stream, const std::string &path, const char *label)
         {
-            return ch == '/' || ch == '\\';
-        }
+            if (!stream.is_open())
+            {
+                return;
+            }
 
-        std::string path_filename(const std::string &path)
-        {
-            std::string normalized = path;
-            while (!normalized.empty() && is_path_separator(normalized.back()))
+            stream.flush();
+            const bool flush_failed = !stream.good();
+            stream.close();
+            const bool close_failed = stream.fail();
+            stream.clear();
+            if (flush_failed || close_failed)
             {
-                normalized.pop_back();
+                throw std::runtime_error(std::string("关闭") + label + "失败: " + path);
             }
-            const std::size_t pos = normalized.find_last_of("/\\");
-            return pos == std::string::npos ? normalized : normalized.substr(pos + 1U);
-        }
-
-        std::string path_parent(const std::string &path)
-        {
-            std::string normalized = path;
-            while (!normalized.empty() && is_path_separator(normalized.back()))
-            {
-                normalized.pop_back();
-            }
-            const std::size_t pos = normalized.find_last_of("/\\");
-            return pos == std::string::npos ? std::string{} : normalized.substr(0U, pos);
-        }
-
-        std::string join_path(const std::string &base, const std::string &name)
-        {
-            if (base.empty())
-            {
-                return name;
-            }
-            if (is_path_separator(base.back()))
-            {
-                return base + name;
-            }
-            return base + "/" + name;
         }
 
         std::string sanitize_run_label(std::string label)
         {
             for (char &ch : label)
             {
-                const bool keep =
-                    (ch >= 'a' && ch <= 'z') ||
-                    (ch >= 'A' && ch <= 'Z') ||
-                    (ch >= '0' && ch <= '9') ||
-                    ch == '_' || ch == '-';
+                const bool keep = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') ||
+                                  ch == '_' || ch == '-';
                 if (!keep)
                 {
                     ch = '_';
@@ -133,7 +115,7 @@ namespace rxtech
         {
             const std::string capture_dir =
                 config.capture_output_dir.empty() ? config.output_dir : config.capture_output_dir;
-            std::string suffix = sanitize_run_label(path_filename(capture_dir));
+            std::string suffix = sanitize_run_label(path_utils::path_filename(capture_dir));
             if (suffix == "run" && !config.backend_name.empty())
             {
                 suffix = sanitize_run_label(config.backend_name);
@@ -143,20 +125,20 @@ namespace rxtech
 
         std::string make_capture_run_dir(const std::string &capture_dir, const std::string &run_label)
         {
-            const std::string parent = path_parent(capture_dir);
-            return join_path(parent, run_label);
+            const std::string parent = path_utils::path_parent(capture_dir);
+            return path_utils::join_path(parent, run_label);
         }
 
         std::string make_raw_record_run_dir(const std::string &raw_record_dir, const std::string &run_label)
         {
-            return join_path(raw_record_dir, run_label);
+            return path_utils::join_path(raw_record_dir, run_label);
         }
 
         std::string make_log_run_path(const std::string &log_file_path, const std::string &run_label)
         {
-            const std::string parent = path_parent(log_file_path);
-            const std::string filename = path_filename(log_file_path);
-            return join_path(join_path(parent, run_label), filename);
+            const std::string parent = path_utils::path_parent(log_file_path);
+            const std::string filename = path_utils::path_filename(log_file_path);
+            return path_utils::join_path(path_utils::join_path(parent, run_label), filename);
         }
 
         /**
@@ -169,8 +151,7 @@ namespace rxtech
          * @param init_result 后端初始化结果，包含可用性和错误原因等信息
          * @return RunSummary 填充了后端不可用状态的运行摘要对象
          */
-        RunSummary make_unavailable_summary(const ReceiveContext &context,
-                                            const BackendInitResult &init_result)
+        RunSummary make_unavailable_summary(const ReceiveContext &context, const BackendInitResult &init_result)
         {
             RunSummary summary;
             summary.backend = context.backend != nullptr ? context.backend->name() : context.config.backend_name;
@@ -186,12 +167,35 @@ namespace rxtech
 
     void request_receive_stop()
     {
-        g_stop_requested.store(true);
+        ReceiveRunner *runner = g_active_receive_runner.load();
+        if (runner != nullptr)
+        {
+            runner->request_stop();
+        }
     }
 
     void reset_receive_stop()
     {
-        g_stop_requested.store(false);
+        ReceiveRunner *runner = g_active_receive_runner.load();
+        if (runner != nullptr)
+        {
+            runner->reset_stop();
+        }
+    }
+
+    void ReceiveRunner::request_stop() noexcept
+    {
+        stop_requested_.store(true);
+    }
+
+    void ReceiveRunner::reset_stop() noexcept
+    {
+        stop_requested_.store(false);
+    }
+
+    bool ReceiveRunner::stop_requested() const noexcept
+    {
+        return stop_requested_.load();
     }
 
     /**
@@ -289,8 +293,8 @@ namespace rxtech
         }
 
         // 重置停止标志并设置信号处理器
-        reset_receive_stop();
-        SignalHandlerGuard signal_guard;
+        reset_stop();
+        SignalHandlerGuard signal_guard(*this);
         prepare_run_artifact_paths(context.config);
 
         // 初始化后端，如果失败则返回不可用摘要
@@ -305,8 +309,9 @@ namespace rxtech
         try
         {
             // 配置数据捕获的文件路径和流
-            const std::string output_dir =
-                context.config.capture_output_dir.empty() ? context.config.output_dir : context.config.capture_output_dir;
+            const std::string output_dir = context.config.capture_output_dir.empty()
+                                               ? context.config.output_dir
+                                               : context.config.capture_output_dir;
             const bool capture_enabled = context.config.capture_enabled;
             const std::string capture_packets_path =
                 capture_enabled ? (output_dir + "/" + context.config.capture_data_filename) : std::string{};
@@ -351,14 +356,15 @@ namespace rxtech
             artifacts.raw_frame_recorder = raw_frame_recorder.enabled() ? &raw_frame_recorder : nullptr;
 
             const auto start_time = std::chrono::steady_clock::now();
-            const auto deadline = start_time + std::chrono::seconds(std::max<std::uint32_t>(1U, context.config.duration_seconds));
-            RunSummary summary = owner_loop.run(
-                context,
-                artifacts,
-                [&]()
-                {
-                    return context.config.run_until_stopped ? g_stop_requested.load() : (std::chrono::steady_clock::now() >= deadline);
-                });
+            const auto deadline =
+                start_time + std::chrono::seconds(std::max<std::uint32_t>(1U, context.config.duration_seconds));
+            RunSummary summary = owner_loop.run(context, artifacts,
+                                                [&]()
+                                                {
+                                                    return context.config.run_until_stopped
+                                                               ? stop_requested()
+                                                               : (std::chrono::steady_clock::now() >= deadline);
+                                                });
 
             // 停止录制器并检查错误
             raw_frame_recorder.stop();
@@ -367,6 +373,9 @@ namespace rxtech
             {
                 throw std::runtime_error("原始帧录制失败: " + raw_record_error);
             }
+
+            close_stream_or_throw(capture_packets_stream, capture_packets_path, " capture 文件");
+            close_stream_or_throw(capture_index_stream, capture_index_path, " capture 索引文件");
 
             // 填充运行摘要信息
             const RawFrameRecorderStats raw_record_stats = raw_frame_recorder.snapshot();
@@ -379,7 +388,8 @@ namespace rxtech
             summary.recorded_packets = artifacts.recorded_packets;
             summary.recorded_bytes = artifacts.recorded_bytes;
             summary.run_artifact_dir = output_dir;
-            summary.raw_record_output_dir = raw_frame_recorder.enabled() ? raw_frame_recorder.output_dir() : std::string{};
+            summary.raw_record_output_dir =
+                raw_frame_recorder.enabled() ? raw_frame_recorder.output_dir() : std::string{};
             summary.raw_record_latest_file_path = raw_record_stats.latest_file_path;
             summary.raw_record_written_frames = raw_record_stats.written_frames;
             summary.raw_record_written_bytes = raw_record_stats.written_bytes;

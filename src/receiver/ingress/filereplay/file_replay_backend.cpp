@@ -48,8 +48,7 @@ namespace rxtech
 
     // ── Construction / destruction ───────────────────────────────────────────
 
-    FileReplayBackend::FileReplayBackend(FileReplayOptions opts)
-        : impl_(std::make_unique<Impl>())
+    FileReplayBackend::FileReplayBackend(FileReplayOptions opts) : impl_(std::make_unique<Impl>())
     {
         impl_->opts = std::move(opts);
     }
@@ -74,11 +73,8 @@ namespace rxtech
             {
                 unsigned a{}, b{}, c{}, d{};
                 if (std::sscanf(ip.c_str(), "%u.%u.%u.%u", &a, &b, &c, &d) == 4)
-                    fcfg.dst_ipv4_be =
-                        (static_cast<std::uint32_t>(a) << 24U) |
-                        (static_cast<std::uint32_t>(b) << 16U) |
-                        (static_cast<std::uint32_t>(c) << 8U) |
-                        static_cast<std::uint32_t>(d);
+                    fcfg.dst_ipv4_be = (static_cast<std::uint32_t>(a) << 24U) | (static_cast<std::uint32_t>(b) << 16U) |
+                                       (static_cast<std::uint32_t>(c) << 8U) | static_cast<std::uint32_t>(d);
             }
         }
         if (impl_->opts.src_ipv4_be != 0)
@@ -90,11 +86,8 @@ namespace rxtech
             {
                 unsigned a{}, b{}, c{}, d{};
                 if (std::sscanf(src_ip.c_str(), "%u.%u.%u.%u", &a, &b, &c, &d) == 4)
-                    fcfg.src_ipv4_be =
-                        (static_cast<std::uint32_t>(a) << 24U) |
-                        (static_cast<std::uint32_t>(b) << 16U) |
-                        (static_cast<std::uint32_t>(c) << 8U) |
-                        static_cast<std::uint32_t>(d);
+                    fcfg.src_ipv4_be = (static_cast<std::uint32_t>(a) << 24U) | (static_cast<std::uint32_t>(b) << 16U) |
+                                       (static_cast<std::uint32_t>(c) << 8U) | static_cast<std::uint32_t>(d);
             }
         }
         if (impl_->opts.dst_port != 0)
@@ -131,10 +124,7 @@ namespace rxtech
                     throw std::runtime_error("读取数据长度不足: " + entry.bin_file);
 
                 // Build Ethernet frame
-                auto frame = replay::build_eth_frame(payload.data(),
-                                                     entry.length,
-                                                     fcfg,
-                                                     seq++);
+                auto frame = replay::build_eth_frame(payload.data(), entry.length, fcfg, seq++);
                 impl_->frames.push_back(std::move(frame));
             }
         }
@@ -166,6 +156,9 @@ namespace rxtech
         if (impl_->stopped || impl_->frames.empty())
             return true;
 
+        const std::uint32_t budget =
+            std::min<std::uint32_t>(max_burst, static_cast<std::uint32_t>(burst.datagrams.max_size()));
+
         // Check loop completion
         if (impl_->cursor >= impl_->frames.size())
         {
@@ -179,7 +172,7 @@ namespace rxtech
         }
 
         // Rate limiting: sleep until next slot
-        if (impl_->ns_per_packet > 0 && max_burst > 0)
+        if (impl_->ns_per_packet > 0 && budget > 0U)
         {
             const std::uint64_t now = steady_clock_now_ns();
             if (now < impl_->next_send_ns)
@@ -193,7 +186,7 @@ namespace rxtech
         // Fill burst
         const std::uint64_t ts = steady_clock_now_ns();
         std::uint32_t served = 0;
-        while (served < max_burst && impl_->cursor < impl_->frames.size())
+        while (served < budget && impl_->cursor < impl_->frames.size())
         {
             const std::size_t frame_index = impl_->cursor;
             const auto &frame = impl_->frames[impl_->cursor];

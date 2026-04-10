@@ -1,6 +1,7 @@
 #include "internal/cpi_state_coordinator.h"
 
 #include <algorithm>
+#include <chrono>
 #include <thread>
 
 #include "rxtech/time_utils.h"
@@ -16,15 +17,13 @@ namespace rxtech
             return std::min(spec.max_n_prt, static_cast<std::uint32_t>(kCpiPrtMax));
         }
 
-        ControlSnapshot make_snapshot_base(std::uint16_t cpi_id,
-                                           const ProtocolSpec &spec,
-                                           BindSource bind_source)
+        ControlSnapshot make_snapshot_base(std::uint16_t cpi_id, const ProtocolSpec &spec, BindSource bind_source)
         {
             ControlSnapshot snapshot;
             snapshot.cpi_id = cpi_id;
             snapshot.channel_count = static_cast<std::uint16_t>(spec.channels_per_prt);
             snapshot.packets_per_channel = static_cast<std::uint16_t>(spec.packets_per_channel);
-            snapshot.timeout_ns = spec.cpi_timeout_ns;
+            snapshot.timeout_ns = spec.protocol_cpi_timeout_ns;
             snapshot.bind_source = bind_source;
             return snapshot;
         }
@@ -32,8 +31,8 @@ namespace rxtech
         ControlSnapshot make_fixed_snapshot(std::uint16_t cpi_id, const ProtocolSpec &spec)
         {
             ControlSnapshot snapshot = make_snapshot_base(cpi_id, spec, BindSource::fixed);
-            snapshot.n_prt = static_cast<std::uint16_t>(
-                std::min(spec.expected_n_prt, static_cast<std::uint32_t>(kCpiPrtMax)));
+            snapshot.n_prt =
+                static_cast<std::uint16_t>(std::min(spec.expected_n_prt, static_cast<std::uint32_t>(kCpiPrtMax)));
             snapshot.valid = snapshot.n_prt > 0U;
             return snapshot;
         }
@@ -66,8 +65,7 @@ namespace rxtech
             return make_fixed_snapshot(parsed.cpi, spec);
         }
 
-        ControlSnapshot select_open_snapshot(std::uint16_t cpi_id,
-                                             const ProtocolSpec &spec,
+        ControlSnapshot select_open_snapshot(std::uint16_t cpi_id, const ProtocolSpec &spec,
                                              const ControlSnapshot &staged_control)
         {
             if (!spec.dynamic_prt_enabled)
@@ -85,8 +83,7 @@ namespace rxtech
 
         bool can_converge_to_control(const ControlSnapshot &candidate, const CpiContext &ctx)
         {
-            return candidate.bind_source == BindSource::control &&
-                   candidate.valid &&
+            return candidate.bind_source == BindSource::control && candidate.valid &&
                    candidate.n_prt >= ctx.header.observed_n_prt;
         }
 
@@ -95,9 +92,7 @@ namespace rxtech
             ControlSnapshot &bound = ctx.control;
             if (bound.bind_source == BindSource::control)
             {
-                if (candidate.bind_source == BindSource::control &&
-                    bound.valid &&
-                    candidate.valid &&
+                if (candidate.bind_source == BindSource::control && bound.valid && candidate.valid &&
                     bound.n_prt != candidate.n_prt)
                 {
                     bound.conflict = true;
@@ -170,6 +165,8 @@ namespace rxtech
     {
         bool timed_out = false;
 
+        // now_ns、first_rx_tsc 和 ingress 提供的 rx_tsc 必须统一处于 steady_clock_now_ns() 纳秒时钟域。
+
         // Check previous CPI timeout first
         if (previous_ctx_ != nullptr)
         {
@@ -211,9 +208,7 @@ namespace rxtech
         return timed_out;
     }
 
-    bool CpiStateCoordinator::open_active(std::uint16_t cpi_id,
-                                          IMetricsCollector &metrics,
-                                          std::string &run_status,
+    bool CpiStateCoordinator::open_active(std::uint16_t cpi_id, IMetricsCollector &metrics, std::string &run_status,
                                           std::string &run_error)
     {
         // Release only the active context, not the previous (dual-window).
@@ -240,18 +235,34 @@ namespace rxtech
             return recycled;
         };
 
-        active_ctx_index_ = ctx_pool_.acquire(cpi_id);
-        if (active_ctx_index_ == kInvalidPoolIndex)
+        auto try_acquire_active = [this, cpi_id]() -> bool
         {
-            for (int attempt = 0; attempt < 3 && active_ctx_index_ == kInvalidPoolIndex; ++attempt)
+            active_ctx_index_ = ctx_pool_.acquire(cpi_id);
+            return active_ctx_index_ != kInvalidPoolIndex;
+        };
+
+        if (!try_acquire_active())
+        {
+            static constexpr std::chrono::microseconds kPoolAcquireBackoff[] = {
+                std::chrono::microseconds(1),
+                std::chrono::microseconds(10),
+                std::chrono::microseconds(100),
+            };
+
+            for (const auto delay : kPoolAcquireBackoff)
             {
-                const bool recycled = drain_recycle_once();
-                if (active_ctx_index_ == kInvalidPoolIndex && !recycled)
+                drain_recycle_once();
+                if (try_acquire_active())
                 {
-                    std::this_thread::yield();
-                    drain_recycle_once();
+                    break;
                 }
-                active_ctx_index_ = ctx_pool_.acquire(cpi_id);
+
+                std::this_thread::sleep_for(delay);
+                drain_recycle_once();
+                if (try_acquire_active())
+                {
+                    break;
+                }
             }
         }
         active_ctx_ = ctx_pool_.get(active_ctx_index_);
@@ -289,7 +300,7 @@ namespace rxtech
                     // SPSC full — zero-blocking drop: discard and release immediately
                     metrics.on_output_backpressure();
                     ctx_pool_.release(active_ctx_index_);
-                    output_degraded_ = true;
+                    output_degraded_.store(true, std::memory_order_relaxed);
                 }
                 // else: pool slot stays occupied until consumer returns ReleaseToken
             }
@@ -326,7 +337,7 @@ namespace rxtech
                 {
                     metrics.on_output_backpressure();
                     ctx_pool_.release(previous_ctx_index_);
-                    output_degraded_ = true;
+                    output_degraded_.store(true, std::memory_order_relaxed);
                 }
             }
             else
@@ -344,10 +355,8 @@ namespace rxtech
 
     CpiProcessResult CpiStateCoordinator::process_data_packet(const ParsedPacketView &parsed,
                                                               const InterpretedPacketView &packet,
-                                                              const ProtocolSpec &spec,
-                                                              IMetricsCollector &metrics,
-                                                              std::string &run_status,
-                                                              std::string &run_error)
+                                                              const ProtocolSpec &spec, IMetricsCollector &metrics,
+                                                              std::string &run_status, std::string &run_error)
     {
         CpiProcessResult result;
         if (active_ctx_ == nullptr && closed_ring_.contains(parsed.cpi))
@@ -386,7 +395,8 @@ namespace rxtech
                 const SlotWriteResult late_write = slot_writer_.write(*previous_ctx_, parsed);
                 if (late_write.first_write && !late_write.duplicate)
                 {
-                    progress_tracker_.advance(*previous_ctx_, packet.prt, packet.channel, parsed.tail == spec.magic_tail);
+                    progress_tracker_.advance(*previous_ctx_, packet.prt, packet.channel,
+                                              parsed.tail == spec.magic_tail);
                     metrics.on_late_packet_accepted();
                     result.accepted = true;
                     return result;
@@ -459,21 +469,14 @@ namespace rxtech
         }
     }
 
-    void CpiStateCoordinator::configure_output_policy(const std::string &policy)
+    void CpiStateCoordinator::configure_output_policy(OutputDropPolicy policy)
     {
-        if (policy == "error")
-        {
-            output_drop_policy_ = "error";
-        }
-        else
-        {
-            output_drop_policy_ = "degrade";
-        }
+        output_drop_policy_ = policy;
     }
 
     bool CpiStateCoordinator::output_drop_is_error() const
     {
-        return output_drop_policy_ == "error";
+        return output_drop_policy_ == OutputDropPolicy::error;
     }
 
 } // namespace rxtech

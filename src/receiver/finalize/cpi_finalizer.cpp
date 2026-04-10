@@ -1,5 +1,7 @@
 #include "rxtech/cpi_finalizer.h"
 
+#include <cassert>
+
 #include "rxtech/time_utils.h"
 
 namespace rxtech
@@ -24,7 +26,13 @@ namespace rxtech
         }
         else if ((trigger & (TriggerTimeout | TriggerStop)) != 0U)
         {
-            return std::nullopt;
+            const bool has_observable_data = ctx.header.received_slot_count > 0U || ctx.header.ready_prt_count > 0U ||
+                                             ctx.header.first_rx_tsc != 0U || ctx.header.observed_n_prt > 0U;
+            if (!has_observable_data)
+            {
+                return std::nullopt;
+            }
+            decision = CpiDecision::ABNORMAL_CUTOFF_COMMIT;
         }
         else
         {
@@ -41,10 +49,9 @@ namespace rxtech
         output.control = ctx.control;
         output.decision = decision;
         output.received_slot_count = ctx.header.received_slot_count;
-        output.missing_slot_count =
-            ctx.header.expected_slot_count > ctx.header.received_slot_count
-                ? (ctx.header.expected_slot_count - ctx.header.received_slot_count)
-                : 0U;
+        output.missing_slot_count = ctx.header.expected_slot_count > ctx.header.received_slot_count
+                                        ? (ctx.header.expected_slot_count - ctx.header.received_slot_count)
+                                        : 0U;
         output.duplicate_count = ctx.header.duplicate_count;
         output.ready_prt_count = ctx.header.ready_prt_count;
         output.trigger_bits = ctx.header.trigger_bits;
@@ -55,12 +62,23 @@ namespace rxtech
         output.view.payload_base = ctx.payload.data();
         output.view.slot_valid_bytes = ctx.slot_valid_bytes.data();
         output.view.prt_summary = ctx.prt_summary.data();
-        output.view.n_prt = output.control.valid && output.control.n_prt > 0U
-                                ? output.control.n_prt
-                                : (ctx.header.observed_n_prt > 0U ? ctx.header.observed_n_prt : ctx.header.expected_n_prt);
+        assert(output.pool_index != kInvalidPoolIndex);
+        assert(output.view.payload_base != nullptr);
+        assert(output.view.slot_valid_bytes != nullptr);
+        assert(output.view.prt_summary != nullptr);
+        output.view.n_prt =
+            output.control.valid && output.control.n_prt > 0U
+                ? output.control.n_prt
+                : (ctx.header.observed_n_prt > 0U ? ctx.header.observed_n_prt : ctx.header.expected_n_prt);
         const std::uint32_t slots_per_prt =
-            static_cast<std::uint32_t>(output.control.channel_count > 0U ? output.control.channel_count : (ctx.header.channels_per_prt > 0U ? ctx.header.channels_per_prt : kCpiMaxChannelCount)) *
-            static_cast<std::uint32_t>(output.control.packets_per_channel > 0U ? output.control.packets_per_channel : (ctx.header.packets_per_channel > 0U ? ctx.header.packets_per_channel : kCpiMaxPacketsPerChannel));
+            static_cast<std::uint32_t>(
+                output.control.channel_count > 0U
+                    ? output.control.channel_count
+                    : (ctx.header.channels_per_prt > 0U ? ctx.header.channels_per_prt : kCpiMaxChannelCount)) *
+            static_cast<std::uint32_t>(output.control.packets_per_channel > 0U
+                                           ? output.control.packets_per_channel
+                                           : (ctx.header.packets_per_channel > 0U ? ctx.header.packets_per_channel
+                                                                                  : kCpiMaxPacketsPerChannel));
         output.view.slot_count = ctx.header.expected_slot_count > 0U
                                      ? ctx.header.expected_slot_count
                                      : static_cast<std::uint32_t>(output.view.n_prt) * slots_per_prt;

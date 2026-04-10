@@ -66,8 +66,7 @@ namespace rxtech
      * @param should_stop 停止检查函数，返回true时终止循环
      * @return RunSummary 运行摘要，包含接收统计、错误信息和性能指标
      */
-    RunSummary OwnerLoop::run(ReceiveContext &context,
-                              CaptureArtifacts &artifacts,
+    RunSummary OwnerLoop::run(ReceiveContext &context, CaptureArtifacts &artifacts,
                               const std::function<bool()> &should_stop) const
     {
         // 从配置中构建协议规范
@@ -87,10 +86,10 @@ namespace rxtech
 
         // CPI 输出管道：owner → output_ring → consumer → recycle_ring → owner
         // 使用无锁单生产者单消费者环形缓冲区实现线程间通信
-        const std::size_t output_capacity = normalize_spsc_usable_capacity(
-            std::max<std::size_t>(1U, context.config.output_ring_capacity));
-        const std::size_t recycle_capacity = normalize_spsc_usable_capacity(
-            std::max<std::size_t>(1U, context.config.recycle_ring_capacity));
+        const std::size_t output_capacity =
+            normalize_spsc_usable_capacity(std::max<std::size_t>(1U, context.config.output_ring_capacity));
+        const std::size_t recycle_capacity =
+            normalize_spsc_usable_capacity(std::max<std::size_t>(1U, context.config.recycle_ring_capacity));
         SpscRing<CpiOutput> output_ring(output_capacity);
         SpscRing<ReleaseToken> recycle_ring(recycle_capacity);
         cpi_state_coordinator.attach_rings(&output_ring, &recycle_ring);
@@ -99,8 +98,7 @@ namespace rxtech
         // 启动 CPI consumer 线程，异步处理 CPI 输出
         std::atomic<bool> consumer_stop{false};
         CpiConsumer consumer(output_ring, recycle_ring, output_handler_);
-        std::thread consumer_thread([&]
-                                    { consumer.run(consumer_stop); });
+        std::thread consumer_thread([&] { consumer.run(consumer_stop); });
 
         // 记录开始时间，用于计算运行时长
         const auto start_time = std::chrono::steady_clock::now();
@@ -111,12 +109,12 @@ namespace rxtech
         // 初始化运行时状态和无效包计数器
         OwnerLoopRuntimeState runtime_state;
         std::uint32_t invalid_dumped = 0;
+        UdpDatagramBurst burst;
 
         // 主循环：持续接收和处理数据包，直到收到停止信号
         while (!should_stop())
         {
             // 从后端接收数据包 burst
-            UdpDatagramBurst burst;
             if (!context.backend->recv_burst(burst, context.config.max_burst))
             {
                 runtime_state.run_status = "error";
@@ -150,8 +148,7 @@ namespace rxtech
                 cpi_state_coordinator.drain_recycle(*context.metrics);
 
                 // 如果启用了原始帧录制，提交数据包到录制器
-                if (artifacts.raw_frame_recorder != nullptr &&
-                    datagram.raw_frame_data != nullptr &&
+                if (artifacts.raw_frame_recorder != nullptr && datagram.raw_frame_data != nullptr &&
                     datagram.raw_frame_len != 0U)
                 {
                     PacketDesc packet;
@@ -165,10 +162,7 @@ namespace rxtech
 
                 // 通过包管道处理数据包，包括协议解析、验证和 CPI 状态更新
                 const PacketProcessStats process_stats = packet_pipeline.process_datagram(
-                    datagram,
-                    *context.metrics,
-                    status_reporter.diagnostic_output(),
-                    invalid_dumped,
+                    datagram, *context.metrics, status_reporter.diagnostic_output(), invalid_dumped,
                     [&](const ProcessedPacket &processed)
                     {
                         // 记录协议层数据包统计
@@ -187,12 +181,9 @@ namespace rxtech
                             data_order_tracker.observe(processed.interpreted);
 
                             // 处理数据包并获取 CPI 处理结果
-                            const CpiProcessResult cpi_result = cpi_state_coordinator.process_data_packet(processed.parsed,
-                                                                                                          processed.interpreted,
-                                                                                                          spec,
-                                                                                                          *context.metrics,
-                                                                                                          runtime_state.run_status,
-                                                                                                          runtime_state.run_error);
+                            const CpiProcessResult cpi_result = cpi_state_coordinator.process_data_packet(
+                                processed.parsed, processed.interpreted, spec, *context.metrics,
+                                runtime_state.run_status, runtime_state.run_error);
 
                             // 如果 CPI 不接受该数据包，跳过后续处理
                             if (!cpi_result.accepted)
@@ -213,15 +204,12 @@ namespace rxtech
                             static_cast<std::streamsize>(processed.udp_frame.udp_payload.size()));
 
                         // 将数据包元数据写入索引流（CSV 格式）
-                        *artifacts.index_stream
-                            << processed.interpreted.cpi
-                            << ',' << processed.interpreted.channel
-                            << ',' << processed.interpreted.prt
-                            << ',' << processed.interpreted.packet_index
-                            << ',' << packet_kind_name(processed.interpreted.kind)
-                            << ',' << processed.udp_frame.udp_payload.size()
-                            << ',' << (processed.interpreted.valid ? "true" : "false")
-                            << '\n';
+                        *artifacts.index_stream << processed.interpreted.cpi << ',' << processed.interpreted.channel
+                                                << ',' << processed.interpreted.prt << ','
+                                                << processed.interpreted.packet_index << ','
+                                                << packet_kind_name(processed.interpreted.kind) << ','
+                                                << processed.udp_frame.udp_payload.size() << ','
+                                                << (processed.interpreted.valid ? "true" : "false") << '\n';
 
                         // 更新捕获统计信息
                         artifacts.file_offset += processed.udp_frame.udp_payload.size();
@@ -265,10 +253,7 @@ namespace rxtech
             cpi_state_coordinator.drain_recycle(*context.metrics);
 
             // 定期输出运行时状态报告
-            status_reporter.emit_periodic(context,
-                                          artifacts,
-                                          runtime_state,
-                                          data_order_tracker,
+            status_reporter.emit_periodic(context, artifacts, runtime_state, data_order_tracker,
                                           std::chrono::steady_clock::now());
         }
 
@@ -302,11 +287,8 @@ namespace rxtech
 
         // 记录结束时间并生成最终摘要
         const auto end_time = std::chrono::steady_clock::now();
-        RunSummary summary = status_reporter.build_final_summary(context,
-                                                                 artifacts,
-                                                                 runtime_state,
-                                                                 data_order_tracker,
-                                                                 end_time);
+        RunSummary summary =
+            status_reporter.build_final_summary(context, artifacts, runtime_state, data_order_tracker, end_time);
 
         // 渲染并输出最终摘要
         status_reporter.render_final(summary, end_time - start_time);

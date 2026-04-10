@@ -14,10 +14,8 @@ namespace rxtech
 
     PacketPipeline::~PacketPipeline() = default;
 
-    PacketProcessStats PacketPipeline::process_packet(const PacketDesc &packet,
-                                                      IMetricsCollector &metrics,
-                                                      std::ostream *diagnostic_output,
-                                                      std::uint32_t &invalid_dumped,
+    PacketProcessStats PacketPipeline::process_packet(const PacketDesc &packet, IMetricsCollector &metrics,
+                                                      std::ostream *diagnostic_output, std::uint32_t &invalid_dumped,
                                                       const std::function<void(const ProcessedPacket &)> &on_packet)
     {
         PacketProcessStats stats;
@@ -35,12 +33,8 @@ namespace rxtech
             datagram.queue_id = packet.queue_id;
             datagram.cookie = packet.cookie;
 
-            const PacketProcessStats datagram_stats = datagram_pipeline_->process_datagram(
-                datagram,
-                metrics,
-                diagnostic_output,
-                invalid_dumped,
-                on_packet);
+            const PacketProcessStats datagram_stats =
+                datagram_pipeline_->process_datagram(datagram, metrics, diagnostic_output, invalid_dumped, on_packet);
 
             stats.accepted_bytes += datagram_stats.accepted_bytes;
             stats.accepted_packets += datagram_stats.accepted_packets;

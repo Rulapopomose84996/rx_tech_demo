@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cerrno>
 #include <stdexcept>
 #include <string>
@@ -11,6 +12,55 @@ namespace rxtech
 {
     namespace path_utils
     {
+
+        inline bool is_path_separator(char ch)
+        {
+            return ch == '/' || ch == '\\';
+        }
+
+        inline std::string trim_trailing_separators(std::string path)
+        {
+            while (!path.empty() && is_path_separator(path.back()))
+            {
+                path.pop_back();
+            }
+            return path;
+        }
+
+        inline std::string path_filename(const std::string &path)
+        {
+            const std::string normalized = trim_trailing_separators(path);
+            const std::size_t pos = normalized.find_last_of("/\\");
+            return pos == std::string::npos ? normalized : normalized.substr(pos + 1U);
+        }
+
+        inline std::string path_parent(const std::string &path)
+        {
+            const std::string normalized = trim_trailing_separators(path);
+            const std::size_t pos = normalized.find_last_of("/\\");
+            if (pos == std::string::npos)
+            {
+                return std::string{};
+            }
+            if (pos == 0U && is_path_separator(normalized.front()))
+            {
+                return normalized.substr(0U, 1U);
+            }
+            return normalized.substr(0U, pos);
+        }
+
+        inline std::string join_path(const std::string &base, const std::string &name)
+        {
+            if (base.empty())
+            {
+                return name;
+            }
+            if (is_path_separator(base.back()))
+            {
+                return base + name;
+            }
+            return base + "/" + name;
+        }
 
         inline void create_directory_if_needed(const std::string &path)
         {
@@ -46,23 +96,28 @@ namespace rxtech
          */
         inline void ensure_parent_directory(const std::string &file_path)
         {
-            // 查找最后一个路径分隔符的位置
-            const std::size_t sep = file_path.find_last_of('/');
-            if (sep == std::string::npos || sep == 0U)
+            const std::string parent = path_parent(file_path);
+            if (parent.empty() || parent == "/")
             {
                 return;
             }
 
-            // 提取父目录路径
-            const std::string parent = file_path.substr(0U, sep);
-            std::size_t start = parent[0] == '/' ? 1U : 0U;
-            std::string current = parent.substr(0U, start);
+            std::size_t start = 0U;
+            std::string current;
+            if (is_path_separator(parent[0]))
+            {
+                current = "/";
+                start = 1U;
+            }
+            else if (parent.size() > 1U && parent[1] == ':')
+            {
+                current = parent.substr(0U, 2U);
+                start = 2U;
+            }
 
-            // 逐级遍历父目录的每一层，确保每层目录都存在
             while (start < parent.size())
             {
-                // 跳过连续的路径分隔符
-                while (start < parent.size() && parent[start] == '/')
+                while (start < parent.size() && is_path_separator(parent[start]))
                 {
                     if (current.empty())
                     {
@@ -71,14 +126,12 @@ namespace rxtech
                     ++start;
                 }
 
-                // 提取当前层级的目录名
-                const std::size_t next = parent.find('/', start);
+                const std::size_t next = parent.find_first_of("/\\", start);
                 const std::string part =
                     parent.substr(start, next == std::string::npos ? std::string::npos : next - start);
                 if (!part.empty())
                 {
-                    // 构建当前完整路径并创建目录
-                    if (!current.empty() && current.back() != '/')
+                    if (!current.empty() && !is_path_separator(current.back()))
                     {
                         current.push_back('/');
                     }
@@ -86,7 +139,6 @@ namespace rxtech
                     create_directory_if_needed(current);
                 }
 
-                // 如果已到达路径末尾，退出循环
                 if (next == std::string::npos)
                 {
                     break;

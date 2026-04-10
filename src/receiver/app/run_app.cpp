@@ -114,7 +114,8 @@ namespace rxtech
                 if (!config.socket_bind_ip.empty() && config.socket_bind_ip != "0.0.0.0" &&
                     !config.receiver_ipv4.empty() && config.socket_bind_ip != config.receiver_ipv4)
                 {
-                    return "backend=socket 时，socket_bind_ip 与 receiver_ipv4 不能冲突；如需任意地址绑定请使用 0.0.0.0";
+                    return "backend=socket 时，socket_bind_ip 与 receiver_ipv4 不能冲突；如需任意地址绑定请使用 "
+                           "0.0.0.0";
                 }
                 if (config.socket_bind_port != 0U && config.allowed_dest_port != 0U &&
                     config.socket_bind_port != config.allowed_dest_port)
@@ -238,6 +239,7 @@ namespace rxtech
             std::cout << "protocol_packets_per_channel=" << config.protocol_packets_per_channel << std::endl;
             std::cout << "run_until_stopped=" << (config.run_until_stopped ? "true" : "false") << std::endl;
             std::cout << "status_interval_seconds=" << config.status_interval_seconds << std::endl;
+            std::cout << "output_drop_policy=" << output_drop_policy_name(config.output_drop_policy) << std::endl;
             std::cout << "log_level=" << config.log_level << std::endl;
             std::cout << "log_output=" << config.log_output << std::endl;
             std::cout << "log_file_path=" << config.log_file_path << std::endl;

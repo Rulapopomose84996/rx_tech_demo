@@ -3,10 +3,12 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdio>
 #include <cstring>
 #include <vector>
 
 #include "arp_responder.h"
+#include "rxtech/byte_order.h"
 #include "rxtech/rx_config.h"
 #include "rxtech/time_utils.h"
 
@@ -60,20 +62,6 @@ namespace rxtech
         constexpr std::uint8_t kIpv4Version = 4U;
         constexpr std::uint8_t kIpProtoUdp = 17U;
 
-        std::uint16_t read_u16_be(const std::uint8_t *data)
-        {
-            return static_cast<std::uint16_t>((static_cast<std::uint16_t>(data[0]) << 8U) |
-                                              static_cast<std::uint16_t>(data[1]));
-        }
-
-        std::uint32_t read_u32_be(const std::uint8_t *data)
-        {
-            return (static_cast<std::uint32_t>(data[0]) << 24U) |
-                   (static_cast<std::uint32_t>(data[1]) << 16U) |
-                   (static_cast<std::uint32_t>(data[2]) << 8U) |
-                   static_cast<std::uint32_t>(data[3]);
-        }
-
         BackendInitResult make_dpdk_result(bool available, const std::string &reason)
         {
             BackendInitResult result;
@@ -83,6 +71,19 @@ namespace rxtech
         }
 
 #if defined(__linux__) && defined(RXTECH_HAS_DPDK_RUNTIME)
+        constexpr std::uint64_t kDpdkLinkCheckIntervalEmptyPolls = 256U;
+
+        bool query_link_up(std::uint16_t port_id, bool &link_up)
+        {
+            rte_eth_link link{};
+            if (rte_eth_link_get_nowait(port_id, &link) != 0)
+            {
+                return false;
+            }
+            link_up = link.link_status != 0;
+            return true;
+        }
+
         bool resolve_port_id(const RxConfig &config, std::uint16_t &port_id)
         {
             std::vector<std::uint16_t> available_ports;
@@ -97,7 +98,8 @@ namespace rxtech
                 if (!config.dpdk_pci_addr.empty())
                 {
                     rte_eth_dev_info info{};
-                    if (rte_eth_dev_info_get(candidate, &info) == 0 && info.device != nullptr && info.device->name != nullptr)
+                    if (rte_eth_dev_info_get(candidate, &info) == 0 && info.device != nullptr &&
+                        info.device->name != nullptr)
                     {
                         if (config.dpdk_pci_addr == info.device->name)
                         {
@@ -146,13 +148,9 @@ namespace rxtech
 
     } // namespace
 
-    DpdkDatagramAdapter::DpdkDatagramAdapter(const std::uint32_t local_ip_be)
-        : local_ip_be_(local_ip_be)
-    {
-    }
+    DpdkDatagramAdapter::DpdkDatagramAdapter(const std::uint32_t local_ip_be) : local_ip_be_(local_ip_be) {}
 
-    bool DpdkDatagramAdapter::adapt_frame(const PacketDesc &packet,
-                                          BackendStats &stats,
+    bool DpdkDatagramAdapter::adapt_frame(const PacketDesc &packet, BackendStats &stats,
                                           UdpDatagramDesc &datagram) const
     {
         datagram = {};
@@ -161,7 +159,7 @@ namespace rxtech
             return false;
         }
 
-        const std::uint16_t ether_type = read_u16_be(packet.data + 12U);
+        const std::uint16_t ether_type = byte_order::read_u16_be(packet.data + 12U);
         if (ether_type == kEtherTypeArp)
         {
             ArpRequestInfo request{};
@@ -187,15 +185,16 @@ namespace rxtech
             return false;
         }
 
-        const std::uint16_t total_length = read_u16_be(packet.data + ip_offset + 2U);
+        const std::uint16_t total_length = byte_order::read_u16_be(packet.data + ip_offset + 2U);
         if (total_length < ip_header_bytes || packet.len < ip_offset + total_length)
         {
             return false;
         }
 
-        const std::uint16_t flags_and_offset = read_u16_be(packet.data + ip_offset + 6U);
+        const std::uint16_t flags_and_offset = byte_order::read_u16_be(packet.data + ip_offset + 6U);
         if ((flags_and_offset & 0x3FFFU) != 0U)
         {
+            ++stats.backend_drops;
             return false;
         }
 
@@ -211,7 +210,7 @@ namespace rxtech
             return false;
         }
 
-        const std::uint16_t udp_length = read_u16_be(udp_header + 4U);
+        const std::uint16_t udp_length = byte_order::read_u16_be(udp_header + 4U);
         if (udp_length < kUdpHeaderBytes || ip_payload_bytes < udp_length)
         {
             return false;
@@ -221,10 +220,11 @@ namespace rxtech
         datagram.payload_len = static_cast<std::uint32_t>(udp_length - kUdpHeaderBytes);
         datagram.raw_frame_data = packet.data;
         datagram.raw_frame_len = packet.len;
-        datagram.src_ipv4_be = read_u32_be(packet.data + ip_offset + 12U);
-        datagram.dst_ipv4_be = read_u32_be(packet.data + ip_offset + 16U);
-        datagram.src_port = read_u16_be(udp_header + 0U);
-        datagram.dst_port = read_u16_be(udp_header + 2U);
+        datagram.src_ipv4_be = byte_order::read_u32_be(packet.data + ip_offset + 12U);
+        datagram.dst_ipv4_be = byte_order::read_u32_be(packet.data + ip_offset + 16U);
+        datagram.src_port = byte_order::read_u16_be(udp_header + 0U);
+        datagram.dst_port = byte_order::read_u16_be(udp_header + 2U);
+        // Keep ingress timestamps in the same steady_clock nanosecond domain used by timeout checks.
         datagram.ts_ns = packet.ts_ns;
         datagram.queue_id = packet.queue_id;
         datagram.cookie = packet.cookie;
@@ -240,6 +240,8 @@ namespace rxtech
         bool started = false;
         std::array<std::uint8_t, 6> local_mac{};
         std::uint32_t local_ip_be = 0;
+        std::uint64_t empty_polls_since_link_check = 0;
+        bool link_up = true;
 
         void cleanup()
         {
@@ -319,9 +321,7 @@ namespace rxtech
 #endif
     };
 
-    DpdkIngress::DpdkIngress() : impl_(new Impl())
-    {
-    }
+    DpdkIngress::DpdkIngress() : impl_(new Impl()) {}
 
     DpdkIngress::~DpdkIngress()
     {
@@ -368,12 +368,9 @@ namespace rxtech
         }
 
         impl_->port_id = port_id;
-        impl_->mempool = rte_pktmbuf_pool_create("rxtech_dpdk_mbuf_pool",
-                                                 config.dpdk_mempool_size,
-                                                 config.dpdk_mbuf_cache_size,
-                                                 0,
-                                                 RTE_MBUF_DEFAULT_BUF_SIZE,
-                                                 rte_socket_id());
+        impl_->mempool =
+            rte_pktmbuf_pool_create("rxtech_dpdk_mbuf_pool", config.dpdk_mempool_size, config.dpdk_mbuf_cache_size, 0,
+                                    RTE_MBUF_DEFAULT_BUF_SIZE, rte_socket_id());
         if (impl_->mempool == nullptr)
         {
             ++stats_.rx_errors;
@@ -386,21 +383,14 @@ namespace rxtech
             ++stats_.rx_errors;
             return make_dpdk_result(true, "rte_eth_dev_configure() 调用失败");
         }
-        if (rte_eth_rx_queue_setup(port_id,
-                                   0,
-                                   static_cast<std::uint16_t>(config.dpdk_rx_desc),
-                                   rte_eth_dev_socket_id(port_id),
-                                   nullptr,
-                                   impl_->mempool) < 0)
+        if (rte_eth_rx_queue_setup(port_id, 0, static_cast<std::uint16_t>(config.dpdk_rx_desc),
+                                   rte_eth_dev_socket_id(port_id), nullptr, impl_->mempool) < 0)
         {
             ++stats_.rx_errors;
             return make_dpdk_result(true, "rte_eth_rx_queue_setup() 调用失败");
         }
-        if (rte_eth_tx_queue_setup(port_id,
-                                   0,
-                                   static_cast<std::uint16_t>(config.dpdk_tx_desc),
-                                   rte_eth_dev_socket_id(port_id),
-                                   nullptr) < 0)
+        if (rte_eth_tx_queue_setup(port_id, 0, static_cast<std::uint16_t>(config.dpdk_tx_desc),
+                                   rte_eth_dev_socket_id(port_id), nullptr) < 0)
         {
             ++stats_.rx_errors;
             return make_dpdk_result(true, "rte_eth_tx_queue_setup() 调用失败");
@@ -427,7 +417,7 @@ namespace rxtech
         // starting normal operation so that background traffic received prior to
         // this application launching does not appear in the statistics.
         {
-            std::vector<rte_mbuf *> drain_mbufs(64);
+            std::array<rte_mbuf *, kDpdkMaxBurstSize> drain_mbufs{};
             std::uint16_t drained = 0;
             do
             {
@@ -442,6 +432,27 @@ namespace rxtech
 
         stats_ = {};
         stats_.queue_id = 0;
+        if (config.max_burst > kDpdkMaxBurstSize)
+        {
+            std::fprintf(stderr,
+                         "[dpdk] configured max_burst=%u exceeds backend limit=%u; recv_burst will clamp to %u\n",
+                         config.max_burst, kDpdkMaxBurstSize, kDpdkMaxBurstSize);
+        }
+
+        bool link_up = true;
+        if (!query_link_up(port_id, link_up))
+        {
+            ++stats_.rx_errors;
+            return make_dpdk_result(true, "rte_eth_link_get_nowait() 调用失败");
+        }
+        impl_->link_up = link_up;
+        impl_->empty_polls_since_link_check = 0;
+        if (!link_up)
+        {
+            ++stats_.rx_errors;
+            return make_dpdk_result(true, "DPDK 端口链路未就绪");
+        }
+
         BackendInitResult result;
         result.ok = true;
         return result;
@@ -461,16 +472,41 @@ namespace rxtech
         }
 
         ++stats_.rx_polls;
-        const std::uint16_t budget = static_cast<std::uint16_t>(std::min<std::uint32_t>(max_burst, 64U));
-        std::vector<rte_mbuf *> mbufs(budget);
+        const std::uint16_t budget =
+            static_cast<std::uint16_t>(std::min<std::uint32_t>(std::min<std::uint32_t>(max_burst, kDpdkMaxBurstSize),
+                                                               static_cast<std::uint32_t>(burst.datagrams.max_size())));
+        std::array<rte_mbuf *, kDpdkMaxBurstSize> mbufs{};
         const std::uint16_t received = rte_eth_rx_burst(impl_->port_id, 0, mbufs.data(), budget);
         if (received == 0U)
         {
             ++stats_.empty_polls;
+            ++impl_->empty_polls_since_link_check;
+            if (impl_->empty_polls_since_link_check >= kDpdkLinkCheckIntervalEmptyPolls)
+            {
+                bool link_up = true;
+                if (!query_link_up(impl_->port_id, link_up))
+                {
+                    ++stats_.rx_errors;
+                    std::fprintf(stderr, "[dpdk] failed to query link status for port %u\n", impl_->port_id);
+                    return false;
+                }
+                impl_->empty_polls_since_link_check = 0;
+                impl_->link_up = link_up;
+                if (!link_up)
+                {
+                    ++stats_.rx_errors;
+                    std::fprintf(stderr, "[dpdk] link down detected on port %u; stopping receiver loop\n",
+                                 impl_->port_id);
+                    return false;
+                }
+            }
             return true;
         }
 
-        burst.datagrams.reserve(received);
+        impl_->empty_polls_since_link_check = 0;
+        ++stats_.receive_batches;
+        stats_.max_burst_size = std::max<std::uint32_t>(stats_.max_burst_size, static_cast<std::uint32_t>(received));
+
         for (std::uint16_t index = 0; index < received; ++index)
         {
             rte_mbuf *mbuf = mbufs[index];

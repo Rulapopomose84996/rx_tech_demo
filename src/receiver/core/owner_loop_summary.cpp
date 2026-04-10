@@ -21,10 +21,7 @@ namespace rxtech
         summary.arp_request_packets = backend_stats.arp_request_packets;
         summary.arp_reply_packets = backend_stats.arp_reply_packets;
         summary.queue_id = backend_stats.queue_id;
-        summary.umem_size = backend_stats.umem_size;
         summary.frame_size = backend_stats.frame_size;
-        summary.fill_ring_size = backend_stats.fill_ring_size;
-        summary.completion_ring_size = backend_stats.completion_ring_size;
         if (summary.rx_polls > 0U)
         {
             summary.empty_poll_ratio = static_cast<double>(summary.empty_polls) / static_cast<double>(summary.rx_polls);
@@ -51,14 +48,14 @@ namespace rxtech
 
     double calculate_drop_rate(const RunSummary &summary)
     {
-        const double total = static_cast<double>(
-            summary.rx_packets + summary.dropped_packets + summary.backend_dropped_packets + summary.backend_kernel_drops);
+        const double total = static_cast<double>(summary.rx_packets + summary.dropped_packets +
+                                                 summary.backend_dropped_packets + summary.backend_kernel_drops);
         if (total <= 0.0)
         {
             return 0.0;
         }
-        return static_cast<double>(
-                   summary.dropped_packets + summary.backend_dropped_packets + summary.backend_kernel_drops) /
+        return static_cast<double>(summary.dropped_packets + summary.backend_dropped_packets +
+                                   summary.backend_kernel_drops) /
                total;
     }
 
@@ -79,11 +76,8 @@ namespace rxtech
         }
     }
 
-    void populate_data_order_summary(RunSummary &target,
-                                     std::uint64_t checked_packets,
-                                     bool matches_expected,
-                                     bool channel_batched,
-                                     const std::string &first_mismatch)
+    void populate_data_order_summary(RunSummary &target, std::uint64_t checked_packets, bool matches_expected,
+                                     bool channel_batched, const std::string &first_mismatch)
     {
         target.data_order_checked_packets = checked_packets;
         if (checked_packets == 0U)
@@ -100,17 +94,13 @@ namespace rxtech
             return;
         }
 
-        target.data_order_assessment = channel_batched
-                                           ? "偏离按 PRT 推进顺序，当前捕获更像按通道分批到达"
-                                           : "偏离按 PRT 推进顺序";
+        target.data_order_assessment =
+            channel_batched ? "偏离按 PRT 推进顺序，当前捕获更像按通道分批到达" : "偏离按 PRT 推进顺序";
         target.data_order_first_mismatch = first_mismatch;
     }
 
-    void populate_active_prt_summary(RunSummary &target,
-                                     const ProtocolSpec &spec,
-                                     bool latest_data_seen,
-                                     std::uint16_t latest_data_cpi,
-                                     std::uint16_t latest_data_prt,
+    void populate_active_prt_summary(RunSummary &target, const ProtocolSpec &spec, bool latest_data_seen,
+                                     std::uint16_t latest_data_cpi, std::uint16_t latest_data_prt,
                                      const CpiPrtCoverageMap &prt_coverage)
     {
         target.active_prt_available = false;
@@ -251,8 +241,8 @@ namespace rxtech
         if (!summary.raw_record_output_dir.empty())
         {
             out << "原始帧目录： " << summary.raw_record_output_dir << "\n";
-            out << "原始帧已写： " << summary.raw_record_written_frames << " 帧，"
-                << summary.raw_record_written_bytes << " 字节\n";
+            out << "原始帧已写： " << summary.raw_record_written_frames << " 帧，" << summary.raw_record_written_bytes
+                << " 字节\n";
             out << "原始帧丢弃： " << summary.raw_record_dropped_frames << " 帧\n";
             out << "原始帧保留量： " << summary.raw_record_retained_bytes << " 字节\n";
             out << "录制队列高水位： " << summary.raw_record_queue_high_watermark << "\n";
@@ -267,8 +257,7 @@ namespace rxtech
             for (const auto &channel : summary.protocol_channels)
             {
                 out << "  - 通道 " << channel.channel << "（" << protocol_channel_name(channel.channel) << "）："
-                    << channel.data_packets << " 个数据包，"
-                    << channel.iq_count << " 个 IQ\n";
+                    << channel.data_packets << " 个数据包，" << channel.iq_count << " 个 IQ\n";
             }
         }
         if (!summary.protocol_cpis.empty())
@@ -276,16 +265,14 @@ namespace rxtech
             out << "CPI 分布：\n";
             for (const auto &cpi : summary.protocol_cpis)
             {
-                out << "  - CPI " << cpi.cpi
-                    << "：数据包 " << cpi.data_packets
-                    << " 包，PRT 数 " << cpi.prt_count << "\n";
+                out << "  - CPI " << cpi.cpi << "：数据包 " << cpi.data_packets << " 包，PRT 数 " << cpi.prt_count
+                    << "\n";
             }
         }
         if (summary.active_prt_available && !summary.active_prt_channels.empty())
         {
-            out << "当前重组 PRT： CPI " << summary.active_cpi
-                << " / PRT " << summary.active_prt
-                << "（" << (summary.active_prt_complete ? "完整" : "接收中") << "）\n";
+            out << "当前重组 PRT： CPI " << summary.active_cpi << " / PRT " << summary.active_prt << "（"
+                << (summary.active_prt_complete ? "完整" : "接收中") << "）\n";
             out << "当前重组 PRT 覆盖：\n";
             for (const auto &channel : summary.active_prt_channels)
             {

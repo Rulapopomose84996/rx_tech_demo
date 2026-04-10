@@ -6,6 +6,8 @@
 #include <string>
 #include <utility>
 
+#include "rxtech/time_utils.h"
+
 namespace rxtech
 {
     namespace
@@ -42,6 +44,8 @@ namespace rxtech
         }
 
 #if defined(RXTECH_DEBUG_DIAGNOSTICS) && RXTECH_DEBUG_DIAGNOSTICS
+        constexpr std::uint64_t kRejectDiagnosticIntervalNs = 5ULL * 1000ULL * 1000ULL * 1000ULL;
+
         std::uint32_t read_u32_le_at(const std::uint8_t *data, std::size_t size, std::size_t offset)
         {
             if (data == nullptr || offset + 4U > size)
@@ -70,31 +74,28 @@ namespace rxtech
             return out.str();
         }
 
-        void emit_invalid_packet_diagnostic(std::ostream &out,
-                                            const UdpDatagramDesc &datagram,
-                                            const ParsedPacketView &parsed,
-                                            const RejectReason reason)
+        void emit_invalid_packet_diagnostic(std::ostream &out, const UdpDatagramDesc &datagram,
+                                            const ParsedPacketView &parsed, const RejectReason reason)
         {
             out << "[invalid-sample]"
-                << " len=" << datagram.payload_len
-                << " queue=" << datagram.queue_id
-                << " magic@0=0x" << std::hex << std::setw(8) << std::setfill('0')
-                << read_u32_le_at(datagram.payload_data, datagram.payload_len, 0U)
-                << std::dec
-                << " reason=" << reject_reason_name(reason)
-                << "\n";
+                << " len=" << datagram.payload_len << " queue=" << datagram.queue_id << " magic@0=0x" << std::hex
+                << std::setw(8) << std::setfill('0') << read_u32_le_at(datagram.payload_data, datagram.payload_len, 0U)
+                << std::dec << " reason=" << reject_reason_name(reason) << "\n";
             out << "[invalid-sample] decoded="
-                << " kind=" << packet_kind_name(parsed.kind)
-                << " cpi=" << parsed.cpi
-                << " channel=" << parsed.channel
-                << " prt=" << parsed.prt
-                << " packet_index=" << parsed.packet_index
-                << " tail=0x" << std::hex << std::setw(8) << std::setfill('0') << parsed.tail
-                << std::dec
-                << " payload_len=" << parsed.payload_len
-                << " rx_tsc=" << parsed.rx_tsc
-                << "\n";
+                << " kind=" << packet_kind_name(parsed.kind) << " cpi=" << parsed.cpi << " channel=" << parsed.channel
+                << " prt=" << parsed.prt << " packet_index=" << parsed.packet_index << " tail=0x" << std::hex
+                << std::setw(8) << std::setfill('0') << parsed.tail << std::dec << " payload_len=" << parsed.payload_len
+                << " rx_tsc=" << parsed.rx_tsc << "\n";
             out << "[invalid-sample] preview=" << hex_preview(datagram.payload_data, datagram.payload_len, 64U) << "\n";
+            out.flush();
+        }
+
+        void emit_invalid_packet_summary(std::ostream &out, RejectReason reason, std::uint64_t suppressed_count,
+                                         std::uint64_t total_count)
+        {
+            out << "[invalid-sample-rate-limit]"
+                << " reason=" << reject_reason_name(reason) << " suppressed=" << suppressed_count
+                << " total=" << total_count << "\n";
             out.flush();
         }
 #endif
@@ -102,11 +103,7 @@ namespace rxtech
     } // namespace
 
     UdpDatagramPipeline::UdpDatagramPipeline(const RxConfig &config, const ProtocolSpec &spec)
-        : config_(config),
-          spec_(spec),
-          parser_(spec),
-          validator_(spec),
-          interpreter_(spec),
+        : config_(config), spec_(spec), parser_(spec), validator_(spec), interpreter_(spec),
           allowed_source_ipv4_be_(parse_ipv4_be(config.allowed_source_ipv4)),
           receiver_ipv4_be_(parse_ipv4_be(config.receiver_ipv4))
     {
@@ -136,11 +133,46 @@ namespace rxtech
         return true;
     }
 
-    PacketProcessStats UdpDatagramPipeline::process_datagram(const UdpDatagramDesc &datagram,
-                                                             IMetricsCollector &metrics,
-                                                             std::ostream *diagnostic_output,
-                                                             std::uint32_t &invalid_dumped,
-                                                             const std::function<void(const ProcessedPacket &)> &on_packet)
+#if defined(RXTECH_DEBUG_DIAGNOSTICS) && RXTECH_DEBUG_DIAGNOSTICS
+    void UdpDatagramPipeline::maybe_emit_invalid_diagnostic(std::ostream &diagnostic_output,
+                                                            const UdpDatagramDesc &datagram,
+                                                            const ParsedPacketView &parsed, RejectReason reason,
+                                                            std::uint32_t &invalid_dumped)
+    {
+        RejectDiagnosticState &state = reject_diagnostic_states_[static_cast<std::size_t>(reason)];
+        ++state.total_count;
+
+        const std::uint64_t now_ns = steady_clock_now_ns();
+        if (!state.emitted_once)
+        {
+            emit_invalid_packet_diagnostic(diagnostic_output, datagram, parsed, reason);
+            ++invalid_dumped;
+            state.emitted_once = true;
+            state.next_emit_after_ns = now_ns + kRejectDiagnosticIntervalNs;
+            return;
+        }
+
+        if (now_ns >= state.next_emit_after_ns)
+        {
+            if (state.suppressed_count > 0U)
+            {
+                emit_invalid_packet_summary(diagnostic_output, reason, state.suppressed_count, state.total_count);
+            }
+            emit_invalid_packet_diagnostic(diagnostic_output, datagram, parsed, reason);
+            ++invalid_dumped;
+            state.suppressed_count = 0;
+            state.next_emit_after_ns = now_ns + kRejectDiagnosticIntervalNs;
+            return;
+        }
+
+        ++state.suppressed_count;
+    }
+#endif
+
+    PacketProcessStats
+    UdpDatagramPipeline::process_datagram(const UdpDatagramDesc &datagram, IMetricsCollector &metrics,
+                                          std::ostream *diagnostic_output, std::uint32_t &invalid_dumped,
+                                          const std::function<void(const ProcessedPacket &)> &on_packet)
     {
         PacketProcessStats stats;
         if (is_malformed_descriptor(datagram))
@@ -149,10 +181,16 @@ namespace rxtech
             return stats;
         }
 
+        if (datagram.truncated)
+        {
+            metrics.on_reject(RejectReason::truncated_datagram);
+            return stats;
+        }
+
         UdpPayloadFrame udp_frame;
         if (datagram.payload_data != nullptr && datagram.payload_len != 0U)
         {
-            udp_frame.udp_payload.assign(datagram.payload_data, datagram.payload_data + datagram.payload_len);
+            udp_frame.udp_payload.set_view(datagram.payload_data, datagram.payload_len);
         }
         udp_frame.source_ipv4_be = datagram.src_ipv4_be;
         udp_frame.dest_ipv4_be = datagram.dst_ipv4_be;
@@ -174,10 +212,9 @@ namespace rxtech
         {
             metrics.on_reject(validation.reason);
 #if defined(RXTECH_DEBUG_DIAGNOSTICS) && RXTECH_DEBUG_DIAGNOSTICS
-            if (diagnostic_output != nullptr && invalid_dumped < 5U)
+            if (diagnostic_output != nullptr)
             {
-                emit_invalid_packet_diagnostic(*diagnostic_output, datagram, parsed, validation.reason);
-                ++invalid_dumped;
+                maybe_emit_invalid_diagnostic(*diagnostic_output, datagram, parsed, validation.reason, invalid_dumped);
             }
 #else
             (void)diagnostic_output;
@@ -191,10 +228,10 @@ namespace rxtech
         {
             metrics.on_reject(interpreted.reject_reason);
 #if defined(RXTECH_DEBUG_DIAGNOSTICS) && RXTECH_DEBUG_DIAGNOSTICS
-            if (diagnostic_output != nullptr && invalid_dumped < 5U)
+            if (diagnostic_output != nullptr)
             {
-                emit_invalid_packet_diagnostic(*diagnostic_output, datagram, parsed, interpreted.reject_reason);
-                ++invalid_dumped;
+                maybe_emit_invalid_diagnostic(*diagnostic_output, datagram, parsed, interpreted.reject_reason,
+                                              invalid_dumped);
             }
 #endif
             return stats;

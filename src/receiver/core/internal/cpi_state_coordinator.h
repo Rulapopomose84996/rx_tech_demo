@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 
@@ -10,6 +11,7 @@
 #include "rxtech/protocol_sequence_interpreter.h"
 #include "rxtech/protocol_spec.h"
 #include "rxtech/progress_tracker.h"
+#include "rxtech/rx_config.h"
 #include "rxtech/sample_packet_parser.h"
 #include "rxtech/slot_writer.h"
 #include "rxtech/spsc_ring.h"
@@ -41,7 +43,7 @@ namespace rxtech
      */
     class CpiStateCoordinator
     {
-    public:
+      public:
         /**
          * @brief 默认构造函数
          */
@@ -53,7 +55,9 @@ namespace rxtech
          * @param spec 协议规范对象，定义数据包格式、通道配置等参数
          */
         explicit CpiStateCoordinator(const ProtocolSpec &spec)
-            : slot_writer_(spec), progress_tracker_(spec), spec_(spec) {}
+            : slot_writer_(spec), progress_tracker_(spec), spec_(spec)
+        {
+        }
 
         /**
          * @brief 附加输出和回收环形缓冲区
@@ -64,8 +68,7 @@ namespace rxtech
          * @param output_ring 指向CPI输出环形缓冲区的指针，用于传递处理完成的CPI数据
          * @param recycle_ring 指向回收令牌环形缓冲区的指针，用于通知外部释放CPI上下文
          */
-        void attach_rings(SpscRing<CpiOutput> *output_ring,
-                          SpscRing<ReleaseToken> *recycle_ring)
+        void attach_rings(SpscRing<CpiOutput> *output_ring, SpscRing<ReleaseToken> *recycle_ring)
         {
             output_ring_ = output_ring;
             recycle_ring_ = recycle_ring;
@@ -112,12 +115,9 @@ namespace rxtech
          * @param run_error 错误信息字符串，用于返回处理过程中的错误详情
          * @return CpiProcessResult 处理结果，标识数据包是否被成功接受
          */
-        CpiProcessResult process_data_packet(const ParsedPacketView &parsed,
-                                             const InterpretedPacketView &packet,
-                                             const ProtocolSpec &spec,
-                                             IMetricsCollector &metrics,
-                                             std::string &run_status,
-                                             std::string &run_error);
+        CpiProcessResult process_data_packet(const ParsedPacketView &parsed, const InterpretedPacketView &packet,
+                                             const ProtocolSpec &spec, IMetricsCollector &metrics,
+                                             std::string &run_status, std::string &run_error);
 
         /**
          * @brief 清空回收环形缓冲区并释放池槽位
@@ -147,12 +147,12 @@ namespace rxtech
          *
          * @param policy 策略字符串，"degrade" 或 "error"
          */
-        void configure_output_policy(const std::string &policy);
+        void configure_output_policy(OutputDropPolicy policy);
 
         /**
          * @brief 查询输出丢弃是否视为错误
          *
-         * @return true 如果 output_drop_policy 为 "error"
+         * @return true 如果 output_drop_policy 为 error
          */
         bool output_drop_is_error() const;
 
@@ -161,7 +161,10 @@ namespace rxtech
          *
          * @return true 如果至少有一次输出丢弃
          */
-        bool output_degraded() const { return output_degraded_; }
+        bool output_degraded() const
+        {
+            return output_degraded_.load(std::memory_order_relaxed);
+        }
 
         /**
          * @brief 释放活动CPI上下文
@@ -171,7 +174,7 @@ namespace rxtech
          */
         void release_active();
 
-    private:
+      private:
         /**
          * @brief 打开新的活动CPI上下文
          *
@@ -184,9 +187,7 @@ namespace rxtech
          * @param run_error 错误信息字符串，用于返回激活失败的详细原因
          * @return bool 如果成功激活新的CPI则返回true，否则返回false（如池耗尽）
          */
-        bool open_active(std::uint16_t cpi_id,
-                         IMetricsCollector &metrics,
-                         std::string &run_status,
+        bool open_active(std::uint16_t cpi_id, IMetricsCollector &metrics, std::string &run_status,
                          std::string &run_error);
 
         /**
@@ -220,23 +221,24 @@ namespace rxtech
          */
         void bind_snapshot_to_active(const ControlSnapshot &snapshot);
 
-        CpiContextPool ctx_pool_;                              ///< CPI上下文池，管理所有可用的CPI上下文实例
-        RecentClosedRing closed_ring_;                         ///< 最近关闭的CPI环形缓冲区，用于追踪刚完成的CPI以防止重复处理
-        CpiAdmission admission_;                               ///< CPI准入控制器，判断新数据包是否应该开启新的CPI
-        SlotWriter slot_writer_;                               ///< 时隙写入器，负责将IQ数据写入CPI的正确位置
-        ProgressTracker progress_tracker_;                     ///< 进度跟踪器，监控CPI中各个PRT和通道的接收进度
-        CpiFinalizer finalizer_;                               ///< CPI完成器，负责生成最终的CPI输出结果
-        ProtocolSpec spec_{};                                  ///< 协议规范，定义数据包格式和布局规则
-        ControlSnapshot current_control_{};                    ///< 当前暂存的控制快照，用于绑定或收敛活动 CPI
-        SpscRing<CpiOutput> *output_ring_ = nullptr;           ///< 指向输出环形缓冲区的指针，用于发送完成的CPI结果
-        SpscRing<ReleaseToken> *recycle_ring_ = nullptr;       ///< 指向回收环形缓冲区的指针，用于释放CPI上下文资源
-        std::uint64_t next_output_id_ = 1U;                    ///< 下一个输出ID，用于唯一标识每个CPI输出
-        std::uint32_t active_ctx_index_ = kInvalidPoolIndex;   ///< 活动CPI上下文在池中的索引，kInvalidPoolIndex表示无活动CPI
-        CpiContext *active_ctx_ = nullptr;                     ///< 指向活动CPI上下文的指针
-        std::uint32_t previous_ctx_index_ = kInvalidPoolIndex; ///< 前一个CPI上下文在池中的索引，用于延迟清理
-        CpiContext *previous_ctx_ = nullptr;                   ///< 指向前一个CPI上下文的指针
-        std::string output_drop_policy_ = "degrade";           ///< 输出丢弃策略：degrade 或 error
-        bool output_degraded_ = false;                         ///< 是否已发生输出退化
+        CpiContextPool ctx_pool_;                        ///< CPI上下文池，管理所有可用的CPI上下文实例
+        RecentClosedRing closed_ring_;                   ///< 最近关闭的CPI环形缓冲区，用于追踪刚完成的CPI以防止重复处理
+        CpiAdmission admission_;                         ///< CPI准入控制器，判断新数据包是否应该开启新的CPI
+        SlotWriter slot_writer_;                         ///< 时隙写入器，负责将IQ数据写入CPI的正确位置
+        ProgressTracker progress_tracker_;               ///< 进度跟踪器，监控CPI中各个PRT和通道的接收进度
+        CpiFinalizer finalizer_;                         ///< CPI完成器，负责生成最终的CPI输出结果
+        ProtocolSpec spec_{};                            ///< 协议规范，定义数据包格式和布局规则
+        ControlSnapshot current_control_{};              ///< 当前暂存的控制快照，用于绑定或收敛活动 CPI
+        SpscRing<CpiOutput> *output_ring_ = nullptr;     ///< 指向输出环形缓冲区的指针，用于发送完成的CPI结果
+        SpscRing<ReleaseToken> *recycle_ring_ = nullptr; ///< 指向回收环形缓冲区的指针，用于释放CPI上下文资源
+        std::uint64_t next_output_id_ = 1U;              ///< 下一个输出ID，用于唯一标识每个CPI输出
+        std::uint32_t active_ctx_index_ =
+            kInvalidPoolIndex;             ///< 活动CPI上下文在池中的索引，kInvalidPoolIndex表示无活动CPI
+        CpiContext *active_ctx_ = nullptr; ///< 指向活动CPI上下文的指针
+        std::uint32_t previous_ctx_index_ = kInvalidPoolIndex;            ///< 前一个CPI上下文在池中的索引，用于延迟清理
+        CpiContext *previous_ctx_ = nullptr;                              ///< 指向前一个CPI上下文的指针
+        OutputDropPolicy output_drop_policy_ = OutputDropPolicy::degrade; ///< 输出丢弃策略
+        std::atomic<bool> output_degraded_{false};                        ///< 是否已发生输出退化
     };
 
 } // namespace rxtech

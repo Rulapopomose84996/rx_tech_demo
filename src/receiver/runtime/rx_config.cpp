@@ -86,8 +86,7 @@ namespace rxtech
             return result;
         }
 
-        bool should_skip_assignment(const std::string &canonical_key,
-                                    bool section_key,
+        bool should_skip_assignment(const std::string &canonical_key, bool section_key,
                                     std::unordered_set<std::string> &section_assigned_keys)
         {
             if (section_key)
@@ -115,43 +114,39 @@ namespace rxtech
                 const std::vector<Row> table = {
                     {"backend_name",
                      {"backend", "backend_name"},
-                     [](RxConfig &c, const std::string &v)
-                     { c.backend_name = v; }},
+                     [](RxConfig &c, const std::string &v) { c.backend_name = v; }},
 
                     {"capture_output_dir",
                      {"output", "output_dir", "capture_output_dir", "capture.output_dir"},
                      [](RxConfig &c, const std::string &v)
-                     { c.output_dir = v; c.capture_output_dir = v; }},
+                     {
+                         c.output_dir = v;
+                         c.capture_output_dir = v;
+                     }},
 
                     {"capture_enabled",
                      {"capture.enabled", "capture_enabled"},
-                     [](RxConfig &c, const std::string &v)
-                     { c.capture_enabled = parse_bool(v); }},
+                     [](RxConfig &c, const std::string &v) { c.capture_enabled = parse_bool(v); }},
 
                     {"capture_index_filename",
                      {"capture.index_filename", "capture_index_filename"},
-                     [](RxConfig &c, const std::string &v)
-                     { c.capture_index_filename = v; }},
+                     [](RxConfig &c, const std::string &v) { c.capture_index_filename = v; }},
 
                     {"capture_data_filename",
                      {"capture.data_filename", "capture_data_filename"},
-                     [](RxConfig &c, const std::string &v)
-                     { c.capture_data_filename = v; }},
+                     [](RxConfig &c, const std::string &v) { c.capture_data_filename = v; }},
 
                     {"raw_record_enabled",
                      {"raw_record.enabled", "raw_record_enabled"},
-                     [](RxConfig &c, const std::string &v)
-                     { c.raw_record_enabled = parse_bool(v); }},
+                     [](RxConfig &c, const std::string &v) { c.raw_record_enabled = parse_bool(v); }},
 
                     {"raw_record_output_dir",
                      {"raw_record.output_dir", "raw_record_output_dir"},
-                     [](RxConfig &c, const std::string &v)
-                     { c.raw_record_output_dir = v; }},
+                     [](RxConfig &c, const std::string &v) { c.raw_record_output_dir = v; }},
 
                     {"raw_record_file_prefix",
                      {"raw_record.file_prefix", "raw_record_file_prefix"},
-                     [](RxConfig &c, const std::string &v)
-                     { c.raw_record_file_prefix = v; }},
+                     [](RxConfig &c, const std::string &v) { c.raw_record_file_prefix = v; }},
 
                     {"raw_record_ring_slots",
                      {"raw_record.ring_slots", "raw_record_ring_slots"},
@@ -180,23 +175,19 @@ namespace rxtech
 
                     {"interface_name",
                      {"interface", "interface_name", "network.interface_name"},
-                     [](RxConfig &c, const std::string &v)
-                     { c.interface_name = v; }},
+                     [](RxConfig &c, const std::string &v) { c.interface_name = v; }},
 
                     {"receiver_ipv4",
                      {"receiver_ipv4", "network.receiver_ipv4"},
-                     [](RxConfig &c, const std::string &v)
-                     { c.receiver_ipv4 = v; }},
+                     [](RxConfig &c, const std::string &v) { c.receiver_ipv4 = v; }},
 
                     {"allowed_source_ipv4",
                      {"allowed_source_ipv4", "network.allowed_source_ipv4"},
-                     [](RxConfig &c, const std::string &v)
-                     { c.allowed_source_ipv4 = v; }},
+                     [](RxConfig &c, const std::string &v) { c.allowed_source_ipv4 = v; }},
 
                     {"socket_bind_ip",
                      {"socket_bind_ip", "network.socket_bind_ip", "socket.bind_ip"},
-                     [](RxConfig &c, const std::string &v)
-                     { c.socket_bind_ip = v; }},
+                     [](RxConfig &c, const std::string &v) { c.socket_bind_ip = v; }},
 
                     {"socket_bind_port",
                      {"socket_bind_port", "network.socket_bind_port", "socket.bind_port"},
@@ -210,8 +201,7 @@ namespace rxtech
 
                     {"socket_nonblocking",
                      {"socket_nonblocking", "socket.nonblocking"},
-                     [](RxConfig &c, const std::string &v)
-                     { c.socket_nonblocking = parse_bool(v); }},
+                     [](RxConfig &c, const std::string &v) { c.socket_nonblocking = parse_bool(v); }},
 
                     {"socket_batch_timeout_ms",
                      {"socket_batch_timeout_ms", "socket.batch_timeout_ms"},
@@ -220,8 +210,7 @@ namespace rxtech
 
                     {"queue_id",
                      {"queue_id", "network.queue_id"},
-                     [](RxConfig &c, const std::string &v)
-                     { c.queue_id = static_cast<std::uint32_t>(std::stoul(v)); }},
+                     [](RxConfig &c, const std::string &v) { c.queue_id = static_cast<std::uint32_t>(std::stoul(v)); }},
 
                     {"max_burst",
                      {"max_burst", "runtime.max_burst"},
@@ -250,13 +239,11 @@ namespace rxtech
 
                     {"cpu_cores",
                      {"cpu_cores", "runtime.cpu_cores"},
-                     [](RxConfig &c, const std::string &v)
-                     { c.cpu_cores = parse_int_list(v); }},
+                     [](RxConfig &c, const std::string &v) { c.cpu_cores = parse_int_list(v); }},
 
                     {"run_until_stopped",
                      {"run_until_stopped", "runtime.run_until_stopped"},
-                     [](RxConfig &c, const std::string &v)
-                     { c.run_until_stopped = parse_bool(v); }},
+                     [](RxConfig &c, const std::string &v) { c.run_until_stopped = parse_bool(v); }},
 
                     {"dpdk_port_id",
                      {"dpdk_port_id", "dpdk.port_id"},
@@ -265,8 +252,7 @@ namespace rxtech
 
                     {"dpdk_pci_addr",
                      {"dpdk_pci_addr", "dpdk.pci_addr"},
-                     [](RxConfig &c, const std::string &v)
-                     { c.dpdk_pci_addr = v; }},
+                     [](RxConfig &c, const std::string &v) { c.dpdk_pci_addr = v; }},
 
                     {"dpdk_socket_mem_mb",
                      {"dpdk_socket_mem_mb", "dpdk.socket_mem_mb"},
@@ -295,18 +281,15 @@ namespace rxtech
 
                     {"log_level",
                      {"log.level", "log_level"},
-                     [](RxConfig &c, const std::string &v)
-                     { c.log_level = to_lower(v); }},
+                     [](RxConfig &c, const std::string &v) { c.log_level = to_lower(v); }},
 
                     {"log_output",
                      {"log.output", "log_output"},
-                     [](RxConfig &c, const std::string &v)
-                     { c.log_output = to_lower(v); }},
+                     [](RxConfig &c, const std::string &v) { c.log_output = to_lower(v); }},
 
                     {"log_file_path",
                      {"log.file_path", "log_file_path"},
-                     [](RxConfig &c, const std::string &v)
-                     { c.log_file_path = v; }},
+                     [](RxConfig &c, const std::string &v) { c.log_file_path = v; }},
 
                     {"protocol_udp_packet_size",
                      {"protocol.udp_packet_size", "protocol_udp_packet_size"},
@@ -330,13 +313,11 @@ namespace rxtech
 
                     {"protocol_cpi_timeout_ns",
                      {"protocol.cpi_timeout_ns", "protocol_cpi_timeout_ns"},
-                     [](RxConfig &c, const std::string &v)
-                     { c.protocol_cpi_timeout_ns = std::stoull(v); }},
+                     [](RxConfig &c, const std::string &v) { c.protocol_cpi_timeout_ns = std::stoull(v); }},
 
                     {"protocol_dynamic_prt_enabled",
                      {"protocol.dynamic_prt_enabled", "protocol_dynamic_prt_enabled"},
-                     [](RxConfig &c, const std::string &v)
-                     { c.protocol_dynamic_prt_enabled = parse_bool(v); }},
+                     [](RxConfig &c, const std::string &v) { c.protocol_dynamic_prt_enabled = parse_bool(v); }},
 
                     {"protocol_max_n_prt",
                      {"protocol.max_n_prt", "protocol_max_n_prt"},
@@ -345,14 +326,7 @@ namespace rxtech
 
                     {"output_drop_policy",
                      {"output_drop_policy", "runtime.output_drop_policy"},
-                     [](RxConfig &c, const std::string &v)
-                     {
-                         const std::string normalized = to_lower(v);
-                         if (normalized == "error")
-                             c.output_drop_policy = "error";
-                         else
-                             c.output_drop_policy = "degrade";
-                     }},
+                     [](RxConfig &c, const std::string &v) { c.output_drop_policy = parse_output_drop_policy(v); }},
 
                     {"output_ring_capacity",
                      {"output_ring_capacity", "runtime.output_ring_capacity"},
@@ -378,10 +352,7 @@ namespace rxtech
             return map;
         }
 
-        void assign_config_value(RxConfig &config,
-                                 const std::string &key,
-                                 const std::string &value,
-                                 bool section_key,
+        void assign_config_value(RxConfig &config, const std::string &key, const std::string &value, bool section_key,
                                  std::unordered_set<std::string> &section_assigned_keys)
         {
             const std::string nk = to_lower(trim(key));
@@ -402,6 +373,24 @@ namespace rxtech
         }
 
     } // namespace
+
+    OutputDropPolicy parse_output_drop_policy(const std::string &value)
+    {
+        const std::string normalized = to_lower(trim(value));
+        return normalized == "error" ? OutputDropPolicy::error : OutputDropPolicy::degrade;
+    }
+
+    const char *output_drop_policy_name(OutputDropPolicy policy) noexcept
+    {
+        switch (policy)
+        {
+        case OutputDropPolicy::error:
+            return "error";
+        case OutputDropPolicy::degrade:
+        default:
+            return "degrade";
+        }
+    }
 
     RxConfig load_default_config()
     {
@@ -638,7 +627,7 @@ namespace rxtech
             spec.udp_packet_size > spec.packet_header_size ? (spec.udp_packet_size - spec.packet_header_size) : 0U;
         spec.control_table_size = spec.udp_packet_size;
         spec.expected_n_prt = config.protocol_expected_n_prt;
-        spec.cpi_timeout_ns = config.protocol_cpi_timeout_ns;
+        spec.protocol_cpi_timeout_ns = config.protocol_cpi_timeout_ns;
         spec.dynamic_prt_enabled = config.protocol_dynamic_prt_enabled;
         spec.max_n_prt = config.protocol_max_n_prt;
         return spec;
