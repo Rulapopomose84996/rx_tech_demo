@@ -8,6 +8,7 @@
 
 #include "rxtech/rx_backend.h"
 #include "rxtech/owner_loop.h"
+#include "owner_loop_runtime_state.h"
 #include "owner_loop_summary.h"
 #include "status_panel.h"
 
@@ -197,6 +198,18 @@ int main()
     assert(saw_pre_business_state);
     assert(saw_protocol_section_pre);
     assert(saw_result_section_pre);
+
+    {
+        rxtech::OwnerLoopRuntimeState degraded_state;
+        assert(degraded_state.run_status == "success");
+        degraded_state.apply_output_degradation(false);
+        assert(degraded_state.run_status == "degraded");
+
+        rxtech::OwnerLoopRuntimeState error_state;
+        assert(error_state.run_status == "success");
+        error_state.apply_output_degradation(true);
+        assert(error_state.run_status == "error");
+    }
 
     // ── Degraded run status rendering ────────────────────────────────
     {

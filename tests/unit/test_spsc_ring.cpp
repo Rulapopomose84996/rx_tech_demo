@@ -10,6 +10,16 @@
 
 int main()
 {
+    {
+        assert(rxtech::normalize_spsc_usable_capacity(0U) == 1U);
+        assert(rxtech::normalize_spsc_usable_capacity(1U) == 1U);
+        assert(rxtech::normalize_spsc_usable_capacity(2U) == 1U);
+        assert(rxtech::normalize_spsc_usable_capacity(3U) == 3U);
+        assert(rxtech::normalize_spsc_usable_capacity(32U) == 31U);
+        assert(rxtech::normalize_spsc_usable_capacity(63U) == 63U);
+        assert(rxtech::normalize_spsc_usable_capacity(64U) == 63U);
+    }
+
     // Basic push/pop
     {
         rxtech::SpscRing<int> ring(2U);

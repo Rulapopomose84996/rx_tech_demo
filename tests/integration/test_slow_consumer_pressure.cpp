@@ -84,34 +84,6 @@ namespace
         return b;
     }
 
-    std::vector<std::uint8_t> wrap_udp(const std::vector<std::uint8_t> &payload)
-    {
-        const std::uint16_t udp_len = static_cast<std::uint16_t>(8U + payload.size());
-        const std::uint16_t ip_tot = static_cast<std::uint16_t>(20U + udp_len);
-        std::vector<std::uint8_t> f = {
-            // Ethernet
-            0x9c, 0x47, 0x82, 0xe1, 0x36, 0xd0,
-            0x9c, 0x47, 0x82, 0xe1, 0x36, 0xdc,
-            0x08, 0x00,
-            // IP
-            0x45, 0x00,
-            static_cast<std::uint8_t>((ip_tot >> 8U) & 0xFFU),
-            static_cast<std::uint8_t>(ip_tot & 0xFFU),
-            0x00, 0x00, 0x00, 0x00, 0x40, 0x11, 0x00, 0x00,
-            // src  172.20.11.222
-            0xAC, 0x14, 0x0B, 0xDE,
-            // dst  172.20.11.100
-            0xAC, 0x14, 0x0B, 0x64,
-            // UDP
-            static_cast<std::uint8_t>(30001U >> 8U), static_cast<std::uint8_t>(30001U & 0xFFU),
-            static_cast<std::uint8_t>(9999U >> 8U), static_cast<std::uint8_t>(9999U & 0xFFU),
-            static_cast<std::uint8_t>((udp_len >> 8U) & 0xFFU),
-            static_cast<std::uint8_t>(udp_len & 0xFFU),
-            0x00, 0x00};
-        f.insert(f.end(), payload.begin(), payload.end());
-        return f;
-    }
-
     // ── Multi-CPI fake backend ───────────────────────────────────────────────
 
     class MultiCpiFakeBackend final : public rxtech::IRxBackend
@@ -139,7 +111,7 @@ namespace
         bool recv_burst(rxtech::UdpDatagramBurst &burst, std::uint32_t max) override
         {
             burst.datagrams.clear();
-            frame_storage_.clear();
+            payload_storage_.clear();
 
             if (done_)
             {
@@ -160,7 +132,7 @@ namespace
             ++cpi_cursor_;
 
             // Control table
-            frame_storage_.push_back(wrap_udp(make_ctrl(cpi)));
+            payload_storage_.push_back(make_ctrl(cpi));
 
             // All data packets
             for (std::uint16_t prt = 1U; prt <= n_prt_; ++prt)
@@ -169,26 +141,24 @@ namespace
                 {
                     for (std::uint16_t pi = 1U; pi <= pkts_; ++pi)
                     {
-                        frame_storage_.push_back(wrap_udp(make_data(cpi, ch, prt, pi, pi == pkts_)));
+                        payload_storage_.push_back(make_data(cpi, ch, prt, pi, pi == pkts_));
                     }
                 }
             }
 
             std::uint32_t served = 0;
             const std::uint64_t ts = rxtech::steady_clock_now_ns();
-            for (const auto &f : frame_storage_)
+            for (const auto &payload : payload_storage_)
             {
                 if (served >= max)
                     break;
                 rxtech::UdpDatagramDesc datagram;
-                datagram.raw_frame_data = f.data();
-                datagram.raw_frame_len = static_cast<std::uint32_t>(f.size());
-                datagram.payload_data = nullptr;
-                datagram.payload_len = 0U;
-                datagram.src_ipv4_be = 0U;
-                datagram.dst_ipv4_be = 0U;
-                datagram.src_port = 0U;
-                datagram.dst_port = 0U;
+                datagram.payload_data = payload.data();
+                datagram.payload_len = static_cast<std::uint32_t>(payload.size());
+                datagram.src_ipv4_be = 0xAC140BDEU;
+                datagram.dst_ipv4_be = 0xAC140B64U;
+                datagram.src_port = 30001U;
+                datagram.dst_port = 9999U;
                 datagram.ts_ns = ts;
                 datagram.backend_kind = rxtech::BackendKind::file_replay;
                 burst.datagrams.push_back(datagram);
@@ -196,13 +166,17 @@ namespace
             }
             ++stats_.rx_polls;
             stats_.rx_packets += served;
+            for (const auto &datagram : burst.datagrams)
+            {
+                stats_.rx_bytes += datagram.payload_len;
+            }
             return true;
         }
 
         void release_burst(rxtech::UdpDatagramBurst &burst) override
         {
             burst.datagrams.clear();
-            frame_storage_.clear();
+            payload_storage_.clear();
         }
 
         rxtech::BackendStats stats() const override { return stats_; }
@@ -219,7 +193,7 @@ namespace
         bool done_ = false;
         int empty_streak_ = 0;
         rxtech::BackendStats stats_{};
-        std::vector<std::vector<std::uint8_t>> frame_storage_;
+        std::vector<std::vector<std::uint8_t>> payload_storage_;
     };
 
     rxtech::RxConfig make_stress_config()
@@ -236,8 +210,6 @@ namespace
         cfg.raw_record_enabled = false;
         cfg.max_burst = 1024;
         cfg.output_drop_policy = "degrade";
-        // Use default ring capacities; zero-blocking drop path is covered
-        // by the unit test (test_cpi_output_pipeline).
         return cfg;
     }
 
@@ -284,7 +256,7 @@ int main()
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(120);
 
     rxtech::RunSummary run_summary = loop.run(ctx, artifacts, [&stop, &deadline]()
-             {
+                                              {
         if (std::chrono::steady_clock::now() >= deadline)
             return true;
         return stop.load(std::memory_order_relaxed); });
@@ -294,24 +266,23 @@ int main()
     // Deadline must not have been hit (loop should have finished cleanly).
     assert(std::chrono::steady_clock::now() < deadline);
 
-    // All CPIs must have been consumed.
-    assert(!decisions.empty());
-
-    // No DISCARD_INVALID decisions.
+    // Any delivered outputs must still be semantically valid.
     for (const auto &d : decisions)
     {
         assert(d != rxtech::CpiDecision::DISCARD_INVALID);
     }
 
-    // At least as many decisions as CPIs sent.
-    assert(decisions.size() >= static_cast<std::size_t>(kNumCpi));
-
-    // Under a slow consumer with a tiny output ring, output drops are expected.
-    // The run should complete with degraded status (or at least not hang).
-    // If output drops occurred, the summary should reflect degradation.
+    // Slow handler latency must not deadlock the owner loop or permanently stall
+    // CPI progress. This test covers recycle/pool safety under a slow consumer.
+    // Zero-blocking drop semantics are locked separately in the unit test.
+    assert(run_summary.cpi_count == static_cast<std::uint64_t>(kNumCpi));
     if (run_summary.output_backpressure_count > 0U)
     {
         assert(run_summary.run_status == "degraded" || run_summary.run_status == "error");
+    }
+    else
+    {
+        assert(run_summary.run_status == "success");
     }
 
     return 0;
