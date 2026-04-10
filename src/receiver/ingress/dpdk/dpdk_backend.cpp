@@ -27,16 +27,16 @@ namespace rxtech
     {
         std::vector<std::string> eal_args;
         eal_args.emplace_back("rxbench_dpdk");
-        if (!config.cpu_cores.empty())
+        if (!config.process.cpu_cores.empty())
         {
             std::string core_list;
-            for (std::size_t index = 0; index < config.cpu_cores.size(); ++index)
+            for (std::size_t index = 0; index < config.process.cpu_cores.size(); ++index)
             {
                 if (index != 0U)
                 {
                     core_list += ",";
                 }
-                core_list += std::to_string(config.cpu_cores[index]);
+                core_list += std::to_string(config.process.cpu_cores[index]);
             }
             eal_args.emplace_back("-l");
             eal_args.emplace_back(core_list);
@@ -44,10 +44,10 @@ namespace rxtech
         eal_args.emplace_back("-n");
         eal_args.emplace_back("4");
         eal_args.emplace_back("--in-memory");
-        if (!config.dpdk_pci_addr.empty())
+        if (!config.ingress.dpdk_pci_addr.empty())
         {
             eal_args.emplace_back("-w");
-            eal_args.emplace_back(config.dpdk_pci_addr);
+            eal_args.emplace_back(config.ingress.dpdk_pci_addr);
         }
         return eal_args;
     }
@@ -95,13 +95,13 @@ namespace rxtech
                 }
                 available_ports.push_back(candidate);
 
-                if (!config.dpdk_pci_addr.empty())
+                if (!config.ingress.dpdk_pci_addr.empty())
                 {
                     rte_eth_dev_info info{};
                     if (rte_eth_dev_info_get(candidate, &info) == 0 && info.device != nullptr &&
                         info.device->name != nullptr)
                     {
-                        if (config.dpdk_pci_addr == info.device->name)
+                        if (config.ingress.dpdk_pci_addr == info.device->name)
                         {
                             port_id = candidate;
                             return true;
@@ -111,7 +111,7 @@ namespace rxtech
                     char port_name[RTE_ETH_NAME_MAX_LEN] = {};
                     if (rte_eth_dev_get_name_by_port(candidate, port_name) == 0)
                     {
-                        if (config.dpdk_pci_addr == port_name)
+                        if (config.ingress.dpdk_pci_addr == port_name)
                         {
                             port_id = candidate;
                             return true;
@@ -120,7 +120,7 @@ namespace rxtech
                 }
             }
 
-            if (!config.dpdk_pci_addr.empty())
+            if (!config.ingress.dpdk_pci_addr.empty())
             {
                 if (available_ports.size() == 1U)
                 {
@@ -130,9 +130,9 @@ namespace rxtech
                 return false;
             }
 
-            if (rte_eth_dev_is_valid_port(static_cast<std::uint16_t>(config.dpdk_port_id)))
+            if (rte_eth_dev_is_valid_port(static_cast<std::uint16_t>(config.ingress.dpdk_port_id)))
             {
-                port_id = static_cast<std::uint16_t>(config.dpdk_port_id);
+                port_id = static_cast<std::uint16_t>(config.ingress.dpdk_port_id);
                 return true;
             }
 
@@ -229,6 +229,8 @@ namespace rxtech
         datagram.queue_id = packet.queue_id;
         datagram.cookie = packet.cookie;
         datagram.backend_kind = BackendKind::dpdk;
+        datagram.has_global_sequence = true;
+        datagram.global_sequence = byte_order::read_u16_be(packet.data + ip_offset + 4U);
         return true;
     }
 
@@ -360,17 +362,17 @@ namespace rxtech
             return make_dpdk_result(true, "rte_eal_init() 调用失败");
         }
 
-        std::uint16_t port_id = static_cast<std::uint16_t>(config.dpdk_port_id);
+        std::uint16_t port_id = static_cast<std::uint16_t>(config.ingress.dpdk_port_id);
         if (!resolve_port_id(config, port_id) || !rte_eth_dev_is_valid_port(port_id))
         {
             ++stats_.rx_errors;
-            return make_dpdk_result(true, "解析 DPDK 设备对应端口失败: " + config.dpdk_pci_addr);
+            return make_dpdk_result(true, "解析 DPDK 设备对应端口失败: " + config.ingress.dpdk_pci_addr);
         }
 
         impl_->port_id = port_id;
         impl_->mempool =
-            rte_pktmbuf_pool_create("rxtech_dpdk_mbuf_pool", config.dpdk_mempool_size, config.dpdk_mbuf_cache_size, 0,
-                                    RTE_MBUF_DEFAULT_BUF_SIZE, rte_socket_id());
+            rte_pktmbuf_pool_create("rxtech_dpdk_mbuf_pool", config.ingress.dpdk_mempool_size,
+                                    config.ingress.dpdk_mbuf_cache_size, 0, RTE_MBUF_DEFAULT_BUF_SIZE, rte_socket_id());
         if (impl_->mempool == nullptr)
         {
             ++stats_.rx_errors;
@@ -383,13 +385,13 @@ namespace rxtech
             ++stats_.rx_errors;
             return make_dpdk_result(true, "rte_eth_dev_configure() 调用失败");
         }
-        if (rte_eth_rx_queue_setup(port_id, 0, static_cast<std::uint16_t>(config.dpdk_rx_desc),
+        if (rte_eth_rx_queue_setup(port_id, 0, static_cast<std::uint16_t>(config.ingress.dpdk_rx_desc),
                                    rte_eth_dev_socket_id(port_id), nullptr, impl_->mempool) < 0)
         {
             ++stats_.rx_errors;
             return make_dpdk_result(true, "rte_eth_rx_queue_setup() 调用失败");
         }
-        if (rte_eth_tx_queue_setup(port_id, 0, static_cast<std::uint16_t>(config.dpdk_tx_desc),
+        if (rte_eth_tx_queue_setup(port_id, 0, static_cast<std::uint16_t>(config.ingress.dpdk_tx_desc),
                                    rte_eth_dev_socket_id(port_id), nullptr) < 0)
         {
             ++stats_.rx_errors;
@@ -405,10 +407,10 @@ namespace rxtech
         rte_ether_addr mac{};
         rte_eth_macaddr_get(port_id, &mac);
         std::memcpy(impl_->local_mac.data(), mac.addr_bytes, impl_->local_mac.size());
-        if (!config.receiver_ipv4.empty())
+        if (!config.ingress.receiver_ipv4.empty())
         {
             in_addr addr{};
-            if (inet_pton(AF_INET, config.receiver_ipv4.c_str(), &addr) == 1)
+            if (inet_pton(AF_INET, config.ingress.receiver_ipv4.c_str(), &addr) == 1)
             {
                 impl_->local_ip_be = ntohl(addr.s_addr);
             }
@@ -432,11 +434,11 @@ namespace rxtech
 
         stats_ = {};
         stats_.queue_id = 0;
-        if (config.max_burst > kDpdkMaxBurstSize)
+        if (config.runtime.max_burst > kDpdkMaxBurstSize)
         {
             std::fprintf(stderr,
                          "[dpdk] configured max_burst=%u exceeds backend limit=%u; recv_burst will clamp to %u\n",
-                         config.max_burst, kDpdkMaxBurstSize, kDpdkMaxBurstSize);
+                         config.runtime.max_burst, kDpdkMaxBurstSize, kDpdkMaxBurstSize);
         }
 
         bool link_up = true;

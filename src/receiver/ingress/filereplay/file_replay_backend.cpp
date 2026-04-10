@@ -19,6 +19,15 @@
 namespace rxtech
 {
 
+    namespace
+    {
+        constexpr std::size_t kReplayEthHeaderBytes = 14U;
+        constexpr std::size_t kReplayIpv4HeaderBytes = 20U;
+        constexpr std::size_t kReplayUdpHeaderBytes = 8U;
+        constexpr std::size_t kReplayUdpPayloadOffset =
+            kReplayEthHeaderBytes + kReplayIpv4HeaderBytes + kReplayUdpHeaderBytes;
+    } // namespace
+
     // ── Implementation details ───────────────────────────────────────────────
 
     struct FileReplayBackend::Impl
@@ -68,7 +77,7 @@ namespace rxtech
         else
         {
             // Parse receiver_ipv4 from config (e.g. "172.20.11.100")
-            const auto &ip = config.receiver_ipv4;
+            const auto &ip = config.ingress.receiver_ipv4;
             if (!ip.empty())
             {
                 unsigned a{}, b{}, c{}, d{};
@@ -81,7 +90,7 @@ namespace rxtech
             fcfg.src_ipv4_be = impl_->opts.src_ipv4_be;
         else
         {
-            const auto &src_ip = config.allowed_source_ipv4;
+            const auto &src_ip = config.ingress.allowed_source_ipv4;
             if (!src_ip.empty())
             {
                 unsigned a{}, b{}, c{}, d{};
@@ -93,7 +102,7 @@ namespace rxtech
         if (impl_->opts.dst_port != 0)
             fcfg.dst_port = impl_->opts.dst_port;
         else
-            fcfg.dst_port = static_cast<std::uint16_t>(config.allowed_dest_port);
+            fcfg.dst_port = static_cast<std::uint16_t>(config.ingress.allowed_dest_port);
 
         if (impl_->opts.src_port != 0)
             fcfg.src_port = impl_->opts.src_port;
@@ -190,15 +199,22 @@ namespace rxtech
         {
             const std::size_t frame_index = impl_->cursor;
             const auto &frame = impl_->frames[impl_->cursor];
+            if (frame.size() < kReplayUdpPayloadOffset)
+            {
+                ++impl_->cursor;
+                ++impl_->stats.rx_errors;
+                continue;
+            }
+
             UdpDatagramDesc datagram;
             datagram.raw_frame_data = frame.data();
             datagram.raw_frame_len = static_cast<std::uint32_t>(frame.size());
-            datagram.payload_data = nullptr;
-            datagram.payload_len = 0U;
-            datagram.src_ipv4_be = 0U;
-            datagram.dst_ipv4_be = 0U;
-            datagram.src_port = 0U;
-            datagram.dst_port = 0U;
+            datagram.payload_data = frame.data() + kReplayUdpPayloadOffset;
+            datagram.payload_len = static_cast<std::uint32_t>(frame.size() - kReplayUdpPayloadOffset);
+            datagram.src_ipv4_be = impl_->src_ipv4_be;
+            datagram.dst_ipv4_be = impl_->dst_ipv4_be;
+            datagram.src_port = impl_->src_port;
+            datagram.dst_port = impl_->dst_port;
             datagram.ts_ns = ts;
             datagram.cookie = static_cast<std::uintptr_t>(frame_index);
             datagram.backend_kind = BackendKind::file_replay;

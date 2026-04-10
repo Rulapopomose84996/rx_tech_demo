@@ -29,9 +29,9 @@ namespace rxtech
                (static_cast<std::size_t>(key.identification) << 2U) ^ (static_cast<std::size_t>(key.protocol) << 3U);
     }
 
-    std::vector<UdpPayloadFrame> UdpPayloadAssembler::push(const PacketDesc &packet)
+    UdpPayloadFrameBatch UdpPayloadAssembler::push(const PacketDesc &packet)
     {
-        std::vector<UdpPayloadFrame> results;
+        UdpPayloadFrameBatch results;
         const std::uint64_t now_ns = packet.ts_ns != 0U ? packet.ts_ns : steady_clock_now_ns();
         for (auto it = fragments_.begin(); it != fragments_.end();)
         {
@@ -104,6 +104,8 @@ namespace rxtech
             frame.dest_ipv4_be = dest_ipv4_be;
             frame.source_port = byte_order::read_u16_be(ip_payload + 0U);
             frame.dest_port = byte_order::read_u16_be(ip_payload + 2U);
+            frame.has_global_sequence = true;
+            frame.global_sequence = identification;
             frame.udp_payload.set_view(ip_payload + 8U, udp_length - 8U);
             results.push_back(std::move(frame));
             return results;
@@ -161,6 +163,8 @@ namespace rxtech
         frame.dest_ipv4_be = dest_ipv4_be;
         frame.source_port = assembly.source_port;
         frame.dest_port = assembly.dest_port;
+        frame.has_global_sequence = true;
+        frame.global_sequence = identification;
         frame.udp_payload.assign(assembled_ip_payload.data() + 8U, assembly.udp_length - 8U);
         results.push_back(std::move(frame));
         fragments_.erase(key);

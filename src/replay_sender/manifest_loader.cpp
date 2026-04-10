@@ -28,37 +28,6 @@ namespace rxtech::replay
             return dir + "/" + name;
         }
 
-        bool file_exists(const std::string &path)
-        {
-            std::ifstream f(path, std::ios::binary);
-            return f.good();
-        }
-
-        // Find the first file in @p dir whose name contains @p substring.
-        std::string find_file_containing(const std::string &dir, const std::string &substring)
-        {
-            // We don't want a heavy filesystem dependency.  Search against known
-            // convention: enumerate via a small suffix list.
-            const std::vector<std::string> suffixes = {
-                "_replay_manifest.json",
-                "_metadata.json",
-                "_packet_manifest.csv",
-                "_control_table.bin",
-                "_data_payloads.bin",
-            };
-            for (const auto &suf : suffixes)
-            {
-                if (suf.find(substring) != std::string::npos)
-                {
-                    // build candidate from dir + some stem
-                    // Fall through to the explicit JSON-based scan below.
-                }
-            }
-            (void)dir;
-            (void)substring;
-            return {};
-        }
-
         // List JSON files in a directory that match a suffix.
         std::vector<std::string> glob_suffix(const std::string &dir, const std::string &suffix)
         {
@@ -103,8 +72,8 @@ namespace rxtech::replay
             {
                 ReplayEntry e;
                 const std::string kind_str = item.at("kind").get<std::string>();
-                e.kind = (kind_str == "control_table") ? ReplayEntry::Kind::control_table
-                                                       : ReplayEntry::Kind::data_packet;
+                e.kind =
+                    (kind_str == "control_table") ? ReplayEntry::Kind::control_table : ReplayEntry::Kind::data_packet;
 
                 const std::string rel_file = item.at("file").get<std::string>();
                 e.bin_file = join_path(data_dir, rel_file);
@@ -125,8 +94,7 @@ namespace rxtech::replay
 
         // ── metadata.json + packet_manifest.csv fallback ─────────────────────
 
-        std::vector<ReplayEntry> load_from_metadata(const std::string &metadata_path,
-                                                    const std::string &data_dir)
+        std::vector<ReplayEntry> load_from_metadata(const std::string &metadata_path, const std::string &data_dir)
         {
             std::ifstream mf(metadata_path);
             if (!mf.is_open())
@@ -134,12 +102,9 @@ namespace rxtech::replay
             nlohmann::json meta;
             mf >> meta;
 
-            const std::string ctrl_file =
-                join_path(data_dir, meta.at("files").at("control_table").get<std::string>());
-            const std::string data_file =
-                join_path(data_dir, meta.at("files").at("data_payloads").get<std::string>());
-            const std::string csv_file =
-                join_path(data_dir, meta.at("files").at("packet_manifest").get<std::string>());
+            const std::string ctrl_file = join_path(data_dir, meta.at("files").at("control_table").get<std::string>());
+            const std::string data_file = join_path(data_dir, meta.at("files").at("data_payloads").get<std::string>());
+            const std::string csv_file = join_path(data_dir, meta.at("files").at("packet_manifest").get<std::string>());
 
             // Control table entry (always first, offset 0).
             std::vector<ReplayEntry> entries;

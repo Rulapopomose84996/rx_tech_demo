@@ -113,12 +113,13 @@ namespace rxtech
 
         std::string choose_run_suffix(const RxConfig &config)
         {
-            const std::string capture_dir =
-                config.capture_output_dir.empty() ? config.output_dir : config.capture_output_dir;
+            const std::string capture_dir = config.capture.capture_output_dir.empty()
+                                                ? config.operations.output_dir
+                                                : config.capture.capture_output_dir;
             std::string suffix = sanitize_run_label(path_utils::path_filename(capture_dir));
-            if (suffix == "run" && !config.backend_name.empty())
+            if (suffix == "run" && !config.process.backend_name.empty())
             {
-                suffix = sanitize_run_label(config.backend_name);
+                suffix = sanitize_run_label(config.process.backend_name);
             }
             return suffix;
         }
@@ -154,12 +155,13 @@ namespace rxtech
         RunSummary make_unavailable_summary(const ReceiveContext &context, const BackendInitResult &init_result)
         {
             RunSummary summary;
-            summary.backend = context.backend != nullptr ? context.backend->name() : context.config.backend_name;
-            summary.run_status = init_result.available ? "error" : "unavailable";
-            summary.error_message = init_result.reason;
-            summary.backend_available = init_result.available;
-            summary.backend_status = init_result.available ? "available" : "unavailable";
-            summary.backend_reason = init_result.reason;
+            summary.run.backend_name =
+                context.backend != nullptr ? context.backend->name() : context.config.process.backend_name;
+            summary.run.status = init_result.available ? "error" : "unavailable";
+            summary.run.error_message = init_result.reason;
+            summary.backend.available = init_result.available;
+            summary.backend.status = init_result.available ? "available" : "unavailable";
+            summary.backend.reason = init_result.reason;
             return summary;
         }
 
@@ -218,39 +220,41 @@ namespace rxtech
     void prepare_run_artifact_paths(RxConfig &config)
     {
         // 如果路径已准备，直接返回避免重复处理
-        if (config.run_artifacts_prepared)
+        if (config.operations.run_artifacts_prepared)
         {
             return;
         }
 
         // 生成运行标签：时间戳 + 后缀
         const std::string run_suffix = choose_run_suffix(config);
-        config.run_label = make_run_timestamp() + "_" + run_suffix;
+        config.process.run_label = make_run_timestamp() + "_" + run_suffix;
 
         // 处理捕获数据输出目录
-        const std::string capture_dir =
-            config.capture_output_dir.empty() ? config.output_dir : config.capture_output_dir;
+        const std::string capture_dir = config.capture.capture_output_dir.empty() ? config.operations.output_dir
+                                                                                  : config.capture.capture_output_dir;
         if (!capture_dir.empty())
         {
-            const std::string run_capture_dir = make_capture_run_dir(capture_dir, config.run_label);
-            config.output_dir = run_capture_dir;
-            config.capture_output_dir = run_capture_dir;
+            const std::string run_capture_dir = make_capture_run_dir(capture_dir, config.process.run_label);
+            config.operations.output_dir = run_capture_dir;
+            config.capture.capture_output_dir = run_capture_dir;
         }
 
         // 处理原始记录输出目录
-        if (config.raw_record_enabled && !config.raw_record_output_dir.empty())
+        if (config.capture.raw_record_enabled && !config.capture.raw_record_output_dir.empty())
         {
-            config.raw_record_output_dir = make_raw_record_run_dir(config.raw_record_output_dir, config.run_label);
+            config.capture.raw_record_output_dir =
+                make_raw_record_run_dir(config.capture.raw_record_output_dir, config.process.run_label);
         }
 
         // 处理日志文件路径
-        if (config.log_output == "file" && !config.log_file_path.empty())
+        if (config.operations.log_output == "file" && !config.operations.log_file_path.empty())
         {
-            config.log_file_path = make_log_run_path(config.log_file_path, config.run_label);
+            config.operations.log_file_path =
+                make_log_run_path(config.operations.log_file_path, config.process.run_label);
         }
 
         // 标记路径已准备完成
-        config.run_artifacts_prepared = true;
+        config.operations.run_artifacts_prepared = true;
     }
 
     void ReceiveRunner::set_status_output(std::ostream *output)
@@ -309,14 +313,14 @@ namespace rxtech
         try
         {
             // 配置数据捕获的文件路径和流
-            const std::string output_dir = context.config.capture_output_dir.empty()
-                                               ? context.config.output_dir
-                                               : context.config.capture_output_dir;
-            const bool capture_enabled = context.config.capture_enabled;
+            const std::string output_dir = context.config.capture.capture_output_dir.empty()
+                                               ? context.config.operations.output_dir
+                                               : context.config.capture.capture_output_dir;
+            const bool capture_enabled = context.config.capture.capture_enabled;
             const std::string capture_packets_path =
-                capture_enabled ? (output_dir + "/" + context.config.capture_data_filename) : std::string{};
+                capture_enabled ? (output_dir + "/" + context.config.capture.capture_data_filename) : std::string{};
             const std::string capture_index_path =
-                capture_enabled ? (output_dir + "/" + context.config.capture_index_filename) : std::string{};
+                capture_enabled ? (output_dir + "/" + context.config.capture.capture_index_filename) : std::string{};
             std::ofstream capture_packets_stream;
             std::ofstream capture_index_stream;
             std::ostringstream capture_packets_sink;
@@ -357,11 +361,11 @@ namespace rxtech
 
             const auto start_time = std::chrono::steady_clock::now();
             const auto deadline =
-                start_time + std::chrono::seconds(std::max<std::uint32_t>(1U, context.config.duration_seconds));
+                start_time + std::chrono::seconds(std::max<std::uint32_t>(1U, context.config.runtime.duration_seconds));
             RunSummary summary = owner_loop.run(context, artifacts,
                                                 [&]()
                                                 {
-                                                    return context.config.run_until_stopped
+                                                    return context.config.runtime.run_until_stopped
                                                                ? stop_requested()
                                                                : (std::chrono::steady_clock::now() >= deadline);
                                                 });
@@ -379,25 +383,25 @@ namespace rxtech
 
             // 填充运行摘要信息
             const RawFrameRecorderStats raw_record_stats = raw_frame_recorder.snapshot();
-            summary.backend_available = true;
-            summary.backend_status = "available";
-            summary.capture_packets_path = capture_packets_path;
-            summary.capture_index_path = capture_index_path;
-            summary.captured_packets = artifacts.captured_packets;
-            summary.captured_bytes = artifacts.captured_bytes;
-            summary.recorded_packets = artifacts.recorded_packets;
-            summary.recorded_bytes = artifacts.recorded_bytes;
-            summary.run_artifact_dir = output_dir;
-            summary.raw_record_output_dir =
+            summary.backend.available = true;
+            summary.backend.status = "available";
+            summary.capture.packets_path = capture_packets_path;
+            summary.capture.index_path = capture_index_path;
+            summary.capture.captured_packets = artifacts.captured_packets;
+            summary.capture.captured_bytes = artifacts.captured_bytes;
+            summary.capture.recorded_packets = artifacts.recorded_packets;
+            summary.capture.recorded_bytes = artifacts.recorded_bytes;
+            summary.capture.run_artifact_dir = output_dir;
+            summary.capture.raw_record_output_dir =
                 raw_frame_recorder.enabled() ? raw_frame_recorder.output_dir() : std::string{};
-            summary.raw_record_latest_file_path = raw_record_stats.latest_file_path;
-            summary.raw_record_written_frames = raw_record_stats.written_frames;
-            summary.raw_record_written_bytes = raw_record_stats.written_bytes;
-            summary.raw_record_dropped_frames = raw_record_stats.dropped_frames;
-            summary.raw_record_dropped_bytes = raw_record_stats.dropped_bytes;
-            summary.raw_record_retained_bytes = raw_record_stats.retained_bytes;
-            summary.raw_record_queue_high_watermark = raw_record_stats.queue_high_watermark;
-            summary.human_summary = build_run_human_summary(summary);
+            summary.capture.raw_record_latest_file_path = raw_record_stats.latest_file_path;
+            summary.capture.raw_record_written_frames = raw_record_stats.written_frames;
+            summary.capture.raw_record_written_bytes = raw_record_stats.written_bytes;
+            summary.capture.raw_record_dropped_frames = raw_record_stats.dropped_frames;
+            summary.capture.raw_record_dropped_bytes = raw_record_stats.dropped_bytes;
+            summary.capture.raw_record_retained_bytes = raw_record_stats.retained_bytes;
+            summary.capture.raw_record_queue_high_watermark = raw_record_stats.queue_high_watermark;
+            summary.run.human_summary = build_run_human_summary(summary);
 
             context.backend->shutdown();
             return summary;

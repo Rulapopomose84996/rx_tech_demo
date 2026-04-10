@@ -87,13 +87,13 @@ namespace rxtech
         // CPI 输出管道：owner → output_ring → consumer → recycle_ring → owner
         // 使用无锁单生产者单消费者环形缓冲区实现线程间通信
         const std::size_t output_capacity =
-            normalize_spsc_usable_capacity(std::max<std::size_t>(1U, context.config.output_ring_capacity));
+            normalize_spsc_usable_capacity(std::max<std::size_t>(1U, context.config.operations.output_ring_capacity));
         const std::size_t recycle_capacity =
-            normalize_spsc_usable_capacity(std::max<std::size_t>(1U, context.config.recycle_ring_capacity));
+            normalize_spsc_usable_capacity(std::max<std::size_t>(1U, context.config.operations.recycle_ring_capacity));
         SpscRing<CpiOutput> output_ring(output_capacity);
         SpscRing<ReleaseToken> recycle_ring(recycle_capacity);
         cpi_state_coordinator.attach_rings(&output_ring, &recycle_ring);
-        cpi_state_coordinator.configure_output_policy(context.config.output_drop_policy);
+        cpi_state_coordinator.configure_output_policy(context.config.operations.output_drop_policy);
 
         // 启动 CPI consumer 线程，异步处理 CPI 输出
         std::atomic<bool> consumer_stop{false};
@@ -115,7 +115,7 @@ namespace rxtech
         while (!should_stop())
         {
             // 从后端接收数据包 burst
-            if (!context.backend->recv_burst(burst, context.config.max_burst))
+            if (!context.backend->recv_burst(burst, context.config.runtime.max_burst))
             {
                 runtime_state.run_status = "error";
                 runtime_state.run_error = "backend recv_burst failed";

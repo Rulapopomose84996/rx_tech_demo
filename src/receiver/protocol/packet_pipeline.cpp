@@ -32,6 +32,8 @@ namespace rxtech
             datagram.ts_ns = packet.ts_ns;
             datagram.queue_id = packet.queue_id;
             datagram.cookie = packet.cookie;
+            datagram.has_global_sequence = udp_frame.has_global_sequence;
+            datagram.global_sequence = udp_frame.global_sequence;
 
             const PacketProcessStats datagram_stats =
                 datagram_pipeline_->process_datagram(datagram, metrics, diagnostic_output, invalid_dumped, on_packet);

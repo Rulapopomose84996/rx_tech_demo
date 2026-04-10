@@ -44,8 +44,6 @@ namespace rxtech
         }
 
 #if defined(RXTECH_DEBUG_DIAGNOSTICS) && RXTECH_DEBUG_DIAGNOSTICS
-        constexpr std::uint64_t kRejectDiagnosticIntervalNs = 5ULL * 1000ULL * 1000ULL * 1000ULL;
-
         std::uint32_t read_u32_le_at(const std::uint8_t *data, std::size_t size, std::size_t offset)
         {
             if (data == nullptr || offset + 4U > size)
@@ -104,16 +102,20 @@ namespace rxtech
 
     UdpDatagramPipeline::UdpDatagramPipeline(const RxConfig &config, const ProtocolSpec &spec)
         : config_(config), spec_(spec), parser_(spec), validator_(spec), interpreter_(spec),
-          allowed_source_ipv4_be_(parse_ipv4_be(config.allowed_source_ipv4)),
-          receiver_ipv4_be_(parse_ipv4_be(config.receiver_ipv4))
+          allowed_source_ipv4_be_(parse_ipv4_be(config.ingress.allowed_source_ipv4)),
+                    receiver_ipv4_be_(parse_ipv4_be(config.ingress.receiver_ipv4))
+#if defined(RXTECH_DEBUG_DIAGNOSTICS) && RXTECH_DEBUG_DIAGNOSTICS
+                , reject_diagnostic_interval_ns_(static_cast<std::uint64_t>(config.operations.log_rate_limit_seconds) *
+                                                                                 1000ULL * 1000ULL * 1000ULL)
+#endif
     {
     }
 
     bool UdpDatagramPipeline::matches_packet_filter(const UdpPayloadFrame &frame) const
     {
-        const bool source_filter_enabled = !config_.allowed_source_ipv4.empty();
-        const bool dest_ip_filter_enabled = !config_.receiver_ipv4.empty();
-        const bool dest_port_filter_enabled = config_.allowed_dest_port != 0U;
+        const bool source_filter_enabled = !config_.ingress.allowed_source_ipv4.empty();
+        const bool dest_ip_filter_enabled = !config_.ingress.receiver_ipv4.empty();
+        const bool dest_port_filter_enabled = config_.ingress.allowed_dest_port != 0U;
         if (!source_filter_enabled && !dest_ip_filter_enabled && !dest_port_filter_enabled)
         {
             return true;
@@ -126,7 +128,8 @@ namespace rxtech
         {
             return false;
         }
-        if (dest_port_filter_enabled && frame.dest_port != static_cast<std::uint16_t>(config_.allowed_dest_port))
+        if (dest_port_filter_enabled &&
+            frame.dest_port != static_cast<std::uint16_t>(config_.ingress.allowed_dest_port))
         {
             return false;
         }
@@ -139,33 +142,22 @@ namespace rxtech
                                                             const ParsedPacketView &parsed, RejectReason reason,
                                                             std::uint32_t &invalid_dumped)
     {
-        RejectDiagnosticState &state = reject_diagnostic_states_[static_cast<std::size_t>(reason)];
-        ++state.total_count;
-
         const std::uint64_t now_ns = steady_clock_now_ns();
-        if (!state.emitted_once)
+        RateLimitedEventState &state = reject_diagnostic_states_[static_cast<std::size_t>(reason)];
+        const RateLimitedEventDecision decision =
+            observe_rate_limited_event(state, now_ns, reject_diagnostic_interval_ns_);
+        if (!decision.emit_detail)
         {
-            emit_invalid_packet_diagnostic(diagnostic_output, datagram, parsed, reason);
-            ++invalid_dumped;
-            state.emitted_once = true;
-            state.next_emit_after_ns = now_ns + kRejectDiagnosticIntervalNs;
             return;
         }
 
-        if (now_ns >= state.next_emit_after_ns)
+        if (decision.emit_summary)
         {
-            if (state.suppressed_count > 0U)
-            {
-                emit_invalid_packet_summary(diagnostic_output, reason, state.suppressed_count, state.total_count);
-            }
-            emit_invalid_packet_diagnostic(diagnostic_output, datagram, parsed, reason);
-            ++invalid_dumped;
-            state.suppressed_count = 0;
-            state.next_emit_after_ns = now_ns + kRejectDiagnosticIntervalNs;
-            return;
+            emit_invalid_packet_summary(diagnostic_output, reason, decision.suppressed_count, decision.total_count);
         }
 
-        ++state.suppressed_count;
+        emit_invalid_packet_diagnostic(diagnostic_output, datagram, parsed, reason);
+        ++invalid_dumped;
     }
 #endif
 
@@ -205,6 +197,11 @@ namespace rxtech
 
         stats.accepted_bytes += udp_frame.udp_payload.size();
         ++stats.accepted_packets;
+
+        if (datagram.has_global_sequence)
+        {
+            metrics.on_global_packet_sequence(datagram.global_sequence);
+        }
 
         const ParsedPacketView parsed = parser_.parse(udp_frame);
         const PacketValidity validation = validator_.validate(parsed);

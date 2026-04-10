@@ -20,7 +20,8 @@ namespace rxtech
 
         bool has_business_traffic(const RunSummary &summary)
         {
-            return summary.parsed_packets > 0U || summary.control_table_packets > 0U || summary.data_packets > 0U;
+            return summary.protocol.parsed_packets > 0U || summary.protocol.control_table_packets > 0U ||
+                   summary.protocol.data_packets > 0U;
         }
 
         std::string format_wall_clock_timestamp()
@@ -65,14 +66,14 @@ namespace rxtech
 
         double calculate_drop_rate(const RunSummary &summary)
         {
-            const double total = static_cast<double>(
-                summary.rx_packets + summary.dropped_packets + summary.backend_dropped_packets + summary.backend_kernel_drops);
+            const double total = static_cast<double>(summary.protocol.rx_packets + summary.protocol.dropped_packets +
+                                                     summary.backend.dropped_packets + summary.backend.kernel_drops);
             if (total <= 0.0)
             {
                 return 0.0;
             }
-            return static_cast<double>(
-                       summary.dropped_packets + summary.backend_dropped_packets + summary.backend_kernel_drops) /
+            return static_cast<double>(summary.protocol.dropped_packets + summary.backend.dropped_packets +
+                                       summary.backend.kernel_drops) /
                    total;
         }
 
@@ -80,10 +81,9 @@ namespace rxtech
                                                              const std::chrono::steady_clock::duration &elapsed)
         {
             const auto elapsed_seconds = std::max<std::uint64_t>(
-                1ULL,
-                static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(elapsed).count()));
-            const double aggregate_gbps =
-                (static_cast<double>(summary.rx_bytes) * 8.0) / static_cast<double>(elapsed_seconds) / 1'000'000'000.0;
+                1ULL, static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(elapsed).count()));
+            const double aggregate_gbps = (static_cast<double>(summary.protocol.rx_bytes) * 8.0) /
+                                          static_cast<double>(elapsed_seconds) / 1'000'000'000.0;
 
             std::vector<std::string> lines;
             lines.reserve(32);
@@ -93,31 +93,36 @@ namespace rxtech
             lines.push_back(build_metric_line("链路判定", describe_link_state(summary)));
             lines.push_back("");
             lines.push_back("[链路层统计]");
-            lines.push_back(build_metric_line("原始接收帧",
-                                              std::to_string(summary.raw_rx_packets) + " 帧 / " +
-                                                  std::to_string(summary.raw_rx_bytes) + " 字节"));
-            lines.push_back(build_metric_line("ARP 请求帧", std::to_string(summary.arp_request_packets) + " 帧"));
-            lines.push_back(build_metric_line("ARP 应答帧", std::to_string(summary.arp_reply_packets) + " 帧"));
-            lines.push_back(build_metric_line("过滤报文", std::to_string(summary.filtered_packets) + " 报文"));
-            lines.push_back(build_metric_line("空轮询占比", format_decimal(summary.empty_poll_ratio, 4)));
+            lines.push_back(build_metric_line("原始接收帧", std::to_string(summary.backend.raw_rx_packets) + " 帧 / " +
+                                                                std::to_string(summary.backend.raw_rx_bytes) +
+                                                                " 字节"));
+            lines.push_back(
+                build_metric_line("ARP 请求帧", std::to_string(summary.backend.arp_request_packets) + " 帧"));
+            lines.push_back(build_metric_line("ARP 应答帧", std::to_string(summary.backend.arp_reply_packets) + " 帧"));
+            lines.push_back(build_metric_line("过滤报文", std::to_string(summary.backend.filtered_packets) + " 报文"));
+            lines.push_back(build_metric_line("空轮询占比", format_decimal(summary.performance.empty_poll_ratio, 4)));
             lines.push_back("");
             lines.push_back("[协议层统计]");
-            lines.push_back(build_metric_line("候选业务报文",
-                                              std::to_string(summary.rx_packets) + " 报文 / " +
-                                                  std::to_string(summary.rx_bytes) + " 字节"));
-            lines.push_back(build_metric_line("协议有效报文", std::to_string(summary.parsed_packets) + " 报文"));
-            lines.push_back(build_metric_line("控制表报文", std::to_string(summary.control_table_packets) + " 报文"));
-            lines.push_back(build_metric_line("数据报文", std::to_string(summary.data_packets) + " 报文"));
-            lines.push_back(build_metric_line("协议丢弃报文", std::to_string(summary.dropped_packets) + " 报文"));
-            lines.push_back(build_metric_line("后端丢弃报文", std::to_string(summary.backend_dropped_packets) + " 报文"));
-            lines.push_back(build_metric_line("接收批次", std::to_string(summary.backend_receive_batches)));
-            lines.push_back(build_metric_line("最大突发批次", std::to_string(summary.backend_max_burst_size)));
-            lines.push_back(build_metric_line("内核丢弃报文", std::to_string(summary.backend_kernel_drops) + " 报文"));
+            lines.push_back(build_metric_line("候选业务报文", std::to_string(summary.protocol.rx_packets) + " 报文 / " +
+                                                                  std::to_string(summary.protocol.rx_bytes) + " 字节"));
+            lines.push_back(
+                build_metric_line("协议有效报文", std::to_string(summary.protocol.parsed_packets) + " 报文"));
+            lines.push_back(
+                build_metric_line("控制表报文", std::to_string(summary.protocol.control_table_packets) + " 报文"));
+            lines.push_back(build_metric_line("数据报文", std::to_string(summary.protocol.data_packets) + " 报文"));
+            lines.push_back(
+                build_metric_line("协议丢弃报文", std::to_string(summary.protocol.dropped_packets) + " 报文"));
+            lines.push_back(
+                build_metric_line("后端丢弃报文", std::to_string(summary.backend.dropped_packets) + " 报文"));
+            lines.push_back(build_metric_line("接收批次", std::to_string(summary.backend.receive_batches)));
+            lines.push_back(build_metric_line("最大突发批次", std::to_string(summary.backend.max_burst_size)));
+            lines.push_back(build_metric_line("内核丢弃报文", std::to_string(summary.backend.kernel_drops) + " 报文"));
             lines.push_back("");
             lines.push_back("[输出链路统计]");
-            if (summary.output_backpressure_count > 0U)
+            if (summary.performance.output_backpressure_count > 0U)
             {
-                lines.push_back(build_metric_line("输出退化次数", std::to_string(summary.output_backpressure_count)));
+                lines.push_back(
+                    build_metric_line("输出退化次数", std::to_string(summary.performance.output_backpressure_count)));
             }
             else
             {
@@ -125,31 +130,63 @@ namespace rxtech
             }
             {
                 const char *run_result_label = "成功";
-                if (summary.run_status == "degraded")
+                if (summary.run.status == "degraded")
                 {
                     run_result_label = "退化";
                 }
-                else if (summary.run_status != "success")
+                else if (summary.run.status != "success")
                 {
                     run_result_label = "失败";
                 }
                 lines.push_back(build_metric_line("运行结论", run_result_label));
             }
             lines.push_back("");
-            lines.push_back("[结果层统计]");
-            lines.push_back(build_metric_line("全局 CPI 数", std::to_string(summary.cpi_count)));
-            lines.push_back(build_metric_line("全局 PRT 数", std::to_string(summary.prt_count)));
-            lines.push_back(build_metric_line("全局通道数", std::to_string(summary.channel_count)));
-            lines.push_back(build_metric_line("落盘记录",
-                                              std::to_string(summary.packet_count) + " 报文 / " +
-                                                  std::to_string(summary.recorded_bytes) + " 字节"));
-            if (!summary.raw_record_output_dir.empty() || summary.raw_record_written_frames > 0U || summary.raw_record_dropped_frames > 0U)
+            lines.push_back("[可观测性]");
+            if (summary.performance.cpu_metrics_available)
             {
-                lines.push_back(build_metric_line("原始帧录制",
-                                                  std::to_string(summary.raw_record_written_frames) + " 帧 / " +
-                                                      std::to_string(summary.raw_record_written_bytes) + " 字节"));
-                lines.push_back(build_metric_line("录制丢弃帧", std::to_string(summary.raw_record_dropped_frames) + " 帧"));
-                lines.push_back(build_metric_line("录制队列高水位", std::to_string(summary.raw_record_queue_high_watermark)));
+                lines.push_back(
+                    build_metric_line("CPU 用户/系统", format_decimal(summary.performance.cpu_user_pct, 2) + "% / " +
+                                                           format_decimal(summary.performance.cpu_sys_pct, 2) + "%"));
+                lines.push_back(
+                    build_metric_line("CPU 峰值", format_decimal(summary.performance.cpu_peak_pct, 2) + "%"));
+            }
+            else
+            {
+                lines.push_back(build_metric_line("CPU 指标", summary.performance.cpu_metrics_status));
+            }
+            if (summary.global_packet_sequence.available)
+            {
+                lines.push_back(build_metric_line(
+                    "全局序列号 gap", std::to_string(summary.global_packet_sequence.gap_count) + " / 缺失 " +
+                                          std::to_string(summary.global_packet_sequence.missing_packets)));
+            }
+            else
+            {
+                lines.push_back(build_metric_line("全局序列号", summary.global_packet_sequence.status));
+            }
+            if (summary.metrics_export.enabled)
+            {
+                lines.push_back(
+                    build_metric_line("指标导出", summary.metrics_export.mode + " / " + summary.metrics_export.status));
+            }
+            lines.push_back("");
+            lines.push_back("[结果层统计]");
+            lines.push_back(build_metric_line("全局 CPI 数", std::to_string(summary.protocol.cpi_count)));
+            lines.push_back(build_metric_line("全局 PRT 数", std::to_string(summary.protocol.prt_count)));
+            lines.push_back(build_metric_line("全局通道数", std::to_string(summary.protocol.channel_count)));
+            lines.push_back(build_metric_line("落盘记录", std::to_string(summary.capture.packet_count) + " 报文 / " +
+                                                              std::to_string(summary.capture.recorded_bytes) +
+                                                              " 字节"));
+            if (!summary.capture.raw_record_output_dir.empty() || summary.capture.raw_record_written_frames > 0U ||
+                summary.capture.raw_record_dropped_frames > 0U)
+            {
+                lines.push_back(build_metric_line(
+                    "原始帧录制", std::to_string(summary.capture.raw_record_written_frames) + " 帧 / " +
+                                      std::to_string(summary.capture.raw_record_written_bytes) + " 字节"));
+                lines.push_back(
+                    build_metric_line("录制丢弃帧", std::to_string(summary.capture.raw_record_dropped_frames) + " 帧"));
+                lines.push_back(build_metric_line("录制队列高水位",
+                                                  std::to_string(summary.capture.raw_record_queue_high_watermark)));
             }
             lines.push_back(build_metric_line("接收吞吐率", format_decimal(aggregate_gbps, 6) + " Gbps"));
             lines.push_back(build_metric_line("丢包率", format_decimal(calculate_drop_rate(summary), 6)));
@@ -159,20 +196,17 @@ namespace rxtech
 
     } // namespace
 
-    std::vector<std::string> build_status_snapshot_lines_for_test(
-        const RunSummary &summary,
-        const std::chrono::steady_clock::duration &elapsed)
+    std::vector<std::string> build_status_snapshot_lines_for_test(const RunSummary &summary,
+                                                                  const std::chrono::steady_clock::duration &elapsed)
     {
         return build_status_snapshot_lines(summary, elapsed);
     }
 
-    StatusPanelWriter::StatusPanelWriter(std::ostream *output)
-        : output_(output)
+    StatusPanelWriter::StatusPanelWriter(std::ostream *output) : output_(output)
     {
 #ifdef __linux__
-        interactive_console_ =
-            (output_ == &std::cout && ::isatty(STDOUT_FILENO) == 1) ||
-            (output_ == &std::cerr && ::isatty(STDERR_FILENO) == 1);
+        interactive_console_ = (output_ == &std::cout && ::isatty(STDOUT_FILENO) == 1) ||
+                               (output_ == &std::cerr && ::isatty(STDERR_FILENO) == 1);
 #endif
     }
 
@@ -181,8 +215,7 @@ namespace rxtech
         finish();
     }
 
-    void StatusPanelWriter::render(const RunSummary &summary,
-                                   const std::chrono::steady_clock::duration &elapsed)
+    void StatusPanelWriter::render(const RunSummary &summary, const std::chrono::steady_clock::duration &elapsed)
     {
         if (output_ == nullptr)
         {

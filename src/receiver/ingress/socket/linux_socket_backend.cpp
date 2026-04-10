@@ -54,7 +54,8 @@ namespace rxtech
 
         std::string effective_socket_frame_dest_ip(const RxConfig &config)
         {
-            return config.receiver_ipv4.empty() ? effective_socket_bind_ip(config) : config.receiver_ipv4;
+            return config.ingress.receiver_ipv4.empty() ? effective_socket_bind_ip(config)
+                                                        : config.ingress.receiver_ipv4;
         }
 
         std::uint32_t socket_dest_ipv4_be(const sockaddr_in &peer, const in_pktinfo &pktinfo,
@@ -234,7 +235,7 @@ namespace rxtech
         (void)::setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &reuse_addr, sizeof(reuse_addr));
 
         const int rcvbuf = static_cast<int>(std::min<std::uint32_t>(
-            config.socket_rcvbuf_bytes, static_cast<std::uint32_t>(std::numeric_limits<int>::max())));
+            config.ingress.socket_rcvbuf_bytes, static_cast<std::uint32_t>(std::numeric_limits<int>::max())));
         if (::setsockopt(socket_fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf)) != 0)
         {
             ++stats_.rx_errors;
@@ -242,11 +243,11 @@ namespace rxtech
             return make_socket_result(true, socket_error_message("设置 SO_RCVBUF"));
         }
 
-        if (!config.socket_nonblocking && config.socket_batch_timeout_ms > 0U)
+        if (!config.ingress.socket_nonblocking && config.ingress.socket_batch_timeout_ms > 0U)
         {
             timeval timeout{};
-            timeout.tv_sec = static_cast<long>(config.socket_batch_timeout_ms / 1000U);
-            timeout.tv_usec = static_cast<long>((config.socket_batch_timeout_ms % 1000U) * 1000U);
+            timeout.tv_sec = static_cast<long>(config.ingress.socket_batch_timeout_ms / 1000U);
+            timeout.tv_usec = static_cast<long>((config.ingress.socket_batch_timeout_ms % 1000U) * 1000U);
             if (::setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0)
             {
                 ++stats_.rx_errors;
@@ -255,7 +256,7 @@ namespace rxtech
             }
         }
 
-        if (config.socket_nonblocking)
+        if (config.ingress.socket_nonblocking)
         {
             const int flags = ::fcntl(socket_fd, F_GETFL, 0);
             if (flags < 0 || ::fcntl(socket_fd, F_SETFL, flags | O_NONBLOCK) != 0)
@@ -291,14 +292,14 @@ namespace rxtech
         }
 
         impl_->socket_fd = socket_fd;
-        impl_->nonblocking = config.socket_nonblocking;
-        impl_->batch_timeout_ms = config.socket_batch_timeout_ms;
+        impl_->nonblocking = config.ingress.socket_nonblocking;
+        impl_->batch_timeout_ms = config.ingress.socket_batch_timeout_ms;
         impl_->dest_ipv4_be = ntohl(frame_dest_addr.s_addr);
         impl_->bind_port = bind_port;
         impl_->last_seen_kernel_drop_count = 0U;
 
-        stats_.queue_id = config.queue_id;
-        stats_.frame_size = config.protocol_udp_packet_size;
+        stats_.queue_id = config.ingress.queue_id;
+        stats_.frame_size = config.protocol.udp_packet_size;
 
         BackendInitResult result;
         result.ok = true;

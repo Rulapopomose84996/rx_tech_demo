@@ -177,13 +177,15 @@ namespace rxtech
         };
 
         explicit Impl(const RxConfig &config)
-            : enabled(config.raw_record_enabled), output_dir(config.raw_record_output_dir),
-              file_prefix(config.raw_record_file_prefix.empty() ? "radar_raw" : config.raw_record_file_prefix),
-              ring_slots(std::max<std::uint32_t>(1U, config.raw_record_ring_slots)),
-              writer_batch_size(std::max<std::uint32_t>(1U, config.raw_record_writer_batch_size)),
-              max_frame_bytes(std::max<std::uint32_t>(64U, config.raw_record_max_frame_bytes)),
-              max_total_bytes(std::max<std::uint64_t>(1ULL, config.raw_record_max_total_bytes)),
-              segment_bytes(std::min(std::max<std::uint64_t>(1ULL, config.raw_record_segment_bytes), max_total_bytes))
+            : enabled(config.capture.raw_record_enabled), output_dir(config.capture.raw_record_output_dir),
+              file_prefix(config.capture.raw_record_file_prefix.empty() ? "radar_raw"
+                                                                        : config.capture.raw_record_file_prefix),
+              ring_slots(std::max<std::uint32_t>(1U, config.capture.raw_record_ring_slots)),
+              writer_batch_size(std::max<std::uint32_t>(1U, config.capture.raw_record_writer_batch_size)),
+              max_frame_bytes(std::max<std::uint32_t>(64U, config.capture.raw_record_max_frame_bytes)),
+              max_total_bytes(std::max<std::uint64_t>(1ULL, config.capture.raw_record_max_total_bytes)),
+              segment_bytes(
+                  std::min(std::max<std::uint64_t>(1ULL, config.capture.raw_record_segment_bytes), max_total_bytes))
         {
         }
 
