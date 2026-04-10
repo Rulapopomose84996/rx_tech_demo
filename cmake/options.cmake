@@ -2,4 +2,7 @@ option(BUILD_TESTS "Build tests" ON)
 option(BUILD_REPLAY "Build replay sender and file replay backend" OFF)
 
 option(RXTECH_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
+option(RXTECH_ENABLE_SANITIZERS "Enable compiler sanitizers for local/server validation builds" OFF)
+set(RXTECH_SANITIZER_KIND "address" CACHE STRING "Sanitizer kind when RXTECH_ENABLE_SANITIZERS is ON: address or thread")
+set_property(CACHE RXTECH_SANITIZER_KIND PROPERTY STRINGS address thread)
 option(RXTECH_ENABLE_DEBUG_DIAGNOSTICS "Enable heavy debug diagnostics (invalid packet dump, per-packet tracing, detail metrics sampling)" OFF)

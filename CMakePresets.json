@@ -1,0 +1,38 @@
+{
+    "version": 2,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 16,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "linux-server-base",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build-preset",
+            "cacheVariables": {
+                "BUILD_TESTS": "ON",
+                "BUILD_REPLAY": "OFF",
+                "CMAKE_BUILD_TYPE": "Debug",
+                "RXTECH_THIRD_PARTY_CACHE": "/home/devuser/WorkSpace/ThirdPartyCache"
+            }
+        },
+        {
+            "name": "linux-server-werror",
+            "displayName": "Linux Server Werror",
+            "description": "Linux 服务器手动验证用 preset，开启 -Werror。",
+            "inherits": "linux-server-base",
+            "binaryDir": "${sourceDir}/build-preset-werror",
+            "cacheVariables": {
+                "RXTECH_WARNINGS_AS_ERRORS": "ON"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "linux-server-werror",
+            "configurePreset": "linux-server-werror"
+        }
+    ]
+}

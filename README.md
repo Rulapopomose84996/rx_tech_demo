@@ -199,6 +199,16 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 bash ./scripts/compile/server_shared_cache.sh
 ```
 
+如果服务器上的 CMake 版本支持 presets，也可以使用仓库根目录新增的 `linux-server-werror` preset 做手动质量闸口验证：
+
+```bash
+cd /home/devuser/WorkSpace/rx_tech_demo
+cmake --preset linux-server-werror
+cmake --build --preset linux-server-werror
+```
+
+这个 preset 只用于 Linux 服务器手动验证，保持现有第三方缓存路径，并额外打开 `-DRXTECH_WARNINGS_AS_ERRORS=ON`。
+
 单元测试：
 
 ```bash
