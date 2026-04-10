@@ -9,9 +9,7 @@
 
 namespace
 {
-    rxtech::InterpretedPacketView make_packet(std::uint16_t cpi,
-                                              std::uint16_t prt,
-                                              std::uint16_t channel,
+    rxtech::InterpretedPacketView make_packet(std::uint16_t cpi, std::uint16_t prt, std::uint16_t channel,
                                               std::uint16_t packet_index)
     {
         rxtech::InterpretedPacketView packet;
@@ -23,7 +21,7 @@ namespace
         packet.packet_index = packet_index;
         return packet;
     }
-}
+} // namespace
 
 int main()
 {
@@ -40,8 +38,8 @@ int main()
     rxtech::RunSummary summary;
     tracker.populate_summary(summary);
 
-    assert(summary.data_order_checked_packets == 3U);
-    assert(summary.data_order_assessment == "符合按 PRT 推进的和/差/差顺序");
-    assert(summary.data_order_first_mismatch.empty());
+    assert(summary.data_order.checked_packets == 3U);
+    assert(summary.data_order.assessment == "符合按 PRT 推进的和/差/差顺序");
+    assert(summary.data_order.first_mismatch.empty());
     return 0;
 }

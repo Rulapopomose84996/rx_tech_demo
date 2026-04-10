@@ -15,49 +15,50 @@
 int main()
 {
     rxtech::RunSummary summary;
-    summary.run_status = "success";
-    summary.backend = "dpdk";
-    summary.queue_id = 3U;
-    summary.raw_rx_packets = 12U;
-    summary.raw_rx_bytes = 3456U;
-    summary.arp_request_packets = 2U;
-    summary.arp_reply_packets = 1U;
-    summary.filtered_packets = 4U;
-    summary.rx_packets = 10U;
-    summary.rx_bytes = 20480U;
-    summary.parsed_packets = 8U;
-    summary.control_table_packets = 1U;
-    summary.data_packets = 7U;
-    summary.dropped_packets = 2U;
-    summary.backend_dropped_packets = 3U;
-    summary.captured_packets = 9U;
-    summary.captured_bytes = 18000U;
-    summary.recorded_bytes = 12345U;
-    summary.raw_record_written_frames = 5U;
-    summary.raw_record_written_bytes = 5000U;
-    summary.raw_record_dropped_frames = 1U;
-    summary.raw_record_dropped_bytes = 256U;
-    summary.raw_record_output_dir = "/data/rx_tech_demo/raw_frames";
-    summary.raw_record_queue_high_watermark = 7U;
-    summary.cpi_count = 2U;
-    summary.prt_count = 6U;
-    summary.channel_count = 3U;
-    summary.data_order_assessment = "偏离按 PRT 推进顺序，当前捕获更像按通道分批到达";
-    summary.data_order_first_mismatch = "第 10 个数据包开始偏离，期望 CPI 2 / PRT 41 / CH 1 / PKT 1，实际 CPI 2 / PRT 42 / CH 0 / PKT 1";
-    summary.active_prt_available = true;
-    summary.active_cpi = 2U;
-    summary.active_prt = 41U;
-    summary.active_prt_packets_per_channel = 9U;
-    summary.active_prt_channel_count = 2U;
-    summary.active_prt_complete = false;
-    summary.active_prt_channels.push_back({0U, 9U, true});
-    summary.active_prt_channels.push_back({1U, 9U, true});
-    summary.active_prt_channels.push_back({2U, 0U, false});
-    summary.packet_count = 9U;
-    summary.empty_poll_ratio = 0.25;
-    summary.backend_receive_batches = 12U;
-    summary.backend_max_burst_size = 6U;
-    summary.backend_kernel_drops = 9U;
+    summary.run.status = "success";
+    summary.run.backend_name = "dpdk";
+    summary.backend.queue_id = 3U;
+    summary.backend.raw_rx_packets = 12U;
+    summary.backend.raw_rx_bytes = 3456U;
+    summary.backend.arp_request_packets = 2U;
+    summary.backend.arp_reply_packets = 1U;
+    summary.backend.filtered_packets = 4U;
+    summary.protocol.rx_packets = 10U;
+    summary.protocol.rx_bytes = 20480U;
+    summary.protocol.parsed_packets = 8U;
+    summary.protocol.control_table_packets = 1U;
+    summary.protocol.data_packets = 7U;
+    summary.protocol.dropped_packets = 2U;
+    summary.backend.dropped_packets = 3U;
+    summary.capture.captured_packets = 9U;
+    summary.capture.captured_bytes = 18000U;
+    summary.capture.recorded_bytes = 12345U;
+    summary.capture.raw_record_written_frames = 5U;
+    summary.capture.raw_record_written_bytes = 5000U;
+    summary.capture.raw_record_dropped_frames = 1U;
+    summary.capture.raw_record_dropped_bytes = 256U;
+    summary.capture.raw_record_output_dir = "/data/rx_tech_demo/raw_frames";
+    summary.capture.raw_record_queue_high_watermark = 7U;
+    summary.protocol.cpi_count = 2U;
+    summary.protocol.prt_count = 6U;
+    summary.protocol.channel_count = 3U;
+    summary.data_order.assessment = "偏离按 PRT 推进顺序，当前捕获更像按通道分批到达";
+    summary.data_order.first_mismatch =
+        "第 10 个数据包开始偏离，期望 CPI 2 / PRT 41 / CH 1 / PKT 1，实际 CPI 2 / PRT 42 / CH 0 / PKT 1";
+    summary.active_prt.available = true;
+    summary.active_prt.cpi = 2U;
+    summary.active_prt.prt = 41U;
+    summary.active_prt.packets_per_channel = 9U;
+    summary.active_prt.channel_count = 2U;
+    summary.active_prt.complete = false;
+    summary.active_prt.channels.push_back({0U, 9U, true});
+    summary.active_prt.channels.push_back({1U, 9U, true});
+    summary.active_prt.channels.push_back({2U, 0U, false});
+    summary.capture.packet_count = 9U;
+    summary.performance.empty_poll_ratio = 0.25;
+    summary.backend.receive_batches = 12U;
+    summary.backend.max_burst_size = 6U;
+    summary.backend.kernel_drops = 9U;
 
     rxtech::BackendStats backend{};
     backend.backend_drops = 3U;
@@ -66,14 +67,14 @@ int main()
     backend.kernel_drop_count = 9U;
 
     rxtech::RunSummary merged_summary{};
-    merged_summary.dropped_packets = 5U;
+    merged_summary.protocol.dropped_packets = 5U;
     rxtech::merge_backend_stats(merged_summary, backend);
 
-    assert(merged_summary.dropped_packets == 5U);
-    assert(merged_summary.backend_dropped_packets == 3U);
-    assert(merged_summary.backend_receive_batches == 12U);
-    assert(merged_summary.backend_max_burst_size == 6U);
-    assert(merged_summary.backend_kernel_drops == 9U);
+    assert(merged_summary.protocol.dropped_packets == 5U);
+    assert(merged_summary.backend.dropped_packets == 3U);
+    assert(merged_summary.backend.receive_batches == 12U);
+    assert(merged_summary.backend.max_burst_size == 6U);
+    assert(merged_summary.backend.kernel_drops == 9U);
 
     const std::string human = rxtech::build_run_human_summary(summary);
     assert(human.find("接收结束汇总") != std::string::npos);
@@ -120,8 +121,7 @@ int main()
         {
             saw_result_section = true;
         }
-        if (line.find("接收顺序") != std::string::npos ||
-            line.find("当前重组 PRT") != std::string::npos ||
+        if (line.find("接收顺序") != std::string::npos || line.find("当前重组 PRT") != std::string::npos ||
             line.find("首个顺序偏差") != std::string::npos)
         {
             saw_debug_lines = true;
@@ -169,10 +169,10 @@ int main()
     assert(!saw_debug_lines);
 
     rxtech::RunSummary pre_business_summary;
-    pre_business_summary.raw_rx_packets = 5U;
-    pre_business_summary.raw_rx_bytes = 300U;
-    pre_business_summary.filtered_packets = 2U;
-    pre_business_summary.empty_poll_ratio = 1.0;
+    pre_business_summary.backend.raw_rx_packets = 5U;
+    pre_business_summary.backend.raw_rx_bytes = 300U;
+    pre_business_summary.backend.filtered_packets = 2U;
+    pre_business_summary.performance.empty_poll_ratio = 1.0;
     const std::vector<std::string> pre_business_lines =
         rxtech::build_status_snapshot_lines_for_test(pre_business_summary, std::chrono::seconds(1));
 
@@ -214,12 +214,12 @@ int main()
     // ── Degraded run status rendering ────────────────────────────────
     {
         rxtech::RunSummary degraded_summary;
-        degraded_summary.run_status = "degraded";
-        degraded_summary.backend = "dpdk";
-        degraded_summary.output_backpressure_count = 7U;
-        degraded_summary.rx_packets = 100U;
-        degraded_summary.parsed_packets = 80U;
-        degraded_summary.data_packets = 70U;
+        degraded_summary.run.status = "degraded";
+        degraded_summary.run.backend_name = "dpdk";
+        degraded_summary.performance.output_backpressure_count = 7U;
+        degraded_summary.protocol.rx_packets = 100U;
+        degraded_summary.protocol.parsed_packets = 80U;
+        degraded_summary.protocol.data_packets = 70U;
 
         const std::string human_degraded = rxtech::build_run_human_summary(degraded_summary);
         assert(human_degraded.find("运行结果： 退化") != std::string::npos);
@@ -253,12 +253,12 @@ int main()
     // ── Error run status rendering ───────────────────────────────────
     {
         rxtech::RunSummary error_summary;
-        error_summary.run_status = "error";
-        error_summary.backend = "dpdk";
-        error_summary.output_backpressure_count = 3U;
-        error_summary.rx_packets = 50U;
-        error_summary.parsed_packets = 40U;
-        error_summary.data_packets = 30U;
+        error_summary.run.status = "error";
+        error_summary.run.backend_name = "dpdk";
+        error_summary.performance.output_backpressure_count = 3U;
+        error_summary.protocol.rx_packets = 50U;
+        error_summary.protocol.parsed_packets = 40U;
+        error_summary.protocol.data_packets = 30U;
 
         const std::string human_error = rxtech::build_run_human_summary(error_summary);
         assert(human_error.find("运行结果： 失败") != std::string::npos);

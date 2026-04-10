@@ -277,7 +277,7 @@ int main()
         assert(late_result.accepted);
 
         const auto summary = metrics.finalize("test", "test", "test", 1U);
-        assert(summary.late_packet_accepted_count >= 1U);
+        assert(summary.performance.late_packet_accepted_count >= 1U);
 
         coord.release_active();
     }

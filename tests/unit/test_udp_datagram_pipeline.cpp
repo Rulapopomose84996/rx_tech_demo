@@ -209,7 +209,7 @@ int main()
 
     {
         rxtech::RxConfig config = rxtech::load_default_config();
-        config.allowed_source_ipv4 = "172.20.11.1";
+        config.ingress.allowed_source_ipv4 = "172.20.11.1";
         const std::vector<std::uint8_t> payload = make_valid_payload();
         const std::vector<std::uint8_t> frame = make_udp_frame_with_payload(payload);
         const PipelineRunResult legacy = run_legacy(config, frame);
@@ -223,8 +223,8 @@ int main()
         assert(datagram.stats.filtered_packets == 1U);
         assert(legacy.callback.count == 0U);
         assert(datagram.callback.count == 0U);
-        assert(datagram.summary.dropped_packets == legacy.summary.dropped_packets);
-        assert(datagram.summary.backend_errors == legacy.summary.backend_errors);
+        assert(datagram.summary.protocol.dropped_packets == legacy.summary.protocol.dropped_packets);
+        assert(datagram.summary.backend.errors == legacy.summary.backend.errors);
     }
 
     {
@@ -239,11 +239,11 @@ int main()
         assert(datagram.stats.accepted_bytes == payload.size());
         assert(legacy.callback.count == 0U);
         assert(datagram.callback.count == 0U);
-        assert(legacy.summary.dropped_packets == 1U);
-        assert(datagram.summary.dropped_packets == 1U);
+        assert(legacy.summary.protocol.dropped_packets == 1U);
+        assert(datagram.summary.protocol.dropped_packets == 1U);
         assert(legacy.summary.reject_by_reason[static_cast<std::size_t>(rxtech::RejectReason::invalid_len)] == 1U);
         assert(datagram.summary.reject_by_reason[static_cast<std::size_t>(rxtech::RejectReason::invalid_len)] == 1U);
-        assert(datagram.summary.backend_errors == legacy.summary.backend_errors);
+        assert(datagram.summary.backend.errors == legacy.summary.backend.errors);
     }
 
     {
@@ -264,8 +264,8 @@ int main()
         assert(datagram.stats.accepted_bytes == 0U);
         assert(datagram.stats.filtered_packets == 0U);
         assert(datagram.callback.count == 0U);
-        assert(datagram.summary.backend_errors == 1U);
-        assert(datagram.summary.dropped_packets == 0U);
+        assert(datagram.summary.backend.errors == 1U);
+        assert(datagram.summary.protocol.dropped_packets == 0U);
         assert(datagram.summary.reject_by_reason == empty_rejects);
     }
 
@@ -279,8 +279,8 @@ int main()
         assert(result.stats.accepted_bytes == 0U);
         assert(result.stats.filtered_packets == 0U);
         assert(result.callback.count == 0U);
-        assert(result.summary.backend_errors == 0U);
-        assert(result.summary.dropped_packets == 1U);
+        assert(result.summary.backend.errors == 0U);
+        assert(result.summary.protocol.dropped_packets == 1U);
         assert(result.summary.reject_by_reason[static_cast<std::size_t>(rxtech::RejectReason::truncated_datagram)] ==
                1U);
     }

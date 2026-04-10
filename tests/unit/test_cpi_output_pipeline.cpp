@@ -208,7 +208,7 @@ int main()
 
         // Verify the drop was recorded
         rxtech::RunSummary drop_summary = drop_metrics.finalize("test", "", "", 0);
-        assert(drop_summary.output_backpressure_count == 1U);
+        assert(drop_summary.performance.output_backpressure_count == 1U);
 
         // Verify pool slot is immediately reusable
         const std::uint32_t reused_idx = drop_pool.acquire(99U);

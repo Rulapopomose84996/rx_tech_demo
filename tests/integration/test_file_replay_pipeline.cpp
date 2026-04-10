@@ -26,30 +26,36 @@ namespace
     rxtech::RxConfig make_replay_config()
     {
         rxtech::RxConfig cfg = rxtech::load_default_config();
-        cfg.receiver_ipv4 = "172.20.11.100";
-        cfg.allowed_source_ipv4 = "172.20.11.222";
-        cfg.allowed_dest_port = 9999;
-        cfg.protocol_channels_per_prt = 3U;
-        cfg.protocol_packets_per_channel = 9U;
-        cfg.protocol_expected_n_prt = 50U;
-        cfg.protocol_dynamic_prt_enabled = false;
-        cfg.protocol_max_n_prt = 100U;
-        cfg.capture_enabled = false;
-        cfg.raw_record_enabled = false;
-        cfg.max_burst = 64U;
+        cfg.ingress.receiver_ipv4 = "172.20.11.100";
+        cfg.ingress.allowed_source_ipv4 = "172.20.11.222";
+        cfg.ingress.allowed_dest_port = 9999;
+        cfg.protocol.channels_per_prt = 3U;
+        cfg.protocol.packets_per_channel = 9U;
+        cfg.protocol.expected_n_prt = 50U;
+        cfg.protocol.dynamic_prt_enabled = false;
+        cfg.protocol.max_n_prt = 100U;
+        cfg.capture.capture_enabled = false;
+        cfg.capture.raw_record_enabled = false;
+        cfg.runtime.max_burst = 64U;
         return cfg;
     }
 
     class ExhaustDetectBackend final : public rxtech::IRxBackend
     {
-    public:
+      public:
         ExhaustDetectBackend(rxtech::FileReplayOptions opts, std::atomic<bool> &stop_flag)
             : inner_(std::move(opts)), stop_flag_(stop_flag)
         {
         }
 
-        std::string name() const override { return inner_.name(); }
-        rxtech::BackendInitResult init(const rxtech::RxConfig &cfg) override { return inner_.init(cfg); }
+        std::string name() const override
+        {
+            return inner_.name();
+        }
+        rxtech::BackendInitResult init(const rxtech::RxConfig &cfg) override
+        {
+            return inner_.init(cfg);
+        }
 
         bool recv_burst(rxtech::UdpDatagramBurst &burst, std::uint32_t max) override
         {
@@ -68,11 +74,20 @@ namespace
             return ok;
         }
 
-        void release_burst(rxtech::UdpDatagramBurst &burst) override { inner_.release_burst(burst); }
-        rxtech::BackendStats stats() const override { return inner_.stats(); }
-        void shutdown() override { inner_.shutdown(); }
+        void release_burst(rxtech::UdpDatagramBurst &burst) override
+        {
+            inner_.release_burst(burst);
+        }
+        rxtech::BackendStats stats() const override
+        {
+            return inner_.stats();
+        }
+        void shutdown() override
+        {
+            inner_.shutdown();
+        }
 
-    private:
+      private:
         rxtech::FileReplayBackend inner_;
         std::atomic<bool> &stop_flag_;
         int empty_streak_ = 0;
@@ -114,15 +129,15 @@ namespace
         const rxtech::CpiVerifier verifier;
 
         rxtech::OwnerLoop loop;
-        loop.set_output_handler([&](const rxtech::CpiOutput &out)
-                                {
-                                    std::lock_guard<std::mutex> lk(mu);
-                                    result.decisions.push_back(out.decision);
-                                    result.verifications.push_back(verifier.verify(out, spec));
-                                });
+        loop.set_output_handler(
+            [&](const rxtech::CpiOutput &out)
+            {
+                std::lock_guard<std::mutex> lk(mu);
+                result.decisions.push_back(out.decision);
+                result.verifications.push_back(verifier.verify(out, spec));
+            });
 
-        loop.run(ctx, artifacts, [&stop]()
-                 { return stop.load(std::memory_order_relaxed); });
+        loop.run(ctx, artifacts, [&stop]() { return stop.load(std::memory_order_relaxed); });
 
         return result;
     }

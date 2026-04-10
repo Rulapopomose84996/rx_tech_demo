@@ -19,21 +19,19 @@ namespace
 {
     std::vector<std::uint8_t> make_sample_payload()
     {
-        std::vector<std::uint8_t> bytes = {
-            0x03, 0xff, 0xaa, 0x55,
-            0x01, 0x00,
-            0x00, 0x00,
-            0x22, 0x00,
-            0x02, 0x00,
-            0x00, 0x00, 0x00, 0x00};
+        std::vector<std::uint8_t> bytes = {0x03, 0xff, 0xaa, 0x55, 0x01, 0x00, 0x00, 0x00,
+                                           0x22, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00};
         bytes.resize(2048U, 0xABU);
         return bytes;
     }
 
     class MissingRawFrameBackend final : public rxtech::IRxBackend
     {
-    public:
-        std::string name() const override { return "missing_raw_frame"; }
+      public:
+        std::string name() const override
+        {
+            return "missing_raw_frame";
+        }
 
         rxtech::BackendInitResult init(const rxtech::RxConfig &) override
         {
@@ -83,7 +81,7 @@ namespace
         std::uint32_t polls_ = 0;
         std::uint32_t release_calls_ = 0;
 
-    private:
+      private:
         rxtech::BackendStats stats_{};
         std::vector<std::uint8_t> payload_;
     };
@@ -94,9 +92,9 @@ int main()
 {
     rxtech::ReceiveContext context;
     context.config = rxtech::load_default_config();
-    context.config.capture_enabled = false;
-    context.config.raw_record_enabled = false;
-    context.config.duration_seconds = 1U;
+    context.config.capture.capture_enabled = false;
+    context.config.capture.raw_record_enabled = false;
+    context.config.runtime.duration_seconds = 1U;
     context.backend = std::make_unique<MissingRawFrameBackend>();
     context.metrics = std::make_unique<rxtech::MetricsCollector>();
 
@@ -108,21 +106,16 @@ int main()
 
     rxtech::OwnerLoop owner_loop;
     const auto *backend = static_cast<const MissingRawFrameBackend *>(context.backend.get());
-    const rxtech::RunSummary summary = owner_loop.run(
-        context,
-        artifacts,
-        [backend]()
-        {
-            return backend->stop_flag_.load(std::memory_order_relaxed);
-        });
+    const rxtech::RunSummary summary =
+        owner_loop.run(context, artifacts, [backend]() { return backend->stop_flag_.load(std::memory_order_relaxed); });
 
-    assert(summary.run_status == "success");
-    assert(summary.error_message.empty());
-    assert(summary.rx_packets == 1U);
-    assert(summary.captured_packets == 1U);
-    assert(summary.recorded_packets == 1U);
-    assert(summary.captured_bytes == 2048U);
-    assert(summary.recorded_bytes == 2048U);
+    assert(summary.run.status == "success");
+    assert(summary.run.error_message.empty());
+    assert(summary.protocol.rx_packets == 1U);
+    assert(summary.capture.captured_packets == 1U);
+    assert(summary.capture.recorded_packets == 1U);
+    assert(summary.capture.captured_bytes == 2048U);
+    assert(summary.capture.recorded_bytes == 2048U);
     assert(packet_sink.str().size() == 2048U);
     assert(index_sink.str().find("data_packet") != std::string::npos);
     assert(backend->polls_ == 3U);

@@ -191,11 +191,11 @@ namespace
     rxtech::RxConfig make_socket_config(const std::uint16_t port)
     {
         rxtech::RxConfig config = rxtech::load_default_config();
-        config.backend_name = "socket";
-        config.receiver_ipv4 = "127.0.0.1";
-        config.allowed_source_ipv4 = "127.0.0.1";
-        config.allowed_dest_port = port;
-        config.protocol_udp_packet_size = 2048U;
+        config.process.backend_name = "socket";
+        config.ingress.receiver_ipv4 = "127.0.0.1";
+        config.ingress.allowed_source_ipv4 = "127.0.0.1";
+        config.ingress.allowed_dest_port = port;
+        config.protocol.udp_packet_size = 2048U;
         return config;
     }
 #endif
@@ -346,7 +346,7 @@ int main()
     }
 
     rxtech::RxConfig timeout_poll_config = make_socket_config(timeout_poll_port);
-    timeout_poll_config.socket_batch_timeout_ms = 5U;
+    timeout_poll_config.ingress.socket_batch_timeout_ms = 5U;
     rxtech::LinuxSocketIngress timeout_poll_backend;
     const rxtech::BackendInitResult timeout_poll_init = timeout_poll_backend.init(timeout_poll_config);
     if (!timeout_poll_init.ok)
@@ -578,7 +578,7 @@ int main()
     }
 
     rxtech::RxConfig empty_poll_config = make_socket_config(empty_poll_port);
-    empty_poll_config.socket_nonblocking = true;
+    empty_poll_config.ingress.socket_nonblocking = true;
 
     rxtech::LinuxSocketIngress empty_poll_backend;
     const rxtech::BackendInitResult empty_poll_init = empty_poll_backend.init(empty_poll_config);

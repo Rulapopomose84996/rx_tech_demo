@@ -27,8 +27,8 @@ int main()
     }
 
     const rxtech::RxConfig config = rxtech::load_config_file(path);
-    assert(config.dpdk_rx_desc == 1024U);
-    assert(config.dpdk_tx_desc == 512U);
+    assert(config.ingress.dpdk_rx_desc == 1024U);
+    assert(config.ingress.dpdk_tx_desc == 512U);
     std::remove(path);
     return 0;
 }

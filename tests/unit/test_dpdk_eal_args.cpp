@@ -10,8 +10,8 @@
 int main()
 {
     rxtech::RxConfig config;
-    config.cpu_cores = {16, 17, 18};
-    config.dpdk_pci_addr = "0001:05:00.3";
+    config.process.cpu_cores = {16, 17, 18};
+    config.ingress.dpdk_pci_addr = "0001:05:00.3";
 
     const std::vector<std::string> args = rxtech::build_dpdk_eal_args(config);
 

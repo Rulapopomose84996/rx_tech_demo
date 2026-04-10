@@ -221,17 +221,17 @@ namespace
     rxtech::RxConfig make_stress_config()
     {
         rxtech::RxConfig cfg = rxtech::load_default_config();
-        cfg.receiver_ipv4 = "172.20.11.100";
-        cfg.allowed_source_ipv4 = "172.20.11.222";
-        cfg.allowed_dest_port = 9999;
-        cfg.protocol_channels_per_prt = 3;
-        cfg.protocol_packets_per_channel = 9;
-        cfg.protocol_dynamic_prt_enabled = true;
-        cfg.protocol_max_n_prt = 100;
-        cfg.capture_enabled = false;
-        cfg.raw_record_enabled = false;
-        cfg.max_burst = 1024;
-        cfg.output_drop_policy = rxtech::OutputDropPolicy::degrade;
+        cfg.ingress.receiver_ipv4 = "172.20.11.100";
+        cfg.ingress.allowed_source_ipv4 = "172.20.11.222";
+        cfg.ingress.allowed_dest_port = 9999;
+        cfg.protocol.channels_per_prt = 3;
+        cfg.protocol.packets_per_channel = 9;
+        cfg.protocol.dynamic_prt_enabled = true;
+        cfg.protocol.max_n_prt = 100;
+        cfg.capture.capture_enabled = false;
+        cfg.capture.raw_record_enabled = false;
+        cfg.runtime.max_burst = 1024;
+        cfg.operations.output_drop_policy = rxtech::OutputDropPolicy::degrade;
         return cfg;
     }
 
@@ -301,14 +301,14 @@ int main()
     // Slow handler latency must not deadlock the owner loop or permanently stall
     // CPI progress. This test covers recycle/pool safety under a slow consumer.
     // Zero-blocking drop semantics are locked separately in the unit test.
-    assert(run_summary.cpi_count == static_cast<std::uint64_t>(kNumCpi));
-    if (run_summary.output_backpressure_count > 0U)
+    assert(run_summary.protocol.cpi_count == static_cast<std::uint64_t>(kNumCpi));
+    if (run_summary.performance.output_backpressure_count > 0U)
     {
-        assert(run_summary.run_status == "degraded" || run_summary.run_status == "error");
+        assert(run_summary.run.status == "degraded" || run_summary.run.status == "error");
     }
     else
     {
-        assert(run_summary.run_status == "success");
+        assert(run_summary.run.status == "success");
     }
 
     return 0;

@@ -20,27 +20,45 @@ namespace
 
     std::vector<std::uint8_t> make_control_table_packet(std::uint16_t cpi)
     {
-        std::vector<std::uint8_t> bytes = {
-            0x00, 0xFF, 0xAA, 0x55,
-            static_cast<std::uint8_t>(cpi & 0xFFU), static_cast<std::uint8_t>((cpi >> 8U) & 0xFFU),
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+        std::vector<std::uint8_t> bytes = {0x00,
+                                           0xFF,
+                                           0xAA,
+                                           0x55,
+                                           static_cast<std::uint8_t>(cpi & 0xFFU),
+                                           static_cast<std::uint8_t>((cpi >> 8U) & 0xFFU),
+                                           0x00,
+                                           0x00,
+                                           0x00,
+                                           0x00,
+                                           0x00,
+                                           0x00,
+                                           0x00,
+                                           0x00,
+                                           0x00,
+                                           0x00};
         bytes.resize(2048U, 0x00U);
         return bytes;
     }
 
-    std::vector<std::uint8_t> make_data_packet(std::uint16_t cpi,
-                                               std::uint16_t channel,
-                                               std::uint16_t prt,
-                                               std::uint16_t packet_index,
-                                               bool final_packet)
+    std::vector<std::uint8_t> make_data_packet(std::uint16_t cpi, std::uint16_t channel, std::uint16_t prt,
+                                               std::uint16_t packet_index, bool final_packet)
     {
-        std::vector<std::uint8_t> bytes = {
-            0x03, 0xFF, 0xAA, 0x55,
-            static_cast<std::uint8_t>(cpi & 0xFFU), static_cast<std::uint8_t>((cpi >> 8U) & 0xFFU),
-            static_cast<std::uint8_t>(channel & 0xFFU), static_cast<std::uint8_t>((channel >> 8U) & 0xFFU),
-            static_cast<std::uint8_t>(prt & 0xFFU), static_cast<std::uint8_t>((prt >> 8U) & 0xFFU),
-            static_cast<std::uint8_t>(packet_index & 0xFFU), static_cast<std::uint8_t>((packet_index >> 8U) & 0xFFU),
-            static_cast<std::uint8_t>(final_packet ? 0x30U : 0x00U), 0xFFU, 0xAAU, 0x55U};
+        std::vector<std::uint8_t> bytes = {0x03,
+                                           0xFF,
+                                           0xAA,
+                                           0x55,
+                                           static_cast<std::uint8_t>(cpi & 0xFFU),
+                                           static_cast<std::uint8_t>((cpi >> 8U) & 0xFFU),
+                                           static_cast<std::uint8_t>(channel & 0xFFU),
+                                           static_cast<std::uint8_t>((channel >> 8U) & 0xFFU),
+                                           static_cast<std::uint8_t>(prt & 0xFFU),
+                                           static_cast<std::uint8_t>((prt >> 8U) & 0xFFU),
+                                           static_cast<std::uint8_t>(packet_index & 0xFFU),
+                                           static_cast<std::uint8_t>((packet_index >> 8U) & 0xFFU),
+                                           static_cast<std::uint8_t>(final_packet ? 0x30U : 0x00U),
+                                           0xFFU,
+                                           0xAAU,
+                                           0x55U};
         bytes.resize(2048U, 0xABU);
         if (!final_packet)
         {
@@ -61,7 +79,7 @@ namespace
 
     class FakeBackend final : public rxtech::IRxBackend
     {
-    public:
+      public:
         std::string name() const override
         {
             return "fake";
@@ -126,11 +144,9 @@ namespace
             return stats_;
         }
 
-        void shutdown() override
-        {
-        }
+        void shutdown() override {}
 
-    private:
+      private:
         bool served_ = false;
         std::size_t calls_ = 0;
         rxtech::BackendStats stats_{};
@@ -139,7 +155,7 @@ namespace
 
     class UnavailableBackend final : public rxtech::IRxBackend
     {
-    public:
+      public:
         std::string name() const override
         {
             return "fake_unavailable";
@@ -168,14 +184,12 @@ namespace
             return {};
         }
 
-        void shutdown() override
-        {
-        }
+        void shutdown() override {}
     };
 
     class FilteringFakeBackend final : public rxtech::IRxBackend
     {
-    public:
+      public:
         std::string name() const override
         {
             return "filtering_fake";
@@ -235,11 +249,9 @@ namespace
             return stats_;
         }
 
-        void shutdown() override
-        {
-        }
+        void shutdown() override {}
 
-    private:
+      private:
         bool served_ = false;
         rxtech::BackendStats stats_{};
         std::vector<std::vector<std::uint8_t>> packet_storage_;
@@ -270,59 +282,59 @@ int main()
     {
         rxtech::ReceiveContext context;
         context.config = rxtech::load_default_config();
-        context.config.capture_output_dir = "results/test_receive_runner_fake";
-        context.config.raw_record_enabled = true;
-        context.config.raw_record_output_dir = "results/test_receive_runner_fake_raw";
-        context.config.raw_record_file_prefix = "raw_capture";
-        context.config.raw_record_ring_slots = 8;
-        context.config.raw_record_writer_batch_size = 2;
-        context.config.raw_record_max_frame_bytes = 4096;
-        context.config.raw_record_segment_bytes = 65536;
-        context.config.raw_record_max_total_bytes = 1048576;
-        context.config.duration_seconds = 1;
+        context.config.capture.capture_output_dir = "results/test_receive_runner_fake";
+        context.config.capture.raw_record_enabled = true;
+        context.config.capture.raw_record_output_dir = "results/test_receive_runner_fake_raw";
+        context.config.capture.raw_record_file_prefix = "raw_capture";
+        context.config.capture.raw_record_ring_slots = 8;
+        context.config.capture.raw_record_writer_batch_size = 2;
+        context.config.capture.raw_record_max_frame_bytes = 4096;
+        context.config.capture.raw_record_segment_bytes = 65536;
+        context.config.capture.raw_record_max_total_bytes = 1048576;
+        context.config.runtime.duration_seconds = 1;
         context.backend = std::make_unique<FakeBackend>();
         context.metrics = std::make_unique<rxtech::MetricsCollector>();
 
         rxtech::ReceiveRunner runner;
         const rxtech::RunSummary summary = runner.run(context);
 
-        assert(summary.run_status == "success");
-        assert(summary.rx_packets > 0U);
-        assert(summary.rx_bytes > 0U);
-        assert(summary.captured_packets > 0U);
-        assert(summary.captured_packets <= summary.rx_packets);
-        assert(summary.recorded_packets == summary.captured_packets);
-        assert(summary.control_table_packets > 0U);
-        assert(summary.data_packets > 0U);
-        assert(summary.cpi_count == 1U);
-        assert(summary.prt_count == 1U);
-        assert(summary.channel_count == 1U);
-        assert(summary.active_prt_available);
-        assert(summary.active_prt_packets_per_channel == 9U);
-        assert(summary.active_prt_channel_count == 1U);
-        assert(summary.active_prt_channels.size() == 3U);
-        assert(summary.active_prt_channels[0].packet_count == 2U);
-        assert(summary.active_prt_channels[1].packet_count == 0U);
-        assert(summary.active_prt_channels[2].packet_count == 0U);
-        assert(summary.complete_prt_count == 0U);
-        assert(summary.final_tail_packets == 1U);
-        assert(summary.packet_count == summary.recorded_packets);
-        assert(summary.raw_record_written_frames >= 3U);
-        assert(summary.raw_record_written_bytes > 0U);
-        assert(summary.raw_record_dropped_frames == 0U);
-        assert(!summary.raw_record_output_dir.empty());
-        assert(!summary.raw_record_latest_file_path.empty());
-        assert(summary.human_summary.find("接收结束汇总") != std::string::npos);
-        assert(summary.human_summary.find("原始帧目录") != std::string::npos);
-        assert(summary.human_summary.find("通道分布") != std::string::npos);
-        assert(summary.human_summary.find("和路") != std::string::npos);
-        assert(contains_run_stamp(summary.capture_packets_path, "test_receive_runner_fake"));
-        assert(contains_run_stamp(summary.capture_index_path, "test_receive_runner_fake"));
-        assert(file_exists(summary.capture_packets_path.c_str()));
-        assert(file_exists(summary.capture_index_path.c_str()));
-        assert(file_exists(summary.raw_record_latest_file_path.c_str()));
+        assert(summary.run.status == "success");
+        assert(summary.protocol.rx_packets > 0U);
+        assert(summary.protocol.rx_bytes > 0U);
+        assert(summary.capture.captured_packets > 0U);
+        assert(summary.capture.captured_packets <= summary.protocol.rx_packets);
+        assert(summary.capture.recorded_packets == summary.capture.captured_packets);
+        assert(summary.protocol.control_table_packets > 0U);
+        assert(summary.protocol.data_packets > 0U);
+        assert(summary.protocol.cpi_count == 1U);
+        assert(summary.protocol.prt_count == 1U);
+        assert(summary.protocol.channel_count == 1U);
+        assert(summary.active_prt.available);
+        assert(summary.active_prt.packets_per_channel == 9U);
+        assert(summary.active_prt.channel_count == 1U);
+        assert(summary.active_prt.channels.size() == 3U);
+        assert(summary.active_prt.channels[0].packet_count == 2U);
+        assert(summary.active_prt.channels[1].packet_count == 0U);
+        assert(summary.active_prt.channels[2].packet_count == 0U);
+        assert(summary.protocol.complete_prt_count == 0U);
+        assert(summary.protocol.final_tail_packets == 1U);
+        assert(summary.capture.packet_count == summary.capture.recorded_packets);
+        assert(summary.capture.raw_record_written_frames >= 3U);
+        assert(summary.capture.raw_record_written_bytes > 0U);
+        assert(summary.capture.raw_record_dropped_frames == 0U);
+        assert(!summary.capture.raw_record_output_dir.empty());
+        assert(!summary.capture.raw_record_latest_file_path.empty());
+        assert(summary.run.human_summary.find("接收结束汇总") != std::string::npos);
+        assert(summary.run.human_summary.find("原始帧目录") != std::string::npos);
+        assert(summary.run.human_summary.find("通道分布") != std::string::npos);
+        assert(summary.run.human_summary.find("和路") != std::string::npos);
+        assert(contains_run_stamp(summary.capture.packets_path, "test_receive_runner_fake"));
+        assert(contains_run_stamp(summary.capture.index_path, "test_receive_runner_fake"));
+        assert(file_exists(summary.capture.packets_path.c_str()));
+        assert(file_exists(summary.capture.index_path.c_str()));
+        assert(file_exists(summary.capture.raw_record_latest_file_path.c_str()));
 
-        std::ifstream capture_file(summary.capture_packets_path, std::ios::binary);
+        std::ifstream capture_file(summary.capture.packets_path, std::ios::binary);
         assert(capture_file.is_open());
         capture_file.seekg(0, std::ios::end);
         assert(capture_file.tellg() > 0);
@@ -331,45 +343,47 @@ int main()
     {
         rxtech::ReceiveContext context;
         context.config = rxtech::load_default_config();
-        context.config.capture_output_dir = "results/test_receive_runner_unavailable";
+        context.config.capture.capture_output_dir = "results/test_receive_runner_unavailable";
         context.backend = std::make_unique<UnavailableBackend>();
         context.metrics = std::make_unique<rxtech::MetricsCollector>();
 
         rxtech::ReceiveRunner runner;
         const rxtech::RunSummary summary = runner.run(context);
 
-        assert(summary.run_status == "unavailable");
-        assert(!summary.backend_available);
-        assert(summary.backend_reason == "backend unavailable in test");
-        assert(summary.capture_packets_path.empty());
+        assert(summary.run.status == "unavailable");
+        assert(!summary.backend.available);
+        assert(summary.backend.reason == "backend unavailable in test");
+        assert(summary.capture.packets_path.empty());
     }
 
     {
         rxtech::ReceiveContext context;
         context.config = rxtech::load_default_config();
-        context.config.capture_output_dir = "results/test_receive_runner_until_stopped";
-        context.config.run_until_stopped = true;
-        context.config.status_interval_seconds = 1;
+        context.config.capture.capture_output_dir = "results/test_receive_runner_until_stopped";
+        context.config.runtime.run_until_stopped = true;
+        context.config.operations.status_interval_seconds = 1;
         context.backend = std::make_unique<FakeBackend>();
         context.metrics = std::make_unique<rxtech::MetricsCollector>();
         std::ostringstream status_stream;
 
-        std::thread stopper([]()
-                            {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-            rxtech::request_receive_stop(); });
+        std::thread stopper(
+            []()
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+                rxtech::request_receive_stop();
+            });
 
         rxtech::ReceiveRunner runner;
         runner.set_status_output(&status_stream);
         const rxtech::RunSummary summary = runner.run(context);
         stopper.join();
 
-        assert(summary.run_status == "success");
-        assert(summary.rx_packets > 0U);
-        assert(summary.cpi_count == 1U);
-        assert(summary.prt_count == 1U);
-        assert(summary.channel_count == 1U);
-        assert(summary.packet_count == summary.recorded_packets);
+        assert(summary.run.status == "success");
+        assert(summary.protocol.rx_packets > 0U);
+        assert(summary.protocol.cpi_count == 1U);
+        assert(summary.protocol.prt_count == 1U);
+        assert(summary.protocol.channel_count == 1U);
+        assert(summary.capture.packet_count == summary.capture.recorded_packets);
         assert(status_stream.str().find("实时接收状态") != std::string::npos);
         assert(status_stream.str().find("时间戳") != std::string::npos);
         assert(status_stream.str().find("链路判定") != std::string::npos);
@@ -380,26 +394,26 @@ int main()
     {
         rxtech::ReceiveContext context;
         context.config = rxtech::load_default_config();
-        context.config.capture_output_dir = "results/test_receive_runner_filtered";
-        context.config.duration_seconds = 1;
-        context.config.receiver_ipv4 = "172.20.11.100";
-        context.config.allowed_source_ipv4 = "172.20.11.222";
-        context.config.allowed_dest_port = 9999U;
+        context.config.capture.capture_output_dir = "results/test_receive_runner_filtered";
+        context.config.runtime.duration_seconds = 1;
+        context.config.ingress.receiver_ipv4 = "172.20.11.100";
+        context.config.ingress.allowed_source_ipv4 = "172.20.11.222";
+        context.config.ingress.allowed_dest_port = 9999U;
         context.backend = std::make_unique<FilteringFakeBackend>();
         context.metrics = std::make_unique<rxtech::MetricsCollector>();
 
         rxtech::ReceiveRunner runner;
         const rxtech::RunSummary summary = runner.run(context);
 
-        assert(summary.run_status == "success");
-        assert(summary.raw_rx_packets == 2U);
-        assert(summary.filtered_packets == 1U);
-        assert(summary.rx_packets == 1U);
-        assert(summary.parsed_packets == 1U);
-        assert(summary.data_packets == 1U);
-        assert(summary.final_tail_packets == 1U);
-        assert(summary.packet_count == 1U);
-        assert(contains_run_stamp(summary.capture_packets_path, "test_receive_runner_filtered"));
+        assert(summary.run.status == "success");
+        assert(summary.backend.raw_rx_packets == 2U);
+        assert(summary.backend.filtered_packets == 1U);
+        assert(summary.protocol.rx_packets == 1U);
+        assert(summary.protocol.parsed_packets == 1U);
+        assert(summary.protocol.data_packets == 1U);
+        assert(summary.protocol.final_tail_packets == 1U);
+        assert(summary.capture.packet_count == 1U);
+        assert(contains_run_stamp(summary.capture.packets_path, "test_receive_runner_filtered"));
     }
 
     return 0;
