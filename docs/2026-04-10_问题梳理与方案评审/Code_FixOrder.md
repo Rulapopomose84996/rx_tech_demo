@@ -10,10 +10,9 @@
 
 ## 2026-04-10 状态更新
 
-- 已按本顺序完成并经 kds 权威验证：Wave 0、Wave 1、Wave 2、Wave 3、Wave 4、Wave 5、Wave 6、Wave 7、Wave 8
-- Wave 9 已完成并验证：F-31、F-32、F-33、F-29、F-38
-- Wave 9 仍受服务器运行库限制：F-30 的 libFuzzer harness 已接入源码与 CMake，clang 配置可成功生成并进入目标链接阶段；当前 kds 的 `libclang_rt.fuzzer` / `libclang_rt.asan` 仍因 unresolved `__aarch64_*` 原子符号阻塞权威通过记录
-- 最新服务器结果：`/home/devuser/WorkSpace/rx_tech_demo_wave89_validation_20260410_220000` 的 Debug Werror 构建通过，28/28 unit、3/3 integration 通过；同目录 GCC ASan/UBSan 构建与测试通过；clang benchmark-only 可选构建通过
+- 已按本顺序完成并经 kds 权威验证：Wave 0、Wave 1、Wave 2、Wave 3、Wave 4、Wave 5、Wave 6、Wave 7、Wave 8、Wave 9
+- Wave 9 已完成并验证：F-31、F-32、F-33、F-29、F-30、F-38
+- 最新服务器结果：`/home/devuser/WorkSpace/rx_tech_demo_wave89_validation_20260410_220000` 的 Debug Werror 构建通过，28/28 unit、3/3 integration 通过；同目录 GCC ASan/UBSan 构建与测试通过；clang benchmark-only 与 clang fuzz-only 可选构建通过
 
 ---
 
@@ -87,14 +86,15 @@
 > 这一波改动的是热路径上的逻辑，互相有相邻关系，按以下顺序避免冲突：
 
 ```
-F-12 (时钟) → F-02 (分片TTL) → F-05 (超时输出) → F-04 (指针生存期)
-    ↑ 独立                           ↑ 涉及 finalizer        ↑ 涉及 CpiOutput 结构
+F-12 (时钟) → F-02 (分片TTL) → F-03 (指标有界采样) → F-05 (超时输出) → F-04 (指针生存期)
+   ↑ 独立                           ↑ 与 F-02 同属 P0 内存边界          ↑ 涉及 finalizer        ↑ 涉及 CpiOutput 结构
 ```
 
 | 编号 | 任务 | 涉及文件 | 依赖 |
 |------|------|---------|------|
 | F-12 | 审计并统一时钟域，`rx_tsc` 全部来自 `steady_clock_now_ns()` | dpdk_backend.cpp、cpi_state_coordinator.cpp 注释 | 无 |
 | F-02 | `FragmentAssembly` 加 TTL，`push()` 入口清理过期条目 | `udp_payload_assembler.h`、`udp_payload_assembler.cpp` | 无 |
+| F-03 | `MetricsCollector` 改为固定容量有界采样缓冲 | `metrics.h`、metrics.cpp | F-02 之后（同一轮 P0 内存边界收口） |
 | F-05 | 超时 CPI 产出 `ABNORMAL_CUTOFF_COMMIT` 输出 | cpi_finalizer.cpp、`cpi_state_coordinator.cpp` | 无 |
 | F-04 | 为 `CpiReadOnlyView` 裸指针添加生存期文档+断言 | `cpi_finalizer.h` | F-05 之后（同文件） |
 
@@ -177,7 +177,7 @@ Step 3: F-15 — RunSummary 分拆
 
 ---
 
-### Wave 9 — 测试补强与 CI 完善（P3，已完成 F-31/F-32/F-33/F-29/F-38；F-30 受服务器 clang runtime 限制）
+### Wave 9 — 测试补强与 CI 完善（P3，已完成 F-31/F-32/F-33/F-29/F-30/F-38）
 
 > 建议每个 Wave 结束时已同步补充对应测试；此波统一补充遗漏的专项测试。
 
@@ -203,7 +203,7 @@ Wave 2: 死代码清理 → F-20, F-19, F-44, F-45
    ↓
 Wave 3: 内存安全   → F-10, F-22, F-40, F-11, F-39, F-24, F-23
    ↓ (+ F-31 Sanitizer preset)
-Wave 4: 数据正确性 → F-12, F-02, F-05, F-04
+Wave 4: 数据正确性 → F-12, F-02, F-03, F-05, F-04
    ↓ (+ F-32 超时测试)
 Wave 5: 热路径性能 → F-01, F-07, F-06, F-08
    ↓ (+ F-29 Benchmark 基线)

@@ -7,10 +7,10 @@
 
 ## 2026-04-10 对齐更新
 
-- 已关闭或显著缓解的评审项：F-05、F-21、F-25、F-26、F-27、F-28、F-29、F-31、F-32、F-33、F-38、F-43
-- 当前权威服务器证据：`/home/devuser/WorkSpace/rx_tech_demo_wave89_validation_20260410_220000` 的 Debug Werror 构建通过，28/28 unit、3/3 integration 通过；同目录 GCC ASan/UBSan 构建与测试通过；clang benchmark-only 可选构建通过
-- 当前剩余边界：libFuzzer harness 已接入，但 kds 的 clang 18 aarch64 runtime 在链接 `libclang_rt.fuzzer` / `libclang_rt.asan` 时仍报 unresolved `__aarch64_*` 原子符号；因此 F-30 现阶段应视为“代码已落地，服务器运行库待修复后补齐权威通过”
-- 因此，正文中关于“无结构化日志框架”“cpu_metrics 未实现”“无外部指标导出”“无日志限流”“无性能基准测试”“无 sanitizer 集成”“CPI 超时路径无隔离测试”“无非法配置值测试”“无包级全局序列号检测”的结论，均不再代表当前主线状态
+- 已关闭或显著缓解的评审项：F-01、F-02、F-03、F-04、F-05、F-06、F-07、F-08、F-09、F-10、F-11、F-12、F-13、F-21、F-25、F-26、F-27、F-28、F-29、F-30、F-31、F-32、F-33、F-38、F-43
+- 当前权威服务器证据：`/home/devuser/WorkSpace/rx_tech_demo_wave89_validation_20260410_220000` 的 Debug Werror 构建通过，28/28 unit、3/3 integration 通过；同目录 GCC ASan/UBSan 构建与测试通过；clang benchmark-only 与 clang fuzz-only 可选构建通过
+- clang fuzz-only 根因修复：kds clang 18 aarch64 驱动未自动补入 `libclang_rt.builtins.a`，现已在 fuzz target 显式链接该 archive，`fuzz_sample_packet_parser` 与 `fuzz_udp_payload_assembler` 均可成功链接
+- 因此，正文中关于“无结构化日志框架”“cpu_metrics 未实现”“无外部指标导出”“无日志限流”“无性能基准测试”“无 Fuzz 测试”“无 sanitizer 集成”“CPI 超时路径无隔离测试”“无非法配置值测试”“无包级全局序列号检测”“MetricsCollector 向量无界增长”“热路径 vector 堆分配”的结论，均不再代表当前主线状态
 
 ---
 
@@ -229,9 +229,8 @@
 
 ## 优先级修复建议（按风险排序）
 
-1. **P0 — 性能**: `CpiContext::reset()` 改为惰性清零（仅清 header + 已用 slot），消除每次 CPI 切换的 ~5MB memset
-2. **P0 — 内存安全**: `UdpPayloadAssembler::fragments_` 加超时淘汰，`MetricsCollector` 向量加容量上限或改用直方图
-3. **P1 — 并发安全**: `CpiReadOnlyView` 裸指针改为引用计数或保证 ReleaseToken 回收前 consumer 完成读取
-4. **P1 — 性能**: 热路径 `vector` 改为预分配（`UdpDatagramBurst` 可复用，`recv_burst` 用栈数组）
-5. **P2 — 工程**: 提取公共 `byte_order.h`、`path_utils.h` 消除 3+ 处重复代码
-6. **P2 — 可维护**: `RxConfig` 拆分为子结构体 (`NetworkConfig`, `DpdkConfig`, `ProtocolConfig`, `CaptureConfig`)
+1. **P1 — 并发安全**: 继续把 `CpiReadOnlyView` 的生命周期保证从当前注释与契约推进到更强的所有权模型或可验证约束
+2. **P2 — 工程**: 提取公共 `byte_order.h`、`path_utils.h`，消除 3+ 处重复实现
+3. **P2 — 可维护**: 继续推进 `RxConfig` 子结构拆分与 `RunSummary` 缩减
+4. **P2 — 工程规范**: 补齐 `.clang-format`、`.clang-tidy`、CI 与更稳定的 `-Werror` 基线
+5. **P3 — 真实环境**: 若外部 sender 条件恢复，再补 DPDK 真链路闭环验证与性能基线
