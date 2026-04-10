@@ -21,6 +21,15 @@ int main()
         return 1;
     }
 
+    // Verify output policy defaults
+    if (default_config.output_drop_policy != "degrade" ||
+        default_config.output_ring_capacity != 32U ||
+        default_config.recycle_ring_capacity != 32U)
+    {
+        std::cerr << "unexpected default output policy configuration\n";
+        return 1;
+    }
+
     const char *path = "test_rx_config_generated.conf";
     {
         std::ofstream out(path, std::ios::trunc);
@@ -127,6 +136,19 @@ int main()
         std::cerr << "socket bind fallback should reuse receiver_ipv4 / allowed_dest_port\n";
         return 1;
     }
+
+    // Verify output policy config file parsing
+    {
+        const rxtech::RxConfig loaded = rxtech::load_config_file("tests/data/output_policy.conf");
+        if (loaded.output_drop_policy != "error" ||
+            loaded.output_ring_capacity != 64U ||
+            loaded.recycle_ring_capacity != 128U)
+        {
+            std::cerr << "output policy config parsing regression\n";
+            return 1;
+        }
+    }
+
     std::remove(path);
     return 0;
 }

@@ -82,10 +82,13 @@ namespace rxtech
         std::string log_file_path;         ///< 日志文件路径
 
         // ========== 输出与监控配置 ==========
-        std::string output_dir = "results";         ///< 输出目录，默认为 results
-        std::uint32_t status_interval_seconds = 10; ///< 状态报告间隔（秒），默认为 10
-        bool metrics_detail_enabled = false;        ///< 是否启用详细指标，默认为 false
-        bool run_artifacts_prepared = false;        ///< 运行产物是否已准备，默认为 false
+        std::string output_dir = "results";                ///< 输出目录，默认为 results
+        std::string output_drop_policy = "degrade";        ///< 输出丢弃策略，degrade 或 error
+        std::uint32_t output_ring_capacity = 32U;          ///< 输出环形缓冲区容量，默认为 32
+        std::uint32_t recycle_ring_capacity = 32U;         ///< 回收环形缓冲区容量，默认为 32
+        std::uint32_t status_interval_seconds = 10;        ///< 状态报告间隔（秒），默认为 10
+        bool metrics_detail_enabled = false;               ///< 是否启用详细指标，默认为 false
+        bool run_artifacts_prepared = false;               ///< 运行产物是否已准备，默认为 false
     };
 
     // ========== 配置管理接口 ==========

@@ -103,6 +103,14 @@ namespace rxtech
             summary.final_tail_packets = final_tail_packets;
         }
 
+        void apply_output_degradation(bool drop_is_error)
+        {
+            if (run_status == "success" || (run_status == "degraded" && drop_is_error))
+            {
+                run_status = drop_is_error ? "error" : "degraded";
+            }
+        }
+
         void populate_protocol_summaries(RunSummary &summary) const
         {
             for (const auto &entry : channel_stats)

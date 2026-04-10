@@ -9,6 +9,26 @@
 namespace rxtech
 {
 
+    constexpr std::size_t normalize_spsc_usable_capacity(std::size_t requested) noexcept
+    {
+        if (requested <= 1U)
+        {
+            return 1U;
+        }
+
+        std::size_t usable = 1U;
+        while (usable <= (((static_cast<std::size_t>(-1) - 1U) >> 1U)))
+        {
+            const std::size_t next = (usable << 1U) | 1U;
+            if (next > requested)
+            {
+                break;
+            }
+            usable = next;
+        }
+        return usable;
+    }
+
     /// Lock-free single-producer / single-consumer ring buffer.
     /// Producer calls push(), consumer calls pop().
     /// Capacity is rounded up to a power of two internally.

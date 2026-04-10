@@ -8,6 +8,7 @@
 
 #include "rxtech/rx_backend.h"
 #include "rxtech/owner_loop.h"
+#include "owner_loop_runtime_state.h"
 #include "owner_loop_summary.h"
 #include "status_panel.h"
 
@@ -197,5 +198,84 @@ int main()
     assert(saw_pre_business_state);
     assert(saw_protocol_section_pre);
     assert(saw_result_section_pre);
+
+    {
+        rxtech::OwnerLoopRuntimeState degraded_state;
+        assert(degraded_state.run_status == "success");
+        degraded_state.apply_output_degradation(false);
+        assert(degraded_state.run_status == "degraded");
+
+        rxtech::OwnerLoopRuntimeState error_state;
+        assert(error_state.run_status == "success");
+        error_state.apply_output_degradation(true);
+        assert(error_state.run_status == "error");
+    }
+
+    // ── Degraded run status rendering ────────────────────────────────
+    {
+        rxtech::RunSummary degraded_summary;
+        degraded_summary.run_status = "degraded";
+        degraded_summary.backend = "dpdk";
+        degraded_summary.output_backpressure_count = 7U;
+        degraded_summary.rx_packets = 100U;
+        degraded_summary.parsed_packets = 80U;
+        degraded_summary.data_packets = 70U;
+
+        const std::string human_degraded = rxtech::build_run_human_summary(degraded_summary);
+        assert(human_degraded.find("运行结果： 退化") != std::string::npos);
+        assert(human_degraded.find("输出退化次数： 7") != std::string::npos);
+
+        const std::vector<std::string> degraded_lines =
+            rxtech::build_status_snapshot_lines_for_test(degraded_summary, std::chrono::seconds(2));
+        bool saw_output_degradation = false;
+        bool saw_output_degradation_count = false;
+        bool saw_run_conclusion_degraded = false;
+        for (const std::string &line : degraded_lines)
+        {
+            if (line.find("输出退化") != std::string::npos)
+            {
+                saw_output_degradation = true;
+            }
+            if (line.find("输出退化次数") != std::string::npos && line.find("7") != std::string::npos)
+            {
+                saw_output_degradation_count = true;
+            }
+            if (line.find("运行结论") != std::string::npos && line.find("退化") != std::string::npos)
+            {
+                saw_run_conclusion_degraded = true;
+            }
+        }
+        assert(saw_output_degradation);
+        assert(saw_output_degradation_count);
+        assert(saw_run_conclusion_degraded);
+    }
+
+    // ── Error run status rendering ───────────────────────────────────
+    {
+        rxtech::RunSummary error_summary;
+        error_summary.run_status = "error";
+        error_summary.backend = "dpdk";
+        error_summary.output_backpressure_count = 3U;
+        error_summary.rx_packets = 50U;
+        error_summary.parsed_packets = 40U;
+        error_summary.data_packets = 30U;
+
+        const std::string human_error = rxtech::build_run_human_summary(error_summary);
+        assert(human_error.find("运行结果： 失败") != std::string::npos);
+        assert(human_error.find("输出退化次数： 3") != std::string::npos);
+
+        const std::vector<std::string> error_lines =
+            rxtech::build_status_snapshot_lines_for_test(error_summary, std::chrono::seconds(2));
+        bool saw_run_conclusion_error = false;
+        for (const std::string &line : error_lines)
+        {
+            if (line.find("运行结论") != std::string::npos && line.find("失败") != std::string::npos)
+            {
+                saw_run_conclusion_error = true;
+            }
+        }
+        assert(saw_run_conclusion_error);
+    }
+
     return 0;
 }

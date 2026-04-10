@@ -59,35 +59,6 @@ namespace
         return bytes;
     }
 
-    std::vector<std::uint8_t> make_udp_frame(const std::vector<std::uint8_t> &payload,
-                                             std::uint32_t source_ipv4_be,
-                                             std::uint32_t dest_ipv4_be,
-                                             std::uint16_t source_port,
-                                             std::uint16_t dest_port)
-    {
-        const std::uint16_t udp_length = static_cast<std::uint16_t>(8U + payload.size());
-        const std::uint16_t total_length = static_cast<std::uint16_t>(20U + udp_length);
-        std::vector<std::uint8_t> bytes = {
-            0x9c, 0x47, 0x82, 0xe1, 0x36, 0xd0, 0x9c, 0x47, 0x82, 0xe1, 0x36, 0xdc, 0x08, 0x00,
-            0x45, 0x00,
-            static_cast<std::uint8_t>((total_length >> 8U) & 0xFFU), static_cast<std::uint8_t>(total_length & 0xFFU),
-            0x00, 0x00, 0x00, 0x00, 0x40, 0x11, 0x00, 0x00,
-            static_cast<std::uint8_t>((source_ipv4_be >> 24U) & 0xFFU),
-            static_cast<std::uint8_t>((source_ipv4_be >> 16U) & 0xFFU),
-            static_cast<std::uint8_t>((source_ipv4_be >> 8U) & 0xFFU),
-            static_cast<std::uint8_t>(source_ipv4_be & 0xFFU),
-            static_cast<std::uint8_t>((dest_ipv4_be >> 24U) & 0xFFU),
-            static_cast<std::uint8_t>((dest_ipv4_be >> 16U) & 0xFFU),
-            static_cast<std::uint8_t>((dest_ipv4_be >> 8U) & 0xFFU),
-            static_cast<std::uint8_t>(dest_ipv4_be & 0xFFU),
-            static_cast<std::uint8_t>((source_port >> 8U) & 0xFFU), static_cast<std::uint8_t>(source_port & 0xFFU),
-            static_cast<std::uint8_t>((dest_port >> 8U) & 0xFFU), static_cast<std::uint8_t>(dest_port & 0xFFU),
-            static_cast<std::uint8_t>((udp_length >> 8U) & 0xFFU), static_cast<std::uint8_t>(udp_length & 0xFFU),
-            0x00, 0x00};
-        bytes.insert(bytes.end(), payload.begin(), payload.end());
-        return bytes;
-    }
-
     class FakeBackend final : public rxtech::IRxBackend
     {
     public:
@@ -115,21 +86,21 @@ namespace
             }
             served_ = true;
 
-            packet_storage_.push_back(make_udp_frame(make_control_table_packet(2U), 0xAC140BDEU, 0xAC140B64U, 30001U, 9999U));
-            packet_storage_.push_back(make_udp_frame(make_data_packet(2U, 0U, 1U, 1U, false), 0xAC140BDEU, 0xAC140B64U, 30001U, 9999U));
-            packet_storage_.push_back(make_udp_frame(make_data_packet(2U, 0U, 1U, 9U, true), 0xAC140BDEU, 0xAC140B64U, 30001U, 9999U));
+            packet_storage_.push_back(make_control_table_packet(2U));
+            packet_storage_.push_back(make_data_packet(2U, 0U, 1U, 1U, false));
+            packet_storage_.push_back(make_data_packet(2U, 0U, 1U, 9U, true));
 
             for (const auto &payload : packet_storage_)
             {
                 rxtech::UdpDatagramDesc datagram;
+                datagram.payload_data = payload.data();
+                datagram.payload_len = static_cast<std::uint32_t>(payload.size());
                 datagram.raw_frame_data = payload.data();
                 datagram.raw_frame_len = static_cast<std::uint32_t>(payload.size());
-                datagram.payload_data = nullptr;
-                datagram.payload_len = 0U;
-                datagram.src_ipv4_be = 0U;
-                datagram.dst_ipv4_be = 0U;
-                datagram.src_port = 0U;
-                datagram.dst_port = 0U;
+                datagram.src_ipv4_be = 0xAC140BDEU;
+                datagram.dst_ipv4_be = 0xAC140B64U;
+                datagram.src_port = 30001U;
+                datagram.dst_port = 9999U;
                 datagram.ts_ns = rxtech::steady_clock_now_ns();
                 datagram.queue_id = 3;
                 datagram.backend_kind = rxtech::BackendKind::file_replay;
@@ -139,7 +110,7 @@ namespace
             stats_.rx_packets += burst.datagrams.size();
             for (const auto &datagram : burst.datagrams)
             {
-                stats_.rx_bytes += datagram.raw_frame_len;
+                stats_.rx_bytes += datagram.payload_len;
             }
             return true;
         }
@@ -228,34 +199,26 @@ namespace
             }
             served_ = true;
 
-            packet_storage_.push_back(make_udp_frame(make_data_packet(2U, 0U, 1U, 9U, true),
-                                                     0xAC140BDEU,
-                                                     0xAC140B64U,
-                                                     30001U,
-                                                     9999U));
-            packet_storage_.push_back(make_udp_frame(make_data_packet(2U, 0U, 1U, 9U, true),
-                                                     0xAC140B63U,
-                                                     0xAC140B64U,
-                                                     30001U,
-                                                     9999U));
+            packet_storage_.push_back(make_data_packet(2U, 0U, 1U, 9U, true));
+            packet_storage_.push_back(make_data_packet(2U, 0U, 1U, 9U, true));
 
-            for (const auto &payload : packet_storage_)
+            for (std::size_t index = 0; index < packet_storage_.size(); ++index)
             {
                 rxtech::UdpDatagramDesc datagram;
-                datagram.raw_frame_data = payload.data();
-                datagram.raw_frame_len = static_cast<std::uint32_t>(payload.size());
-                datagram.payload_data = nullptr;
-                datagram.payload_len = 0U;
-                datagram.src_ipv4_be = 0U;
-                datagram.dst_ipv4_be = 0U;
-                datagram.src_port = 0U;
-                datagram.dst_port = 0U;
+                datagram.payload_data = packet_storage_[index].data();
+                datagram.payload_len = static_cast<std::uint32_t>(packet_storage_[index].size());
+                datagram.raw_frame_data = packet_storage_[index].data();
+                datagram.raw_frame_len = static_cast<std::uint32_t>(packet_storage_[index].size());
+                datagram.src_ipv4_be = (index == 0U) ? 0xAC140BDEU : 0xAC140B63U;
+                datagram.dst_ipv4_be = 0xAC140B64U;
+                datagram.src_port = 30001U;
+                datagram.dst_port = 9999U;
                 datagram.ts_ns = rxtech::steady_clock_now_ns();
                 datagram.queue_id = 0;
                 datagram.backend_kind = rxtech::BackendKind::file_replay;
                 burst.datagrams.push_back(datagram);
                 ++stats_.rx_packets;
-                stats_.rx_bytes += datagram.raw_frame_len;
+                stats_.rx_bytes += datagram.payload_len;
             }
             ++stats_.rx_polls;
             return true;
