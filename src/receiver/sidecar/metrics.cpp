@@ -169,7 +169,7 @@ namespace rxtech
         burst_sum_ += burst_size;
         burst_max_ = std::max<std::uint64_t>(burst_max_, burst_size);
 #if defined(RXTECH_DEBUG_DIAGNOSTICS) && RXTECH_DEBUG_DIAGNOSTICS
-    append_bounded_sample(burst_samples_, burst_sample_count_, burst_sample_next_index_, burst_size);
+        append_bounded_sample(burst_samples_, burst_sample_count_, burst_sample_next_index_, burst_size);
 #endif
     }
 
@@ -189,7 +189,7 @@ namespace rxtech
     void MetricsCollector::on_packet_latency_ns(std::uint64_t latency_ns)
     {
 #if defined(RXTECH_DEBUG_DIAGNOSTICS) && RXTECH_DEBUG_DIAGNOSTICS
-    append_bounded_sample(latency_samples_ns_, latency_sample_count_, latency_sample_next_index_, latency_ns);
+        append_bounded_sample(latency_samples_ns_, latency_sample_count_, latency_sample_next_index_, latency_ns);
 #else
         (void)latency_ns;
 #endif

@@ -103,10 +103,11 @@ namespace rxtech
     UdpDatagramPipeline::UdpDatagramPipeline(const RxConfig &config, const ProtocolSpec &spec)
         : config_(config), spec_(spec), parser_(spec), validator_(spec), interpreter_(spec),
           allowed_source_ipv4_be_(parse_ipv4_be(config.ingress.allowed_source_ipv4)),
-                    receiver_ipv4_be_(parse_ipv4_be(config.ingress.receiver_ipv4))
+          receiver_ipv4_be_(parse_ipv4_be(config.ingress.receiver_ipv4))
 #if defined(RXTECH_DEBUG_DIAGNOSTICS) && RXTECH_DEBUG_DIAGNOSTICS
-                , reject_diagnostic_interval_ns_(static_cast<std::uint64_t>(config.operations.log_rate_limit_seconds) *
-                                                                                 1000ULL * 1000ULL * 1000ULL)
+          ,
+          reject_diagnostic_interval_ns_(static_cast<std::uint64_t>(config.operations.log_rate_limit_seconds) *
+                                         1000ULL * 1000ULL * 1000ULL)
 #endif
     {
     }
