@@ -70,8 +70,7 @@ namespace rxtech
             }
         }
 
-        void record_data_packet(const ParsedPacketView &parsed,
-                                const InterpretedPacketView &packet,
+        void record_data_packet(const ParsedPacketView &parsed, const InterpretedPacketView &packet,
                                 const ProtocolSpec &spec)
         {
             ProtocolChannelStats &per_channel = channel_stats[packet.channel];
@@ -94,13 +93,13 @@ namespace rxtech
 
         void populate_common_summary(RunSummary &summary) const
         {
-            summary.run_status = run_status;
-            summary.error_message = run_error;
-            summary.filtered_packets = filtered_packets;
-            summary.cpi_count = static_cast<std::uint64_t>(unique_cpis.size());
-            summary.prt_count = static_cast<std::uint64_t>(unique_prts.size());
-            summary.channel_count = static_cast<std::uint64_t>(unique_channels.size());
-            summary.final_tail_packets = final_tail_packets;
+            summary.run.status = run_status;
+            summary.run.error_message = run_error;
+            summary.backend.filtered_packets = filtered_packets;
+            summary.protocol.cpi_count = static_cast<std::uint64_t>(unique_cpis.size());
+            summary.protocol.prt_count = static_cast<std::uint64_t>(unique_prts.size());
+            summary.protocol.channel_count = static_cast<std::uint64_t>(unique_channels.size());
+            summary.protocol.final_tail_packets = final_tail_packets;
         }
 
         void apply_output_degradation(bool drop_is_error)
@@ -119,7 +118,7 @@ namespace rxtech
                 channel_summary.channel = entry.first;
                 channel_summary.data_packets = entry.second.data_packets;
                 channel_summary.iq_count = entry.second.iq_count;
-                summary.protocol_channels.push_back(channel_summary);
+                summary.protocol.channels.push_back(channel_summary);
             }
 
             for (const auto &entry : cpi_stats)
@@ -128,7 +127,7 @@ namespace rxtech
                 cpi_summary.cpi = entry.first;
                 cpi_summary.data_packets = entry.second.data_packets;
                 cpi_summary.prt_count = static_cast<std::uint64_t>(entry.second.prts.size());
-                summary.protocol_cpis.push_back(cpi_summary);
+                summary.protocol.cpis.push_back(cpi_summary);
             }
         }
     };

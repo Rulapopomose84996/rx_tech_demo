@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <map>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "rxtech/packet_desc.h"
@@ -195,12 +196,80 @@ namespace rxtech
         std::uint32_t dest_ipv4_be = 0;
         std::uint16_t source_port = 0;
         std::uint16_t dest_port = 0;
+        bool has_global_sequence = false;
+        std::uint16_t global_sequence = 0;
+    };
+
+    class UdpPayloadFrameBatch
+    {
+      public:
+        using value_type = UdpPayloadFrame;
+        using iterator = value_type *;
+        using const_iterator = const value_type *;
+
+        void clear() noexcept
+        {
+            size_ = 0U;
+        }
+
+        void push_back(value_type value) noexcept
+        {
+            if (size_ >= storage_.size())
+            {
+                return;
+            }
+            storage_[size_++] = std::move(value);
+        }
+
+        std::size_t size() const noexcept
+        {
+            return size_;
+        }
+
+        bool empty() const noexcept
+        {
+            return size_ == 0U;
+        }
+
+        value_type &operator[](std::size_t index) noexcept
+        {
+            return storage_[index];
+        }
+
+        const value_type &operator[](std::size_t index) const noexcept
+        {
+            return storage_[index];
+        }
+
+        iterator begin() noexcept
+        {
+            return storage_.data();
+        }
+
+        iterator end() noexcept
+        {
+            return storage_.data() + size_;
+        }
+
+        const_iterator begin() const noexcept
+        {
+            return storage_.data();
+        }
+
+        const_iterator end() const noexcept
+        {
+            return storage_.data() + size_;
+        }
+
+      private:
+        std::array<value_type, 1U> storage_{};
+        std::size_t size_ = 0U;
     };
 
     class UdpPayloadAssembler
     {
       public:
-        std::vector<UdpPayloadFrame> push(const PacketDesc &packet);
+        UdpPayloadFrameBatch push(const PacketDesc &packet);
 
       private:
         struct FragmentKey

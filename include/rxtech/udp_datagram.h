@@ -31,6 +31,8 @@ namespace rxtech
         std::uint32_t queue_id = 0;
         std::uintptr_t cookie = 0;
         BackendKind backend_kind = BackendKind::unknown;
+        bool has_global_sequence = false;
+        std::uint16_t global_sequence = 0;
         bool truncated = false;
     };
 

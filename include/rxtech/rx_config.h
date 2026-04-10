@@ -15,15 +15,16 @@ namespace rxtech
 
     inline constexpr std::uint32_t kDpdkMaxBurstSize = 64U;
 
-    struct RxConfig
+    struct ProcessConfig
     {
-        // ========== 基础配置 ==========
         std::string backend_name = "dpdk"; ///< 后端名称，默认为 dpdk
         std::string config_path;           ///< 配置文件路径
         std::string run_label;             ///< 运行标签
-        std::vector<int> cpu_cores;        ///< CPU 核心列表
+        std::vector<int> cpu_cores = {0};  ///< CPU 核心列表
+    };
 
-        // ========== 网络接口配置 ==========
+    struct IngressConfig
+    {
         std::string interface_name = "receiver0"; ///< 网络接口名称，默认为 receiver0
         std::string receiver_ipv4;                ///< 接收端 IPv4 地址
         std::string allowed_source_ipv4;          ///< 允许的源 IPv4 地址
@@ -45,23 +46,29 @@ namespace rxtech
         std::uint32_t dpdk_mbuf_cache_size = 256; ///< DPDK mbuf 缓存大小，默认为 256
         std::uint32_t dpdk_rx_desc = 256;         ///< DPDK 接收描述符数量，默认为 256
         std::uint32_t dpdk_tx_desc = 256;         ///< DPDK 发送描述符数量，默认为 256
+    };
 
-        // ========== 数据接收配置 ==========
+    struct RuntimeConfig
+    {
         std::uint32_t max_burst = 64;        ///< 最大突发数据包数量，DPDK 路径还会受 kDpdkMaxBurstSize 限制
         std::uint32_t packet_size_bytes = 0; ///< 数据包大小（字节），0 表示自动
         std::uint32_t duration_seconds = 0;  ///< 运行持续时间（秒），0 表示无限
         bool run_until_stopped = false;      ///< 是否持续运行直到手动停止，默认为 false
+    };
 
-        // ========== 协议解析配置 ==========
-        std::uint32_t protocol_udp_packet_size = 2048;  ///< 协议 UDP 数据包大小（字节），默认为 2048
-        std::uint32_t protocol_channels_per_prt = 3;    ///< 每个 PRT 的通道数，默认为 3
-        std::uint32_t protocol_packets_per_channel = 9; ///< 每个通道的数据包数，默认为 9
-        std::uint32_t protocol_expected_n_prt = 0;      ///< 期望的 PRT 数量，0 表示动态
-        std::uint32_t protocol_max_n_prt = 100U;        ///< 最大 PRT 数量，默认为 100
-        std::uint64_t protocol_cpi_timeout_ns = 0;      ///< CPI 超时时间（纳秒），0 表示禁用
-        bool protocol_dynamic_prt_enabled = true;       ///< 是否启用动态 PRT，默认为 true
+    struct ProtocolConfig
+    {
+        std::uint32_t udp_packet_size = 2048;  ///< 协议 UDP 数据包大小（字节），默认为 2048
+        std::uint32_t channels_per_prt = 3;    ///< 每个 PRT 的通道数，默认为 3
+        std::uint32_t packets_per_channel = 9; ///< 每个通道的数据包数，默认为 9
+        std::uint32_t expected_n_prt = 0;      ///< 期望的 PRT 数量，0 表示动态
+        std::uint32_t max_n_prt = 100U;        ///< 最大 PRT 数量，默认为 100
+        std::uint64_t cpi_timeout_ns = 0;      ///< CPI 超时时间（纳秒），0 表示禁用
+        bool dynamic_prt_enabled = true;       ///< 是否启用动态 PRT，默认为 true
+    };
 
-        // ========== 抓包配置 ==========
+    struct CaptureConfig
+    {
         bool capture_enabled = true;                               ///< 是否启用抓包功能，默认为 true
         std::string capture_output_dir = "results";                ///< 抓包数据输出目录，默认为 results
         std::string capture_index_filename = "capture_index.csv";  ///< 抓包索引文件名
@@ -76,8 +83,10 @@ namespace rxtech
         std::uint32_t raw_record_max_frame_bytes = 16384;               ///< 原始帧最大字节数，默认为 16384
         std::uint64_t raw_record_segment_bytes = 5368709120ULL / 10ULL; ///< 原始帧分段大小（字节），默认为 512MB
         std::uint64_t raw_record_max_total_bytes = 5368709120ULL;       ///< 原始帧最大总大小（字节），默认为 5GB
+    };
 
-        // ========== 反馈系统配置 ==========
+    struct OperationsConfig
+    {
         bool feedback_enabled = false;               ///< 是否启用反馈功能，默认为 false
         std::string feedback_host;                   ///< 反馈服务器主机地址
         std::string feedback_bind_host;              ///< 反馈绑定主机地址
@@ -85,9 +94,13 @@ namespace rxtech
         std::uint32_t feedback_interval_seconds = 1; ///< 反馈间隔（秒），默认为 1
 
         // ========== 日志配置 ==========
-        std::string log_level = "info";    ///< 日志级别，默认为 info
-        std::string log_output = "stdout"; ///< 日志输出方式，默认为 stdout
-        std::string log_file_path;         ///< 日志文件路径
+        std::string log_level = "info";               ///< 日志级别，默认为 info
+        std::string log_output = "stdout";            ///< 日志输出方式，默认为 stdout
+        std::string log_file_path;                    ///< 日志文件路径
+        std::string structured_log_output = "stderr"; ///< 结构化日志输出方式：disabled/stdout/stderr/file
+        std::string structured_log_file_path;         ///< 结构化日志文件路径
+        std::string structured_log_format = "json";   ///< 结构化日志格式：json/text
+        std::uint32_t log_rate_limit_seconds = 5U;    ///< 高频日志聚合周期（秒）
 
         // ========== 输出与监控配置 ==========
         std::string output_dir = "results";                              ///< 输出目录，默认为 results
@@ -95,14 +108,28 @@ namespace rxtech
         std::uint32_t output_ring_capacity = 32U;                        ///< 输出环形缓冲区容量，默认为 32
         std::uint32_t recycle_ring_capacity = 32U;                       ///< 回收环形缓冲区容量，默认为 32
         std::uint32_t status_interval_seconds = 10;                      ///< 状态报告间隔（秒），默认为 10
-        bool metrics_detail_enabled = false;                             ///< 是否启用详细指标，默认为 false
-        bool run_artifacts_prepared = false;                             ///< 运行产物是否已准备，默认为 false
+        std::string metrics_export_mode = "none";           ///< 指标导出模式：none/prometheus_text/json_socket
+        std::string metrics_export_path;                    ///< 指标导出路径：文本文件或 Unix socket
+        std::uint32_t metrics_export_interval_seconds = 0U; ///< 指标导出周期；0 表示复用状态周期
+        bool metrics_detail_enabled = false;                ///< 是否启用详细指标，默认为 false
+        bool run_artifacts_prepared = false;                ///< 运行产物是否已准备，默认为 false
+    };
+
+    struct RxConfig
+    {
+        ProcessConfig process;
+        IngressConfig ingress;
+        RuntimeConfig runtime;
+        ProtocolConfig protocol;
+        CaptureConfig capture;
+        OperationsConfig operations;
     };
 
     // ========== 配置管理接口 ==========
     RxConfig load_default_config();                                        ///< 加载默认配置
     RxConfig load_config_file(const std::string &path);                    ///< 从文件加载配置
     void merge_config(RxConfig &base, const RxConfig &overrides);          ///< 合并配置（覆盖模式）
+    std::vector<std::string> validate_config(const RxConfig &config);      ///< 校验配置并返回所有错误
     OutputDropPolicy parse_output_drop_policy(const std::string &value);   ///< 解析输出丢弃策略字符串
     const char *output_drop_policy_name(OutputDropPolicy policy) noexcept; ///< 输出丢弃策略名称
     std::string effective_socket_bind_ip(const RxConfig &config);          ///< 计算 Linux socket 的实际绑定 IPv4
