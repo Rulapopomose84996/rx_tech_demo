@@ -13,8 +13,10 @@ add_library(rx_receiver_core
     protocol/udp_datagram_pipeline.cpp
     protocol/udp_payload_assembler.cpp
     sidecar/metrics.cpp
+    sidecar/metrics_exporter.cpp
     sidecar/runtime_status_reporter.cpp
     sidecar/status_panel.cpp
+    sidecar/structured_logger.cpp
     storage/progress_tracker.cpp
     storage/slot_writer.cpp
     runtime/rx_config.cpp
@@ -49,6 +51,8 @@ endif()
 if(UNIX AND NOT APPLE)
     target_link_libraries(rx_receiver_core PUBLIC pthread)
 endif()
+
+target_link_libraries(rx_receiver_core PRIVATE nlohmann_json rxtech_spdlog)
 
 rxtech_apply_warnings(rx_receiver_core)
 
@@ -120,6 +124,9 @@ target_link_libraries(rx_receiver_app
     rx_receiver_core
     rx_receiver_dpdk_ingress
     rx_receiver_socket_ingress
+    PRIVATE
+    nlohmann_json
+    rxtech_spdlog
 )
 
 rxtech_apply_warnings(rx_receiver_app)

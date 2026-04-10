@@ -41,3 +41,55 @@ else()
         "${CMAKE_BINARY_DIR}/_deps/nlohmann/..")
     message(STATUS "nlohmann/json: downloaded via FetchContent")
 endif()
+
+# ── spdlog (optional structured logging backend) ───────────────────────────
+add_library(rxtech_spdlog INTERFACE)
+
+if(RXTECH_ENABLE_SPDLOG)
+    set(_RXTECH_HAS_SPDLOG FALSE)
+
+    find_package(spdlog QUIET)
+
+    if(TARGET spdlog::spdlog_header_only)
+        target_link_libraries(rxtech_spdlog INTERFACE spdlog::spdlog_header_only)
+        target_compile_definitions(rxtech_spdlog INTERFACE RXTECH_HAS_SPDLOG=1)
+        set(_RXTECH_HAS_SPDLOG TRUE)
+        message(STATUS "spdlog: using installed package target spdlog::spdlog_header_only")
+    elseif(TARGET spdlog::spdlog)
+        target_link_libraries(rxtech_spdlog INTERFACE spdlog::spdlog)
+        target_compile_definitions(rxtech_spdlog INTERFACE RXTECH_HAS_SPDLOG=1)
+        set(_RXTECH_HAS_SPDLOG TRUE)
+        message(STATUS "spdlog: using installed package target spdlog::spdlog")
+    else()
+        find_path(_SPDLOG_CACHE_INCLUDE_DIR
+            NAMES spdlog/spdlog.h
+            PATHS "${RXTECH_THIRD_PARTY_CACHE}/spdlog/include"
+            NO_DEFAULT_PATH
+        )
+        find_path(_SPDLOG_LOCAL_INCLUDE_DIR
+            NAMES spdlog/spdlog.h
+            PATHS "${CMAKE_SOURCE_DIR}/third_party/spdlog/include"
+            NO_DEFAULT_PATH
+        )
+
+        if(_SPDLOG_CACHE_INCLUDE_DIR)
+            target_include_directories(rxtech_spdlog INTERFACE "${_SPDLOG_CACHE_INCLUDE_DIR}")
+            target_compile_definitions(rxtech_spdlog INTERFACE RXTECH_HAS_SPDLOG=1)
+            set(_RXTECH_HAS_SPDLOG TRUE)
+            message(STATUS "spdlog: using shared cache include dir ${_SPDLOG_CACHE_INCLUDE_DIR}")
+        elseif(_SPDLOG_LOCAL_INCLUDE_DIR)
+            target_include_directories(rxtech_spdlog INTERFACE "${_SPDLOG_LOCAL_INCLUDE_DIR}")
+            target_compile_definitions(rxtech_spdlog INTERFACE RXTECH_HAS_SPDLOG=1)
+            set(_RXTECH_HAS_SPDLOG TRUE)
+            message(STATUS "spdlog: using vendored include dir ${_SPDLOG_LOCAL_INCLUDE_DIR}")
+        else()
+            message(STATUS "spdlog: dependency not found, falling back to built-in structured logger backend")
+        endif()
+    endif()
+
+    if(NOT _RXTECH_HAS_SPDLOG)
+        target_compile_definitions(rxtech_spdlog INTERFACE RXTECH_HAS_SPDLOG=0)
+    endif()
+else()
+    target_compile_definitions(rxtech_spdlog INTERFACE RXTECH_HAS_SPDLOG=0)
+endif()

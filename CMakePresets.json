@@ -27,12 +27,44 @@
             "cacheVariables": {
                 "RXTECH_WARNINGS_AS_ERRORS": "ON"
             }
+        },
+        {
+            "name": "linux-server-asan",
+            "displayName": "Linux Server ASan/UBSan",
+            "description": "Linux 服务器 AddressSanitizer + UBSan 构建 preset。",
+            "inherits": "linux-server-base",
+            "binaryDir": "${sourceDir}/build-preset-asan",
+            "cacheVariables": {
+                "RXTECH_WARNINGS_AS_ERRORS": "ON",
+                "RXTECH_ENABLE_SANITIZERS": "ON",
+                "RXTECH_SANITIZER_KIND": "address"
+            }
+        },
+        {
+            "name": "linux-server-tsan",
+            "displayName": "Linux Server TSan",
+            "description": "Linux 服务器 ThreadSanitizer 构建 preset。",
+            "inherits": "linux-server-base",
+            "binaryDir": "${sourceDir}/build-preset-tsan",
+            "cacheVariables": {
+                "RXTECH_WARNINGS_AS_ERRORS": "ON",
+                "RXTECH_ENABLE_SANITIZERS": "ON",
+                "RXTECH_SANITIZER_KIND": "thread"
+            }
         }
     ],
     "buildPresets": [
         {
             "name": "linux-server-werror",
             "configurePreset": "linux-server-werror"
+        },
+        {
+            "name": "linux-server-asan",
+            "configurePreset": "linux-server-asan"
+        },
+        {
+            "name": "linux-server-tsan",
+            "configurePreset": "linux-server-tsan"
         }
     ]
 }

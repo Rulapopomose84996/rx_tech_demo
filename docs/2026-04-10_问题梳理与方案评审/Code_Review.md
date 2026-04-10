@@ -3,6 +3,15 @@
 **评审范围**: 25个头文件、31个源文件、29个测试文件、CMake构建体系
 **综合评分: 7.15 / 10**
 
+> 注：下方主体表格反映的是 Wave 7 之前的静态评审基线，未对 2026-04-10 新完成的 Wave 8/9 修复逐项重算评分。请以下面的“对齐更新”作为当前事实状态。
+
+## 2026-04-10 对齐更新
+
+- 已关闭或显著缓解的评审项：F-05、F-21、F-25、F-26、F-27、F-28、F-29、F-31、F-32、F-33、F-38、F-43
+- 当前权威服务器证据：`/home/devuser/WorkSpace/rx_tech_demo_wave89_validation_20260410_220000` 的 Debug Werror 构建通过，28/28 unit、3/3 integration 通过；同目录 GCC ASan/UBSan 构建与测试通过；clang benchmark-only 可选构建通过
+- 当前剩余边界：libFuzzer harness 已接入，但 kds 的 clang 18 aarch64 runtime 在链接 `libclang_rt.fuzzer` / `libclang_rt.asan` 时仍报 unresolved `__aarch64_*` 原子符号；因此 F-30 现阶段应视为“代码已落地，服务器运行库待修复后补齐权威通过”
+- 因此，正文中关于“无结构化日志框架”“cpu_metrics 未实现”“无外部指标导出”“无日志限流”“无性能基准测试”“无 sanitizer 集成”“CPI 超时路径无隔离测试”“无非法配置值测试”“无包级全局序列号检测”的结论，均不再代表当前主线状态
+
 ---
 
 ## 1. 接收链路正确性 — 7.5 / 10

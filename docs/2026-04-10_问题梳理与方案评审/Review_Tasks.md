@@ -1,5 +1,13 @@
 # rx_tech_demo 评审修复清单
 
+## 2026-04-10 Wave 8/9 对齐状态
+
+- 已完成并经 kds 权威验证：F-25、F-26、F-27、F-28、F-29、F-31、F-32、F-33、F-38
+- 已完成代码接入但受服务器运行库限制：F-30
+- 最新权威结果：`/home/devuser/WorkSpace/rx_tech_demo_wave89_validation_20260410_220000` 的 Debug Werror 构建通过，28/28 unit、3/3 integration 通过；同目录 GCC ASan/UBSan 构建与测试通过；clang benchmark-only 可选构建通过；clang fuzz-only 构建在 `libclang_rt.fuzzer` / `libclang_rt.asan` 链接阶段被 kds 的 unresolved `__aarch64_*` 原子符号阻塞
+
+> 因此，下面与 F-25/F-26/F-27/F-28/F-29/F-31/F-32/F-33/F-38 对应的条目应视为“已关闭”；F-30 应视为“实现完成，待服务器 clang runtime 修复后补齐权威通过”。
+
 ## P0 — 必须立即修复（影响正确性/安全/核心性能）
 
 ### F-01 · CpiContext::reset() 大面积清零
@@ -295,4 +303,3 @@
 | **P2** | 11 | 可维护性, 可移植性, 工程规范 |
 | **P3** | 21 | 可观测性, 测试, 工程完善 |
 | **合计** | **45** | |
-

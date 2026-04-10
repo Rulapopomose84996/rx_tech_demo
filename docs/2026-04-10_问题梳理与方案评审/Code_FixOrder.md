@@ -8,6 +8,15 @@
 
 ---
 
+## 2026-04-10 状态更新
+
+- 已按本顺序完成并经 kds 权威验证：Wave 0、Wave 1、Wave 2、Wave 3、Wave 4、Wave 5、Wave 6、Wave 7、Wave 8
+- Wave 9 已完成并验证：F-31、F-32、F-33、F-29、F-38
+- Wave 9 仍受服务器运行库限制：F-30 的 libFuzzer harness 已接入源码与 CMake，clang 配置可成功生成并进入目标链接阶段；当前 kds 的 `libclang_rt.fuzzer` / `libclang_rt.asan` 仍因 unresolved `__aarch64_*` 原子符号阻塞权威通过记录
+- 最新服务器结果：`/home/devuser/WorkSpace/rx_tech_demo_wave89_validation_20260410_220000` 的 Debug Werror 构建通过，28/28 unit、3/3 integration 通过；同目录 GCC ASan/UBSan 构建与测试通过；clang benchmark-only 可选构建通过
+
+---
+
 ## 执行阶段
 
 ### Wave 0 — 工程基础配置（纯配置，零代码冲突）
@@ -155,7 +164,7 @@ Step 3: F-15 — RunSummary 分拆
 
 ---
 
-### Wave 8 — 可观测性增强（P3）
+### Wave 8 — 可观测性增强（P3，已完成）
 
 > 依赖 Wave 7 的 `RunSummary` 结构稳定后再做，避免重复修改。
 
@@ -168,7 +177,7 @@ Step 3: F-15 — RunSummary 分拆
 
 ---
 
-### Wave 9 — 测试补强与 CI 完善（P3）
+### Wave 9 — 测试补强与 CI 完善（P3，已完成 F-31/F-32/F-33/F-29/F-38；F-30 受服务器 clang runtime 限制）
 
 > 建议每个 Wave 结束时已同步补充对应测试；此波统一补充遗漏的专项测试。
 
