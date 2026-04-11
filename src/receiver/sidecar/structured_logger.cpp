@@ -1,19 +1,12 @@
 ﻿#include "internal/structured_logger.h"
 
-#include <chrono>
-#include <ctime>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <mutex>
-#include <sstream>
+#include <utility>
 
-#if defined(RXTECH_HAS_SPDLOG) && RXTECH_HAS_SPDLOG
-#include <spdlog/logger.h>
-#include <spdlog/sinks/basic_file_sink.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
-#endif
+#include "internal/event_logger.h"
 
 namespace rxtech
 {
@@ -22,16 +15,11 @@ namespace rxtech
     {
 
         std::mutex g_logger_mutex;
-        bool g_logger_enabled = false;
         StructuredLogLevel g_min_level = StructuredLogLevel::info;
-        std::string g_log_format = "json";
-        std::ofstream g_log_file_stream;
-        std::ostream *g_fallback_stream = nullptr;
+        std::unique_ptr<EventLogger> g_event_logger;
+        std::vector<std::unique_ptr<IEventSink>> g_owned_sinks;
         std::string g_backend_name = "disabled";
-
-#if defined(RXTECH_HAS_SPDLOG) && RXTECH_HAS_SPDLOG
-        std::shared_ptr<spdlog::logger> g_spdlog_logger;
-#endif
+        std::string g_events_path;
 
         StructuredLogLevel parse_structured_log_level(const std::string &level)
         {
@@ -66,98 +54,71 @@ namespace rxtech
             return 1;
         }
 
-        bool should_emit(StructuredLogLevel level)
+        class OstreamEventSink final : public IEventSink
         {
-            return g_logger_enabled && structured_log_level_rank(level) >= structured_log_level_rank(g_min_level);
-        }
+          public:
+            explicit OstreamEventSink(std::ostream *stream) : stream_(stream) {}
 
-        const char *structured_log_level_name(StructuredLogLevel level) noexcept
-        {
-            switch (level)
+            void write_line(const std::string &line) override
             {
-            case StructuredLogLevel::debug:
-                return "debug";
-            case StructuredLogLevel::info:
-                return "info";
-            case StructuredLogLevel::warn:
-                return "warn";
-            case StructuredLogLevel::error:
-                return "error";
-            }
-            return "info";
-        }
-
-        std::string format_timestamp()
-        {
-            const auto now = std::chrono::system_clock::now();
-            const std::time_t now_time = std::chrono::system_clock::to_time_t(now);
-            std::tm local_time{};
-#ifdef _WIN32
-            localtime_s(&local_time, &now_time);
-#else
-            localtime_r(&now_time, &local_time);
-#endif
-            std::ostringstream out;
-            out << std::put_time(&local_time, "%Y-%m-%d %H:%M:%S");
-            return out.str();
-        }
-
-        nlohmann::json make_record(StructuredLogLevel level, const std::string &event, const nlohmann::json &fields)
-        {
-            nlohmann::json record = fields.is_object() ? fields : nlohmann::json::object();
-            record["timestamp"] = format_timestamp();
-            record["level"] = structured_log_level_name(level);
-            record["event"] = event;
-            return record;
-        }
-
-        std::string render_text_record(const nlohmann::json &record)
-        {
-            std::ostringstream out;
-            out << '[' << record.value("timestamp", std::string{}) << "] " << record.value("level", std::string{"info"})
-                << ' ' << record.value("event", std::string{"log"});
-            for (auto it = record.begin(); it != record.end(); ++it)
-            {
-                if (it.key() == "timestamp" || it.key() == "level" || it.key() == "event")
+                if (stream_ != nullptr)
                 {
-                    continue;
+                    (*stream_) << line << '\n';
                 }
-                out << ' ' << it.key() << '=' << it.value().dump();
             }
-            return out.str();
-        }
 
-#if defined(RXTECH_HAS_SPDLOG) && RXTECH_HAS_SPDLOG
-        spdlog::level::level_enum to_spdlog_level(StructuredLogLevel level)
-        {
-            switch (level)
+            void flush() override
             {
-            case StructuredLogLevel::debug:
-                return spdlog::level::debug;
-            case StructuredLogLevel::warn:
-                return spdlog::level::warn;
-            case StructuredLogLevel::error:
-                return spdlog::level::err;
-            case StructuredLogLevel::info:
-            default:
-                return spdlog::level::info;
+                if (stream_ != nullptr)
+                {
+                    stream_->flush();
+                }
             }
-        }
-#endif
+
+          private:
+            std::ostream *stream_ = nullptr;
+        };
+
+        class FileEventSink final : public IEventSink
+        {
+          public:
+            explicit FileEventSink(std::string path) : path_(std::move(path)), stream_(path_, std::ios::out | std::ios::app) {}
+
+            bool is_open() const noexcept
+            {
+                return stream_.is_open();
+            }
+
+            void write_line(const std::string &line) override
+            {
+                if (stream_.is_open())
+                {
+                    stream_ << line << '\n';
+                }
+            }
+
+            void flush() override
+            {
+                if (stream_.is_open())
+                {
+                    stream_.flush();
+                }
+            }
+
+          private:
+            std::string path_;
+            std::ofstream stream_;
+        };
 
     } // namespace
 
     void configure_structured_logger(const RxConfig &config)
     {
         std::lock_guard<std::mutex> lock(g_logger_mutex);
-
-#if defined(RXTECH_HAS_SPDLOG) && RXTECH_HAS_SPDLOG
-        g_spdlog_logger.reset();
-#endif
-        g_log_file_stream.close();
-        g_fallback_stream = nullptr;
-        g_logger_enabled = false;
+        g_event_logger.reset();
+        g_owned_sinks.clear();
         g_backend_name = "disabled";
+        g_events_path.clear();
 
         const std::string output = config.operations.structured_log_output;
         if (output == "disabled")
@@ -166,81 +127,49 @@ namespace rxtech
         }
 
         g_min_level = parse_structured_log_level(config.operations.log_level);
-        g_log_format = config.operations.structured_log_format;
-
-#if defined(RXTECH_HAS_SPDLOG) && RXTECH_HAS_SPDLOG
-        try
-        {
-            if (output == "stdout")
-            {
-                g_spdlog_logger = std::make_shared<spdlog::logger>(
-                    "rxtech_structured_logger", std::make_shared<spdlog::sinks::stdout_color_sink_mt>());
-            }
-            else if (output == "stderr")
-            {
-                g_spdlog_logger = std::make_shared<spdlog::logger>(
-                    "rxtech_structured_logger", std::make_shared<spdlog::sinks::stderr_color_sink_mt>());
-            }
-            else if (output == "file" && !config.operations.structured_log_file_path.empty())
-            {
-                g_spdlog_logger = std::make_shared<spdlog::logger>(
-                    "rxtech_structured_logger", std::make_shared<spdlog::sinks::basic_file_sink_mt>(
-                                                    config.operations.structured_log_file_path, true));
-            }
-
-            if (g_spdlog_logger != nullptr)
-            {
-                g_spdlog_logger->set_level(to_spdlog_level(g_min_level));
-                g_spdlog_logger->set_pattern("%v");
-                g_logger_enabled = true;
-                g_backend_name = "spdlog";
-                return;
-            }
-        }
-        catch (...)
-        {
-            g_spdlog_logger.reset();
-        }
-#endif
 
         if (output == "stdout")
         {
-            g_fallback_stream = &std::cout;
+            g_owned_sinks.push_back(std::make_unique<OstreamEventSink>(&std::cout));
         }
         else if (output == "stderr")
         {
-            g_fallback_stream = &std::cerr;
+            g_owned_sinks.push_back(std::make_unique<OstreamEventSink>(&std::cerr));
         }
         else if (output == "file" && !config.operations.structured_log_file_path.empty())
         {
-            g_log_file_stream.open(config.operations.structured_log_file_path, std::ios::out | std::ios::app);
-            if (g_log_file_stream.is_open())
+            auto sink = std::make_unique<FileEventSink>(config.operations.structured_log_file_path);
+            if (sink->is_open())
             {
-                g_fallback_stream = &g_log_file_stream;
+                g_events_path = config.operations.structured_log_file_path;
+                g_owned_sinks.push_back(std::move(sink));
             }
         }
 
-        if (g_fallback_stream != nullptr)
+        if (!g_owned_sinks.empty())
         {
-            g_logger_enabled = true;
-            g_backend_name = "builtin";
+            EventLoggerConfig event_config;
+            event_config.min_level = g_min_level;
+            for (const auto &sink : g_owned_sinks)
+            {
+                event_config.sinks.push_back(sink.get());
+            }
+            g_event_logger = std::make_unique<EventLogger>(std::move(event_config));
+            g_backend_name = "event_logger";
         }
     }
 
     void shutdown_structured_logger()
     {
         std::lock_guard<std::mutex> lock(g_logger_mutex);
-#if defined(RXTECH_HAS_SPDLOG) && RXTECH_HAS_SPDLOG
-        g_spdlog_logger.reset();
-#endif
-        if (g_log_file_stream.is_open())
+        if (g_event_logger != nullptr)
         {
-            g_log_file_stream.flush();
-            g_log_file_stream.close();
+            g_event_logger->flush();
         }
-        g_fallback_stream = nullptr;
-        g_logger_enabled = false;
+        g_event_logger.reset();
+        g_owned_sinks.clear();
         g_backend_name = "disabled";
+        g_events_path.clear();
     }
 
     const char *structured_logger_backend_name() noexcept
@@ -248,31 +177,26 @@ namespace rxtech
         return g_backend_name.c_str();
     }
 
+    std::string structured_logger_events_path()
+    {
+        std::lock_guard<std::mutex> lock(g_logger_mutex);
+        return g_events_path;
+    }
+
     void structured_log(StructuredLogLevel level, const std::string &event, const nlohmann::json &fields)
     {
         std::lock_guard<std::mutex> lock(g_logger_mutex);
-        if (!should_emit(level))
+        if (g_event_logger == nullptr || structured_log_level_rank(level) < structured_log_level_rank(g_min_level))
         {
             return;
         }
 
-        const nlohmann::json record = make_record(level, event, fields);
-        const std::string payload = g_log_format == "text" ? render_text_record(record) : record.dump();
-
-#if defined(RXTECH_HAS_SPDLOG) && RXTECH_HAS_SPDLOG
-        if (g_spdlog_logger != nullptr)
-        {
-            g_spdlog_logger->log(to_spdlog_level(level), payload);
-            g_spdlog_logger->flush();
-            return;
-        }
-#endif
-
-        if (g_fallback_stream != nullptr)
-        {
-            (*g_fallback_stream) << payload << '\n';
-            g_fallback_stream->flush();
-        }
+        EventEnvelope envelope;
+        envelope.event = event;
+        envelope.level = level;
+        envelope.payload = fields.is_object() ? fields : nlohmann::json::object();
+        g_event_logger->emit(envelope);
+        g_event_logger->flush();
     }
 
 } // namespace rxtech

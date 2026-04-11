@@ -2,6 +2,8 @@
 #undef NDEBUG
 #endif
 #include <cassert>
+#include <cstdio>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -9,6 +11,8 @@
 
 #include "event_logger.h"
 #include "event_schema.h"
+#include "rxtech/rx_config.h"
+#include "structured_logger.h"
 
 namespace
 {
@@ -57,5 +61,29 @@ int main()
     event.level = rxtech::StructuredLogLevel::debug;
     logger.emit(event);
     assert(sink.lines.size() == 1U);
+
+    const char *temp_path = "test_event_logger.jsonl";
+    {
+        std::remove(temp_path);
+        rxtech::RxConfig config = rxtech::load_default_config();
+        config.operations.structured_log_output = "file";
+        config.operations.structured_log_file_path = temp_path;
+        config.operations.structured_log_format = "json";
+        config.operations.log_level = "info";
+
+        rxtech::configure_structured_logger(config);
+        rxtech::structured_log(rxtech::StructuredLogLevel::info, "run.started",
+                               {{"backend", "socket"}, {"config_path", "configs/socket_loopback.conf"}});
+        rxtech::shutdown_structured_logger();
+
+        std::ifstream input(temp_path);
+        assert(input.is_open());
+        std::string file_line;
+        std::getline(input, file_line);
+        const nlohmann::json parsed_file = nlohmann::json::parse(file_line);
+        assert(parsed_file.at("event") == "run.started");
+        assert(parsed_file.at("payload").at("backend") == "socket");
+    }
+    std::remove(temp_path);
     return 0;
 }
