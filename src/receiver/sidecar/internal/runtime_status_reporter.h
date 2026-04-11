@@ -4,6 +4,7 @@
 
 #include "metrics_exporter.h"
 #include "owner_loop_runtime_state.h"
+#include "run_context_snapshot.h"
 #include "internal/status_panel.h"
 #include "rxtech/owner_loop.h"
 #include "rxtech/protocol_spec.h"
@@ -33,6 +34,9 @@ namespace rxtech
         std::ostream *diagnostic_output() const;
 
       private:
+        void emit_run_header() const;
+        void emit_status_snapshot(const RunSummary &summary, std::uint32_t elapsed_seconds) const;
+        RunHeaderSnapshot build_run_header() const;
         RunSummary build_summary(ReceiveContext &context, CaptureArtifacts &artifacts,
                                  const OwnerLoopRuntimeState &runtime_state, const DataOrderTracker &data_order_tracker,
                                  std::uint32_t elapsed_seconds) const;

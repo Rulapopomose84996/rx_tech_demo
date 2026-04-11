@@ -14,6 +14,8 @@
 
 #include "rxtech/owner_loop.h"
 #include "rxtech/raw_frame_recorder.h"
+#include "../sidecar/internal/run_context_snapshot.h"
+#include "../sidecar/internal/summary_renderer.h"
 #include "internal/path_utils.h"
 
 namespace rxtech
@@ -401,7 +403,34 @@ namespace rxtech
             summary.capture.raw_record_dropped_bytes = raw_record_stats.dropped_bytes;
             summary.capture.raw_record_retained_bytes = raw_record_stats.retained_bytes;
             summary.capture.raw_record_queue_high_watermark = raw_record_stats.queue_high_watermark;
+            const RunHeaderSnapshot header = build_run_header_snapshot(context.config);
+            summary.run.run_id = header.run_id;
+            summary.run.config_path = header.config_path;
+            summary.run.events_path = header.events_path;
+            summary.run.summary_json_path = header.summary_json_path;
+            summary.run.summary_text_path = header.summary_text_path;
             summary.run.human_summary = build_run_human_summary(summary);
+
+            path_utils::ensure_parent_directory(summary.run.summary_json_path);
+            path_utils::ensure_parent_directory(summary.run.summary_text_path);
+
+            {
+                std::ofstream summary_json_stream(summary.run.summary_json_path, std::ios::trunc);
+                if (!summary_json_stream.is_open())
+                {
+                    throw std::runtime_error("打开 summary.json 失败: " + summary.run.summary_json_path);
+                }
+                summary_json_stream << render_summary_json(summary, header);
+            }
+
+            {
+                std::ofstream summary_text_stream(summary.run.summary_text_path, std::ios::trunc);
+                if (!summary_text_stream.is_open())
+                {
+                    throw std::runtime_error("打开 summary.txt 失败: " + summary.run.summary_text_path);
+                }
+                summary_text_stream << render_summary_text(summary, header);
+            }
 
             context.backend->shutdown();
             return summary;

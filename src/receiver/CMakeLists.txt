@@ -15,7 +15,9 @@ add_library(rx_receiver_core
     sidecar/event_logger.cpp
     sidecar/metrics.cpp
     sidecar/metrics_exporter.cpp
+    sidecar/run_context_snapshot.cpp
     sidecar/runtime_status_reporter.cpp
+    sidecar/summary_renderer.cpp
     sidecar/status_panel.cpp
     sidecar/structured_logger.cpp
     storage/progress_tracker.cpp

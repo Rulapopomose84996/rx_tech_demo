@@ -93,5 +93,30 @@ int main()
         config.operations.structured_log_output = "stderr";
         assert(rxtech::default_events_log_path(config) == "results/stage1_case/events.jsonl");
     }
+
+    {
+        rxtech::RxConfig config = rxtech::load_default_config();
+        config.operations.structured_log_output = "file";
+        config.operations.structured_log_file_path = "test_event_logger_snapshot.jsonl";
+        std::remove(config.operations.structured_log_file_path.c_str());
+
+        rxtech::configure_structured_logger(config);
+        rxtech::structured_log(rxtech::StructuredLogLevel::info, "status.snapshot",
+                               {{"backend", "socket"},
+                                {"traffic_state", "idle"},
+                                {"window_rx_gbps", 0.0},
+                                {"protocol_parsed_packets", 0U},
+                                {"elapsed_seconds", 5U}});
+        rxtech::shutdown_structured_logger();
+
+        std::ifstream input(config.operations.structured_log_file_path);
+        assert(input.is_open());
+        std::string line;
+        std::getline(input, line);
+        const nlohmann::json parsed_snapshot = nlohmann::json::parse(line);
+        assert(parsed_snapshot.at("event") == "status.snapshot");
+        assert(parsed_snapshot.at("payload").at("traffic_state") == "idle");
+        std::remove(config.operations.structured_log_file_path.c_str());
+    }
     return 0;
 }

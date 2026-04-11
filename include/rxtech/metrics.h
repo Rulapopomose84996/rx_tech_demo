@@ -82,6 +82,11 @@ namespace rxtech
         std::string error_message;
         std::string human_summary;
         std::string structured_log_backend = "disabled";
+        std::string run_id;
+        std::string config_path;
+        std::string events_path;
+        std::string summary_json_path;
+        std::string summary_text_path;
     };
 
     struct BackendSummary

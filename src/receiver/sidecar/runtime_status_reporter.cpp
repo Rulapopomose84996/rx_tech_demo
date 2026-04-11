@@ -3,6 +3,7 @@
 #include <algorithm>
 #include "data_order_tracker.h"
 #include "owner_loop_summary.h"
+#include "internal/structured_logger.h"
 
 namespace rxtech
 {
@@ -21,6 +22,12 @@ namespace rxtech
                                                  1U, config.operations.status_interval_seconds)}),
           status_panel_(status_output), metrics_exporter_(config, start_time)
     {
+        emit_run_header();
+    }
+
+    RunHeaderSnapshot RuntimeStatusReporter::build_run_header() const
+    {
+        return build_run_header_snapshot(config_);
     }
 
     RunSummary RuntimeStatusReporter::build_summary(ReceiveContext &context, CaptureArtifacts &artifacts,
@@ -47,30 +54,52 @@ namespace rxtech
         return summary;
     }
 
+    void RuntimeStatusReporter::emit_run_header() const
+    {
+        const RunHeaderSnapshot header = build_run_header();
+        structured_log(StructuredLogLevel::info, "run.header", render_run_header_event_payload(header));
+    }
+
+    void RuntimeStatusReporter::emit_status_snapshot(const RunSummary &summary, std::uint32_t elapsed_seconds) const
+    {
+        structured_log(StructuredLogLevel::info, "status.snapshot",
+                       {{"backend", summary.run.backend_name},
+                        {"traffic_state", summary.protocol.parsed_packets > 0U ? "active" : "idle"},
+                        {"window_rx_gbps", summary.performance.actual_rx_gbps},
+                        {"protocol_rx_packets", summary.protocol.rx_packets},
+                        {"protocol_parsed_packets", summary.protocol.parsed_packets},
+                        {"protocol_dropped_packets", summary.protocol.dropped_packets},
+                        {"backend_dropped_packets", summary.backend.dropped_packets},
+                        {"output_backpressure_count", summary.performance.output_backpressure_count},
+                        {"sequence_gap_count", summary.global_packet_sequence.gap_count},
+                        {"active_cpi", summary.active_prt.cpi},
+                        {"active_prt", summary.active_prt.prt},
+                        {"cpu_user_pct", summary.performance.cpu_user_pct},
+                        {"cpu_sys_pct", summary.performance.cpu_sys_pct},
+                        {"elapsed_seconds", elapsed_seconds}});
+    }
+
     void RuntimeStatusReporter::emit_periodic(ReceiveContext &context, CaptureArtifacts &artifacts,
                                               const OwnerLoopRuntimeState &runtime_state,
                                               const DataOrderTracker &data_order_tracker,
                                               const std::chrono::steady_clock::time_point &now)
     {
-        if (!config_.runtime.run_until_stopped)
-        {
-            return;
-        }
-        if (diagnostic_output() == nullptr || now < next_status_at_)
+        if (now < next_status_at_)
         {
             return;
         }
 
+        const std::uint32_t elapsed_seconds =
+            std::max<std::uint32_t>(1U, static_cast<std::uint32_t>(
+                                            std::chrono::duration_cast<std::chrono::seconds>(now - start_time_).count()));
         RunSummary summary =
-            build_summary(context, artifacts, runtime_state, data_order_tracker,
-                          std::max<std::uint32_t>(
-                              1U, static_cast<std::uint32_t>(
-                                      std::chrono::duration_cast<std::chrono::seconds>(now - start_time_).count())));
-        if (diagnostic_output() != nullptr && now >= next_status_at_)
+            build_summary(context, artifacts, runtime_state, data_order_tracker, elapsed_seconds);
+        emit_status_snapshot(summary, elapsed_seconds);
+        if (config_.runtime.run_until_stopped && diagnostic_output() != nullptr)
         {
             status_panel_.render(summary, now - start_time_);
-            next_status_at_ = now + status_interval_;
         }
+        next_status_at_ = now + status_interval_;
         metrics_exporter_.maybe_export(summary, now);
     }
 
