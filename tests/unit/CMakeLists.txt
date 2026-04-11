@@ -10,6 +10,13 @@ add_test(NAME test_metrics COMMAND test_metrics)
 set_tests_properties(test_metrics PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(test_metrics)
 
+add_executable(test_event_logger test_event_logger.cpp)
+target_link_libraries(test_event_logger PRIVATE rx_receiver_core nlohmann_json)
+target_include_directories(test_event_logger PRIVATE ${CMAKE_SOURCE_DIR}/src/receiver/sidecar/internal)
+add_test(NAME test_event_logger COMMAND test_event_logger)
+set_tests_properties(test_event_logger PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+rxtech_apply_warnings(test_event_logger)
+
 add_executable(test_metrics_exporter test_metrics_exporter.cpp)
 target_link_libraries(test_metrics_exporter PRIVATE rx_receiver_core nlohmann_json)
 target_include_directories(test_metrics_exporter PRIVATE ${CMAKE_SOURCE_DIR}/src/receiver/sidecar/internal)

@@ -12,6 +12,7 @@ add_library(rx_receiver_core
     protocol/sample_packet_validator.cpp
     protocol/udp_datagram_pipeline.cpp
     protocol/udp_payload_assembler.cpp
+    sidecar/event_logger.cpp
     sidecar/metrics.cpp
     sidecar/metrics_exporter.cpp
     sidecar/runtime_status_reporter.cpp
