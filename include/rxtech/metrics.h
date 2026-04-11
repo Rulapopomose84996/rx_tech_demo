@@ -184,6 +184,15 @@ namespace rxtech
         std::vector<ProtocolPrtChannelCoverageSummary> channels;
     };
 
+    struct TrafficFlowSummary
+    {
+        std::string state = "idle";
+        std::string first_seen_wall;
+        std::string last_seen_wall;
+        std::string last_interrupted_wall;
+        std::string last_resumed_wall;
+    };
+
     struct PerformanceSummary
     {
         std::uint64_t pool_exhaustion_count = 0;
@@ -228,6 +237,7 @@ namespace rxtech
         DataOrderSummary data_order;
         GlobalPacketSequenceSummary global_packet_sequence;
         ActivePrtSummary active_prt;
+        TrafficFlowSummary traffic_flow;
         PerformanceSummary performance;
         MetricsExportSummary metrics_export;
         ScenarioSummary scenario;

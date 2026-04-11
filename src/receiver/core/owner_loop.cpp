@@ -15,12 +15,16 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <ctime>
 #include <ostream>
+#include <sstream>
 #include <thread>
 
 #include "internal/cpi_state_coordinator.h"
 #include "internal/owner_loop_runtime_state.h"
 #include "data_order_tracker.h"
+#include "internal/structured_logger.h"
+#include "internal/traffic_state_tracker.h"
 #include "udp_datagram_pipeline.h"
 #include "rxtech/cpi_consumer.h"
 #include "rxtech/raw_frame_recorder.h"
@@ -29,6 +33,28 @@
 
 namespace rxtech
 {
+
+    namespace
+    {
+
+        std::string format_wall_clock_now()
+        {
+            const std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+            std::tm local_time{};
+#ifdef _WIN32
+            localtime_s(&local_time, &now);
+#else
+            localtime_r(&now, &local_time);
+#endif
+            char buffer[32] = {};
+            if (std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &local_time) == 0U)
+            {
+                return {};
+            }
+            return buffer;
+        }
+
+    } // namespace
 
     /**
      * @brief 设置状态输出流
@@ -105,6 +131,7 @@ namespace rxtech
 
         // 初始化运行时状态报告器，定期输出状态信息
         RuntimeStatusReporter status_reporter(context.config, spec, status_output_, start_time);
+        TrafficStateTracker traffic_tracker(3000U);
 
         // 初始化运行时状态和无效包计数器
         OwnerLoopRuntimeState runtime_state;
@@ -167,6 +194,32 @@ namespace rxtech
                     {
                         // 记录协议层数据包统计
                         runtime_state.record_protocol_packet(processed.interpreted);
+                        if (processed.interpreted.valid)
+                        {
+                            const std::uint64_t now_ns = steady_clock_now_ns();
+                            const std::string wall_time = format_wall_clock_now();
+                            if (const auto transition =
+                                    traffic_tracker.observe_valid_business_packet(now_ns, wall_time))
+                            {
+                                switch (transition->transition)
+                                {
+                                case TrafficTransition::first_seen:
+                                    structured_log(StructuredLogLevel::info, "traffic.first_seen",
+                                                   {{"backend", context.backend->name()},
+                                                    {"current_state", "active"},
+                                                    {"first_seen_wall", transition->wall_time}});
+                                    break;
+                                case TrafficTransition::resumed:
+                                    structured_log(StructuredLogLevel::info, "traffic.resumed",
+                                                   {{"backend", context.backend->name()},
+                                                    {"current_state", "active"},
+                                                    {"last_resumed_wall", transition->wall_time}});
+                                    break;
+                                case TrafficTransition::interrupted:
+                                    break;
+                                }
+                            }
+                        }
 
                         // 处理控制表包：更新 CPI 状态协调器
                         if (processed.interpreted.kind == PacketKind::control_table)
@@ -252,8 +305,17 @@ namespace rxtech
             // 从 consumer 线程回收已处理的 CPI 资源
             cpi_state_coordinator.drain_recycle(*context.metrics);
 
+            if (const auto transition = traffic_tracker.observe_timeout(steady_clock_now_ns(), format_wall_clock_now()))
+            {
+                structured_log(StructuredLogLevel::warn, "traffic.interrupted",
+                               {{"backend", context.backend->name()},
+                                {"interrupt_timeout_ms", 3000},
+                                {"current_state", "interrupted"},
+                                {"last_interrupted_wall", transition->wall_time}});
+            }
+
             // 定期输出运行时状态报告
-            status_reporter.emit_periodic(context, artifacts, runtime_state, data_order_tracker,
+            status_reporter.emit_periodic(context, artifacts, runtime_state, data_order_tracker, traffic_tracker,
                                           std::chrono::steady_clock::now());
         }
 
@@ -288,7 +350,8 @@ namespace rxtech
         // 记录结束时间并生成最终摘要
         const auto end_time = std::chrono::steady_clock::now();
         RunSummary summary =
-            status_reporter.build_final_summary(context, artifacts, runtime_state, data_order_tracker, end_time);
+            status_reporter.build_final_summary(context, artifacts, runtime_state, data_order_tracker, traffic_tracker,
+                                               end_time);
 
         // 渲染并输出最终摘要
         status_reporter.render_final(summary, end_time - start_time);

@@ -45,6 +45,9 @@ int main()
     summary.data_order.assessment = "偏离按 PRT 推进顺序，当前捕获更像按通道分批到达";
     summary.data_order.first_mismatch =
         "第 10 个数据包开始偏离，期望 CPI 2 / PRT 41 / CH 1 / PKT 1，实际 CPI 2 / PRT 42 / CH 0 / PKT 1";
+    summary.traffic_flow.state = "active";
+    summary.traffic_flow.first_seen_wall = "2026-04-12 00:00:01";
+    summary.traffic_flow.last_seen_wall = "2026-04-12 00:00:04";
     summary.active_prt.available = true;
     summary.active_prt.cpi = 2U;
     summary.active_prt.prt = 41U;
@@ -96,7 +99,9 @@ int main()
     assert(!lines.empty());
     assert(lines.front().find("实时接收状态") != std::string::npos);
 
-    bool saw_link_state = false;
+    bool saw_traffic_state = false;
+    bool saw_first_seen = false;
+    bool saw_last_seen = false;
     bool saw_protocol_section = false;
     bool saw_result_section = false;
     bool saw_drop_rate = false;
@@ -109,9 +114,17 @@ int main()
     bool saw_backend_drops = false;
     for (const std::string &line : lines)
     {
-        if (line.find("链路判定") != std::string::npos && line.find("已检测到业务协议流量") != std::string::npos)
+        if (line.find("业务流状态") != std::string::npos && line.find("正常") != std::string::npos)
         {
-            saw_link_state = true;
+            saw_traffic_state = true;
+        }
+        if (line.find("首次检测时间") != std::string::npos && line.find("2026-04-12 00:00:01") != std::string::npos)
+        {
+            saw_first_seen = true;
+        }
+        if (line.find("最近有效流量") != std::string::npos && line.find("2026-04-12 00:00:04") != std::string::npos)
+        {
+            saw_last_seen = true;
         }
         if (line.find("[协议层统计]") != std::string::npos)
         {
@@ -156,7 +169,9 @@ int main()
         }
     }
 
-    assert(saw_link_state);
+    assert(saw_traffic_state);
+    assert(saw_first_seen);
+    assert(saw_last_seen);
     assert(saw_protocol_section);
     assert(saw_result_section);
     assert(saw_drop_rate);
@@ -181,7 +196,7 @@ int main()
     bool saw_result_section_pre = false;
     for (const std::string &line : pre_business_lines)
     {
-        if (line.find("链路判定") != std::string::npos && line.find("尚未检测到业务协议流量") != std::string::npos)
+        if (line.find("业务流状态") != std::string::npos && line.find("未检测到") != std::string::npos)
         {
             saw_pre_business_state = true;
         }

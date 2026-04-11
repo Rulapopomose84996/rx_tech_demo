@@ -41,13 +41,21 @@ namespace rxtech
             return buffer;
         }
 
-        std::string describe_link_state(const RunSummary &summary)
+        std::string describe_traffic_state(const RunSummary &summary)
         {
+            if (summary.traffic_flow.state == "active")
+            {
+                return "正常";
+            }
+            if (summary.traffic_flow.state == "interrupted")
+            {
+                return "中断";
+            }
             if (has_business_traffic(summary))
             {
-                return "已检测到业务协议流量";
+                return "正常";
             }
-            return "尚未检测到业务协议流量";
+            return "未检测到";
         }
 
         std::string format_decimal(double value, int precision)
@@ -90,7 +98,23 @@ namespace rxtech
             lines.push_back("================ 实时接收状态 ================");
             lines.push_back(build_metric_line("时间戳", format_wall_clock_timestamp()));
             lines.push_back(build_metric_line("运行时长", std::to_string(elapsed_seconds) + " s"));
-            lines.push_back(build_metric_line("链路判定", describe_link_state(summary)));
+            lines.push_back(build_metric_line("业务流状态", describe_traffic_state(summary)));
+            if (!summary.traffic_flow.first_seen_wall.empty())
+            {
+                lines.push_back(build_metric_line("首次检测时间", summary.traffic_flow.first_seen_wall));
+            }
+            if (!summary.traffic_flow.last_seen_wall.empty())
+            {
+                lines.push_back(build_metric_line("最近有效流量", summary.traffic_flow.last_seen_wall));
+            }
+            if (!summary.traffic_flow.last_interrupted_wall.empty())
+            {
+                lines.push_back(build_metric_line("最近中断时间", summary.traffic_flow.last_interrupted_wall));
+            }
+            if (!summary.traffic_flow.last_resumed_wall.empty())
+            {
+                lines.push_back(build_metric_line("最近恢复时间", summary.traffic_flow.last_resumed_wall));
+            }
             lines.push_back("");
             lines.push_back("[链路层统计]");
             lines.push_back(build_metric_line("原始接收帧", std::to_string(summary.backend.raw_rx_packets) + " 帧 / " +

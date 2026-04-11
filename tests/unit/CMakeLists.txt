@@ -24,6 +24,13 @@ add_test(NAME test_summary_renderer COMMAND test_summary_renderer)
 set_tests_properties(test_summary_renderer PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(test_summary_renderer)
 
+add_executable(test_traffic_state_tracker test_traffic_state_tracker.cpp)
+target_link_libraries(test_traffic_state_tracker PRIVATE rx_receiver_core)
+target_include_directories(test_traffic_state_tracker PRIVATE ${CMAKE_SOURCE_DIR}/src/receiver/sidecar/internal)
+add_test(NAME test_traffic_state_tracker COMMAND test_traffic_state_tracker)
+set_tests_properties(test_traffic_state_tracker PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+rxtech_apply_warnings(test_traffic_state_tracker)
+
 add_executable(test_metrics_exporter test_metrics_exporter.cpp)
 target_link_libraries(test_metrics_exporter PRIVATE rx_receiver_core nlohmann_json)
 target_include_directories(test_metrics_exporter PRIVATE ${CMAKE_SOURCE_DIR}/src/receiver/sidecar/internal)

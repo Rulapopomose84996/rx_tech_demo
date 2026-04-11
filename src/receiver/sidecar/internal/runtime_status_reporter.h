@@ -5,6 +5,7 @@
 #include "metrics_exporter.h"
 #include "owner_loop_runtime_state.h"
 #include "run_context_snapshot.h"
+#include "traffic_state_tracker.h"
 #include "internal/status_panel.h"
 #include "rxtech/owner_loop.h"
 #include "rxtech/protocol_spec.h"
@@ -22,11 +23,13 @@ namespace rxtech
 
         void emit_periodic(ReceiveContext &context, CaptureArtifacts &artifacts,
                            const OwnerLoopRuntimeState &runtime_state, const DataOrderTracker &data_order_tracker,
+                           const TrafficStateTracker &traffic_tracker,
                            const std::chrono::steady_clock::time_point &now);
 
         RunSummary build_final_summary(ReceiveContext &context, CaptureArtifacts &artifacts,
                                        const OwnerLoopRuntimeState &runtime_state,
                                        const DataOrderTracker &data_order_tracker,
+                                       const TrafficStateTracker &traffic_tracker,
                                        const std::chrono::steady_clock::time_point &end_time) const;
 
         void render_final(const RunSummary &summary, const std::chrono::steady_clock::duration &elapsed);
@@ -39,6 +42,7 @@ namespace rxtech
         RunHeaderSnapshot build_run_header() const;
         RunSummary build_summary(ReceiveContext &context, CaptureArtifacts &artifacts,
                                  const OwnerLoopRuntimeState &runtime_state, const DataOrderTracker &data_order_tracker,
+                                 const TrafficStateTracker &traffic_tracker,
                                  std::uint32_t elapsed_seconds) const;
 
         RxConfig config_;

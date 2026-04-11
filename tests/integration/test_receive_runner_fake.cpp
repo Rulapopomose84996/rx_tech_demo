@@ -386,7 +386,7 @@ int main()
         assert(summary.capture.packet_count == summary.capture.recorded_packets);
         assert(status_stream.str().find("实时接收状态") != std::string::npos);
         assert(status_stream.str().find("时间戳") != std::string::npos);
-        assert(status_stream.str().find("链路判定") != std::string::npos);
+        assert(status_stream.str().find("业务流状态") != std::string::npos);
         assert(status_stream.str().find("落盘记录") != std::string::npos);
         assert(status_stream.str().find("全局 CPI 数") != std::string::npos);
     }

@@ -8,6 +8,25 @@
 namespace rxtech
 {
 
+    namespace
+    {
+
+        std::string format_traffic_state(TrafficState state)
+        {
+            switch (state)
+            {
+            case TrafficState::idle:
+                return "idle";
+            case TrafficState::active:
+                return "active";
+            case TrafficState::interrupted:
+                return "interrupted";
+            }
+            return "idle";
+        }
+
+    } // namespace
+
     RuntimeStatusReporter::RuntimeStatusReporter(const RxConfig &config, const ProtocolSpec &spec,
                                                  std::ostream *status_output,
                                                  const std::chrono::steady_clock::time_point &start_time)
@@ -33,6 +52,7 @@ namespace rxtech
     RunSummary RuntimeStatusReporter::build_summary(ReceiveContext &context, CaptureArtifacts &artifacts,
                                                     const OwnerLoopRuntimeState &runtime_state,
                                                     const DataOrderTracker &data_order_tracker,
+                                                    const TrafficStateTracker &traffic_tracker,
                                                     std::uint32_t elapsed_seconds) const
     {
         RunSummary summary =
@@ -51,6 +71,12 @@ namespace rxtech
         merge_backend_stats(summary, context.backend->stats());
         apply_raw_record_stats(summary, artifacts.raw_frame_recorder);
         metrics_exporter_.populate_summary(summary);
+        const TrafficStateSnapshot traffic_snapshot = traffic_tracker.snapshot();
+        summary.traffic_flow.state = format_traffic_state(traffic_snapshot.state);
+        summary.traffic_flow.first_seen_wall = traffic_snapshot.first_seen_wall.value_or(std::string{});
+        summary.traffic_flow.last_seen_wall = traffic_snapshot.last_seen_wall.value_or(std::string{});
+        summary.traffic_flow.last_interrupted_wall = traffic_snapshot.last_interrupted_wall.value_or(std::string{});
+        summary.traffic_flow.last_resumed_wall = traffic_snapshot.last_resumed_wall.value_or(std::string{});
         return summary;
     }
 
@@ -82,6 +108,7 @@ namespace rxtech
     void RuntimeStatusReporter::emit_periodic(ReceiveContext &context, CaptureArtifacts &artifacts,
                                               const OwnerLoopRuntimeState &runtime_state,
                                               const DataOrderTracker &data_order_tracker,
+                                              const TrafficStateTracker &traffic_tracker,
                                               const std::chrono::steady_clock::time_point &now)
     {
         if (now < next_status_at_)
@@ -93,7 +120,7 @@ namespace rxtech
             std::max<std::uint32_t>(1U, static_cast<std::uint32_t>(
                                             std::chrono::duration_cast<std::chrono::seconds>(now - start_time_).count()));
         RunSummary summary =
-            build_summary(context, artifacts, runtime_state, data_order_tracker, elapsed_seconds);
+            build_summary(context, artifacts, runtime_state, data_order_tracker, traffic_tracker, elapsed_seconds);
         emit_status_snapshot(summary, elapsed_seconds);
         if (config_.runtime.run_until_stopped && diagnostic_output() != nullptr)
         {
@@ -106,10 +133,11 @@ namespace rxtech
     RunSummary RuntimeStatusReporter::build_final_summary(ReceiveContext &context, CaptureArtifacts &artifacts,
                                                           const OwnerLoopRuntimeState &runtime_state,
                                                           const DataOrderTracker &data_order_tracker,
+                                                          const TrafficStateTracker &traffic_tracker,
                                                           const std::chrono::steady_clock::time_point &end_time) const
     {
         RunSummary summary = build_summary(
-            context, artifacts, runtime_state, data_order_tracker,
+            context, artifacts, runtime_state, data_order_tracker, traffic_tracker,
             std::max<std::uint32_t>(
                 1U, static_cast<std::uint32_t>(
                         std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time_).count())));

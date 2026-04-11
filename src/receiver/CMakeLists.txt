@@ -20,6 +20,7 @@ add_library(rx_receiver_core
     sidecar/summary_renderer.cpp
     sidecar/status_panel.cpp
     sidecar/structured_logger.cpp
+    sidecar/traffic_state_tracker.cpp
     storage/progress_tracker.cpp
     storage/slot_writer.cpp
     runtime/rx_config.cpp

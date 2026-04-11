@@ -118,5 +118,29 @@ int main()
         assert(parsed_snapshot.at("payload").at("traffic_state") == "idle");
         std::remove(config.operations.structured_log_file_path.c_str());
     }
+
+    {
+        rxtech::RxConfig config = rxtech::load_default_config();
+        config.operations.structured_log_output = "file";
+        config.operations.structured_log_file_path = "test_traffic_transition.jsonl";
+        std::remove(config.operations.structured_log_file_path.c_str());
+
+        rxtech::configure_structured_logger(config);
+        rxtech::structured_log(rxtech::StructuredLogLevel::warn, "traffic.interrupted",
+                               {{"backend", "socket"},
+                                {"last_valid_business_packet_wall", "2026-04-12 00:00:04"},
+                                {"interrupt_timeout_ms", 3000},
+                                {"current_state", "interrupted"}});
+        rxtech::shutdown_structured_logger();
+
+        std::ifstream input(config.operations.structured_log_file_path);
+        assert(input.is_open());
+        std::string line;
+        std::getline(input, line);
+        const nlohmann::json parsed_transition = nlohmann::json::parse(line);
+        assert(parsed_transition.at("event") == "traffic.interrupted");
+        assert(parsed_transition.at("payload").at("current_state") == "interrupted");
+        std::remove(config.operations.structured_log_file_path.c_str());
+    }
     return 0;
 }
