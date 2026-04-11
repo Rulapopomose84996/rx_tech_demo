@@ -114,6 +114,7 @@ namespace rxtech
         std::string capture_policy;
         std::string packets_path;
         std::string index_path;
+        std::string raw_record_role;
         std::string raw_record_output_dir;
         std::string raw_record_latest_file_path;
         std::string run_artifact_dir;

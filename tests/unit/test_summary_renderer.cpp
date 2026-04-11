@@ -33,6 +33,8 @@ int main()
     summary.capture.run_artifact_dir = "results/20260411_235000_socket_loopback";
     summary.capture.packets_path = "results/20260411_235000_socket_loopback/capture_packets.bin";
     summary.capture.index_path = "results/20260411_235000_socket_loopback/capture_index.csv";
+    summary.capture.raw_record_role = "heavy_debug_recorder";
+    summary.capture.raw_record_output_dir = "/data/rx_tech_demo/raw_frames";
     summary.protocol.rx_packets = 10U;
     summary.protocol.parsed_packets = 8U;
     summary.protocol.data_packets = 7U;
@@ -48,11 +50,13 @@ int main()
     const nlohmann::json parsed_json = nlohmann::json::parse(json_text);
     assert(parsed_json.at("header").at("backend") == "socket");
     assert(parsed_json.at("summary").at("protocol").at("parsed_packets") == 8U);
+    assert(parsed_json.at("summary").at("capture").at("raw_record_role") == "heavy_debug_recorder");
 
     const std::string text_summary = rxtech::render_summary_text(summary, header);
     assert(text_summary.find("运行头部") != std::string::npos);
     assert(text_summary.find("后端类型： socket") != std::string::npos);
     assert(text_summary.find("解析有效包： 8 包") != std::string::npos);
+    assert(text_summary.find("重型专项录制") != std::string::npos);
 
     assert(rxtech::summary_json_path("results/20260411_235000_socket_loopback") ==
            "results/20260411_235000_socket_loopback/summary.json");

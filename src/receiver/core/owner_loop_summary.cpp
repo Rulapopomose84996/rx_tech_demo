@@ -275,6 +275,11 @@ namespace rxtech
         out << "抓包数据： " << summary.capture.packets_path << "\n";
         if (!summary.capture.raw_record_output_dir.empty())
         {
+            if (!summary.capture.raw_record_role.empty())
+            {
+                out << "原始帧录制角色： " << summary.capture.raw_record_role << "\n";
+            }
+            out << "原始帧录制定位： 重型专项录制\n";
             out << "原始帧目录： " << summary.capture.raw_record_output_dir << "\n";
             out << "原始帧已写： " << summary.capture.raw_record_written_frames << " 帧，"
                 << summary.capture.raw_record_written_bytes << " 字节\n";

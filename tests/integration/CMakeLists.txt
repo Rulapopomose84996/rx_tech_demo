@@ -5,6 +5,10 @@ add_executable(rxtech_integration_fake_tests
 target_link_libraries(rxtech_integration_fake_tests
     PRIVATE
     rx_receiver_core
+    nlohmann_json
+)
+target_include_directories(rxtech_integration_fake_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/receiver/sidecar/internal
 )
 
 if(UNIX AND NOT APPLE)

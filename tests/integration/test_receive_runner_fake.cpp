@@ -4,6 +4,7 @@
 #include <cassert>
 #include <fstream>
 #include <memory>
+#include <iterator>
 #include <sstream>
 #include <thread>
 #include <vector>
@@ -14,6 +15,7 @@
 #include "rxtech/rx_backend.h"
 #include "rxtech/rx_config.h"
 #include "rxtech/time_utils.h"
+#include "structured_logger.h"
 
 namespace
 {
@@ -327,6 +329,7 @@ int main()
         assert(!summary.capture.raw_record_latest_file_path.empty());
         assert(summary.run.human_summary.find("接收结束汇总") != std::string::npos);
         assert(summary.run.human_summary.find("原始帧目录") != std::string::npos);
+        assert(summary.run.human_summary.find("重型专项录制") != std::string::npos);
         assert(summary.run.human_summary.find("通道分布") != std::string::npos);
         assert(summary.run.human_summary.find("和路") != std::string::npos);
         assert(contains_run_stamp(summary.capture.packets_path, "test_receive_runner_fake"));
@@ -334,11 +337,46 @@ int main()
         assert(file_exists(summary.capture.packets_path.c_str()));
         assert(file_exists(summary.capture.index_path.c_str()));
         assert(file_exists(summary.capture.raw_record_latest_file_path.c_str()));
-
         std::ifstream capture_file(summary.capture.packets_path, std::ios::binary);
         assert(capture_file.is_open());
         capture_file.seekg(0, std::ios::end);
         assert(capture_file.tellg() > 0);
+    }
+
+    {
+        rxtech::ReceiveContext context;
+        context.config = rxtech::load_default_config();
+        context.config.process.run_label = "raw_record_events_case";
+        context.config.operations.output_dir = "results/raw_record_events_case";
+        context.config.capture.capture_output_dir = "results/raw_record_events_case";
+        context.config.capture.raw_record_enabled = true;
+        context.config.capture.raw_record_output_dir = "results/raw_record_events_case_raw";
+        context.config.capture.raw_record_file_prefix = "raw_capture";
+        context.config.capture.raw_record_ring_slots = 8;
+        context.config.capture.raw_record_writer_batch_size = 2;
+        context.config.capture.raw_record_max_frame_bytes = 4096;
+        context.config.capture.raw_record_segment_bytes = 65536;
+        context.config.capture.raw_record_max_total_bytes = 1048576;
+        context.config.runtime.duration_seconds = 1;
+        context.config.operations.run_artifacts_prepared = true;
+        context.config.operations.structured_log_output = "file";
+        context.config.operations.structured_log_file_path = "results/raw_record_events_case/events.mirror.jsonl";
+        context.backend = std::make_unique<FakeBackend>();
+        context.metrics = std::make_unique<rxtech::MetricsCollector>();
+
+        rxtech::configure_structured_logger(context.config);
+        rxtech::ReceiveRunner runner;
+        const rxtech::RunSummary summary = runner.run(context);
+        rxtech::shutdown_structured_logger();
+
+        assert(file_exists(summary.run.events_path.c_str()));
+        std::ifstream events_file(summary.run.events_path);
+        assert(events_file.is_open());
+        const std::string events_content((std::istreambuf_iterator<char>(events_file)),
+                                         std::istreambuf_iterator<char>());
+        assert(events_content.find("\"raw_record.started\"") != std::string::npos);
+        assert(events_content.find("\"raw_record.stopped\"") != std::string::npos);
+        assert(events_content.find("\"role\":\"heavy_debug_recorder\"") != std::string::npos);
     }
 
     {

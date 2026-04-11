@@ -17,6 +17,7 @@
 #include "internal/debug_capture_writer.h"
 #include "../sidecar/internal/run_context_snapshot.h"
 #include "../sidecar/internal/summary_renderer.h"
+#include "../sidecar/internal/structured_logger.h"
 #include "internal/path_utils.h"
 
 namespace rxtech
@@ -350,6 +351,12 @@ namespace rxtech
             if (raw_frame_recorder.enabled())
             {
                 raw_frame_recorder.start();
+                structured_log(StructuredLogLevel::info, "raw_record.started",
+                               {{"backend", context.config.process.backend_name},
+                                {"role", "heavy_debug_recorder"},
+                                {"output_dir", raw_frame_recorder.output_dir()},
+                                {"segment_bytes", context.config.capture.raw_record_segment_bytes},
+                                {"max_total_bytes", context.config.capture.raw_record_max_total_bytes}});
             }
 
             // 配置捕获产物并执行主接收循环
@@ -385,6 +392,11 @@ namespace rxtech
             const std::string raw_record_error = raw_frame_recorder.error_message();
             if (!raw_record_error.empty())
             {
+                structured_log(StructuredLogLevel::error, "raw_record.failed",
+                               {{"backend", context.config.process.backend_name},
+                                {"role", "heavy_debug_recorder"},
+                                {"output_dir", raw_frame_recorder.output_dir()},
+                                {"message", raw_record_error}});
                 throw std::runtime_error("原始帧录制失败: " + raw_record_error);
             }
 
@@ -403,6 +415,7 @@ namespace rxtech
             summary.capture.recorded_packets = artifacts.recorded_packets;
             summary.capture.recorded_bytes = artifacts.recorded_bytes;
             summary.capture.run_artifact_dir = output_dir;
+            summary.capture.raw_record_role = raw_frame_recorder.enabled() ? "heavy_debug_recorder" : std::string{};
             summary.capture.raw_record_output_dir =
                 raw_frame_recorder.enabled() ? raw_frame_recorder.output_dir() : std::string{};
             summary.capture.raw_record_latest_file_path = raw_record_stats.latest_file_path;
@@ -412,6 +425,18 @@ namespace rxtech
             summary.capture.raw_record_dropped_bytes = raw_record_stats.dropped_bytes;
             summary.capture.raw_record_retained_bytes = raw_record_stats.retained_bytes;
             summary.capture.raw_record_queue_high_watermark = raw_record_stats.queue_high_watermark;
+            if (raw_frame_recorder.enabled())
+            {
+                structured_log(StructuredLogLevel::info, "raw_record.stopped",
+                               {{"backend", context.config.process.backend_name},
+                                {"role", "heavy_debug_recorder"},
+                                {"output_dir", raw_frame_recorder.output_dir()},
+                                {"latest_file_path", raw_record_stats.latest_file_path},
+                                {"written_frames", raw_record_stats.written_frames},
+                                {"written_bytes", raw_record_stats.written_bytes},
+                                {"dropped_frames", raw_record_stats.dropped_frames},
+                                {"retained_bytes", raw_record_stats.retained_bytes}});
+            }
             const RunHeaderSnapshot header = build_run_header_snapshot(context.config);
             summary.run.run_id = header.run_id;
             summary.run.config_path = header.config_path;
