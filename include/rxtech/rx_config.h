@@ -13,6 +13,13 @@ namespace rxtech
         error,
     };
 
+    enum class CapturePolicy
+    {
+        disabled,
+        first_effective_cpi,
+        full,
+    };
+
     inline constexpr std::uint32_t kDpdkMaxBurstSize = 64U;
 
     struct ProcessConfig
@@ -70,6 +77,7 @@ namespace rxtech
     struct CaptureConfig
     {
         bool capture_enabled = true;                               ///< 是否启用抓包功能，默认为 true
+        CapturePolicy capture_policy = CapturePolicy::first_effective_cpi; ///< 抓包策略
         std::string capture_output_dir = "results";                ///< 抓包数据输出目录，默认为 results
         std::string capture_index_filename = "capture_index.csv";  ///< 抓包索引文件名
         std::string capture_data_filename = "capture_packets.bin"; ///< 抓包数据文件名
@@ -130,6 +138,8 @@ namespace rxtech
     RxConfig load_config_file(const std::string &path);                    ///< 从文件加载配置
     void merge_config(RxConfig &base, const RxConfig &overrides);          ///< 合并配置（覆盖模式）
     std::vector<std::string> validate_config(const RxConfig &config);      ///< 校验配置并返回所有错误
+    CapturePolicy parse_capture_policy(const std::string &value);          ///< 解析抓包策略字符串
+    const char *capture_policy_name(CapturePolicy policy) noexcept;        ///< 抓包策略名称
     OutputDropPolicy parse_output_drop_policy(const std::string &value);   ///< 解析输出丢弃策略字符串
     const char *output_drop_policy_name(OutputDropPolicy policy) noexcept; ///< 输出丢弃策略名称
     std::string effective_socket_bind_ip(const RxConfig &config);          ///< 计算 Linux socket 的实际绑定 IPv4

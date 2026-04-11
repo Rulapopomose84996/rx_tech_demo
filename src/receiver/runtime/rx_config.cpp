@@ -15,6 +15,38 @@
 namespace rxtech
 {
 
+    CapturePolicy parse_capture_policy(const std::string &value)
+    {
+        std::string normalized = value;
+        for (char &ch : normalized)
+        {
+            ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+        }
+        if (normalized == "disabled" || normalized == "none")
+        {
+            return CapturePolicy::disabled;
+        }
+        if (normalized == "full")
+        {
+            return CapturePolicy::full;
+        }
+        return CapturePolicy::first_effective_cpi;
+    }
+
+    const char *capture_policy_name(CapturePolicy policy) noexcept
+    {
+        switch (policy)
+        {
+        case CapturePolicy::disabled:
+            return "disabled";
+        case CapturePolicy::first_effective_cpi:
+            return "first_effective_cpi";
+        case CapturePolicy::full:
+            return "full";
+        }
+        return "first_effective_cpi";
+    }
+
     namespace
     {
 
@@ -126,7 +158,20 @@ namespace rxtech
 
                     {"capture_enabled",
                      {"capture.enabled", "capture_enabled"},
-                     [](RxConfig &c, const std::string &v) { c.capture.capture_enabled = parse_bool(v); }},
+                     [](RxConfig &c, const std::string &v)
+                     {
+                         c.capture.capture_enabled = parse_bool(v);
+                         c.capture.capture_policy =
+                             c.capture.capture_enabled ? c.capture.capture_policy : CapturePolicy::disabled;
+                     }},
+
+                    {"capture_policy",
+                     {"capture.policy", "capture_policy"},
+                     [](RxConfig &c, const std::string &v)
+                     {
+                         c.capture.capture_policy = parse_capture_policy(v);
+                         c.capture.capture_enabled = c.capture.capture_policy != CapturePolicy::disabled;
+                     }},
 
                     {"capture_index_filename",
                      {"capture.index_filename", "capture_index_filename"},
@@ -497,6 +542,8 @@ namespace rxtech
         {
             config.capture.capture_output_dir = config.operations.output_dir;
         }
+        config.capture.capture_policy =
+            config.capture.capture_enabled ? config.capture.capture_policy : CapturePolicy::disabled;
         if (config.operations.output_dir.empty())
         {
             config.operations.output_dir = config.capture.capture_output_dir;
@@ -574,6 +621,8 @@ namespace rxtech
             base.ingress.socket_batch_timeout_ms = overrides.ingress.socket_batch_timeout_ms;
         if (overrides.capture.capture_enabled != defaults.capture.capture_enabled)
             base.capture.capture_enabled = overrides.capture.capture_enabled;
+        if (overrides.capture.capture_policy != defaults.capture.capture_policy)
+            base.capture.capture_policy = overrides.capture.capture_policy;
         if (overrides.capture.raw_record_enabled != defaults.capture.raw_record_enabled)
             base.capture.raw_record_enabled = overrides.capture.raw_record_enabled;
         if (overrides.ingress.dpdk_port_id != defaults.ingress.dpdk_port_id)
@@ -704,7 +753,7 @@ namespace rxtech
             }
         }
 
-        if (config.capture.capture_enabled)
+        if (config.capture.capture_policy != CapturePolicy::disabled)
         {
             const std::string capture_output_dir = config.capture.capture_output_dir.empty()
                                                        ? config.operations.output_dir

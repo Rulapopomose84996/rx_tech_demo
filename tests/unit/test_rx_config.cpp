@@ -39,6 +39,11 @@ int main()
         std::cerr << "unexpected default capture configuration\n";
         return 1;
     }
+    if (default_config.capture.capture_policy != rxtech::CapturePolicy::first_effective_cpi)
+    {
+        std::cerr << "unexpected default capture policy\n";
+        return 1;
+    }
 
     // Verify output policy defaults
     if (default_config.operations.output_drop_policy != rxtech::OutputDropPolicy::degrade ||
@@ -118,6 +123,7 @@ int main()
         out << "[capture]\n";
         out << "output_dir = results/config_case\n";
         out << "enabled = true\n";
+        out << "policy = full\n";
         out << "index_filename = parsed.csv\n";
         out << "data_filename = parsed.bin\n";
         out << "[raw_record]\n";
@@ -168,6 +174,7 @@ int main()
     const rxtech::RxConfig config = rxtech::load_config_file(path);
     if (config.process.backend_name != "socket" || config.capture.capture_output_dir != "results/config_case" ||
         config.operations.output_dir != "results/config_case" || !config.capture.capture_enabled ||
+        config.capture.capture_policy != rxtech::CapturePolicy::full ||
         config.capture.capture_index_filename != "parsed.csv" || config.capture.capture_data_filename != "parsed.bin" ||
         !config.capture.raw_record_enabled ||
         config.capture.raw_record_output_dir != "/data/rx_tech_demo/test_raw_frames" ||
