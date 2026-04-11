@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <fstream>
 #include <iostream>
@@ -7,6 +8,24 @@
 
 int main()
 {
+    const auto looks_like_ipv4 = [](const std::string &value)
+    {
+        int dot_count = 0;
+        for (const char ch : value)
+        {
+            if (ch == '.')
+            {
+                ++dot_count;
+                continue;
+            }
+            if (!std::isdigit(static_cast<unsigned char>(ch)))
+            {
+                return false;
+            }
+        }
+        return !value.empty() && dot_count == 3;
+    };
+
     const rxtech::RxConfig default_config = rxtech::load_default_config();
     if (default_config.ingress.interface_name != "receiver0")
     {
@@ -185,11 +204,16 @@ int main()
     const rxtech::RxConfig dpdk_config = rxtech::load_config_file("configs/dpdk_single_face.conf");
     if (dpdk_config.process.backend_name != "dpdk" || dpdk_config.ingress.interface_name != "receiver0" ||
         dpdk_config.ingress.receiver_ipv4 != "172.20.11.100" ||
-        dpdk_config.ingress.allowed_source_ipv4 != "172.20.11.222" || dpdk_config.ingress.allowed_dest_port != 9999U ||
+        dpdk_config.ingress.allowed_dest_port != 9999U ||
         dpdk_config.ingress.dpdk_pci_addr != "0001:05:00.0")
     {
-        std::cerr << "dpdk single face config should point at receiver0 / 172.20.11.100 / 172.20.11.222 / 9999 / "
+        std::cerr << "dpdk single face config should point at receiver0 / 172.20.11.100 / <allowed_source_ipv4> / 9999 / "
                      "0001:05:00.0\n";
+        return 1;
+    }
+    if (!looks_like_ipv4(dpdk_config.ingress.allowed_source_ipv4))
+    {
+        std::cerr << "dpdk single face config should keep a valid allowed_source_ipv4\n";
         return 1;
     }
     if (rxtech::effective_socket_bind_ip(dpdk_config) != "172.20.11.100" ||

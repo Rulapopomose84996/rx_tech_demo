@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cstdio>
 #include <fstream>
+#include <sstream>
 #include <string>
 
 #include <nlohmann/json.hpp>
@@ -80,7 +81,9 @@ int main()
 
 #if defined(__unix__) || defined(__linux__)
     {
-        const std::string socket_path = "test_metrics_export.sock";
+        std::ostringstream socket_path_builder;
+        socket_path_builder << "/tmp/test_metrics_export_" << ::getpid() << ".sock";
+        const std::string socket_path = socket_path_builder.str();
         std::remove(socket_path.c_str());
 
         int server_fd = ::socket(AF_UNIX, SOCK_DGRAM, 0);
