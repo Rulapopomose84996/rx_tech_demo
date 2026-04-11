@@ -226,10 +226,10 @@ namespace rxtech
                 }
             } structured_logger_shutdown_guard;
 
-            structured_log(StructuredLogLevel::info, "receiver_start",
+            structured_log(StructuredLogLevel::info, "run.started",
                            {{"backend", context.config.process.backend_name},
                             {"config_path", context.config.process.config_path},
-                            {"structured_log_backend", structured_logger_backend_name()}});
+                            {"events_path", structured_logger_events_path()}});
 
             // 初始化后端实例和指标收集器
             context.backend = make_backend(backend_name);
@@ -261,10 +261,10 @@ namespace rxtech
             // 执行接收任务并获取运行摘要
             RunSummary summary = runner.run(context);
             summary.run.structured_log_backend = structured_logger_backend_name();
-            structured_log(StructuredLogLevel::info, "receiver_stop",
+            structured_log(StructuredLogLevel::info, "run.stopped",
                            {{"status", summary.run.status},
                             {"backend", summary.run.backend_name},
-                            {"structured_log_backend", summary.run.structured_log_backend}});
+                            {"events_path", structured_logger_events_path()}});
             if (!summary.run.human_summary.empty())
             {
                 if (log_stream.is_open())
@@ -293,7 +293,8 @@ namespace rxtech
         }
         catch (const std::exception &ex)
         {
-            structured_log(StructuredLogLevel::error, "receiver_exception", {{"message", ex.what()}});
+            structured_log(StructuredLogLevel::error, "run.failed",
+                           {{"message", ex.what()}, {"events_path", structured_logger_events_path()}});
             std::cerr << "运行失败: " << ex.what() << std::endl;
             return 1;
         }

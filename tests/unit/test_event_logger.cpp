@@ -82,8 +82,16 @@ int main()
         std::getline(input, file_line);
         const nlohmann::json parsed_file = nlohmann::json::parse(file_line);
         assert(parsed_file.at("event") == "run.started");
+        assert(parsed_file.at("backend") == "socket");
         assert(parsed_file.at("payload").at("backend") == "socket");
     }
     std::remove(temp_path);
+
+    {
+        rxtech::RxConfig config = rxtech::load_default_config();
+        config.operations.output_dir = "results/stage1_case";
+        config.operations.structured_log_output = "stderr";
+        assert(rxtech::default_events_log_path(config) == "results/stage1_case/events.jsonl");
+    }
     return 0;
 }

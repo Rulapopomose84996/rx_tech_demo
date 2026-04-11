@@ -20,6 +20,7 @@ namespace rxtech
     void configure_structured_logger(const RxConfig &config);
     void shutdown_structured_logger();
     const char *structured_logger_backend_name() noexcept;
+    std::string default_events_log_path(const RxConfig &config);
     std::string structured_logger_events_path();
     void structured_log(StructuredLogLevel level, const std::string &event,
                         const nlohmann::json &fields = nlohmann::json::object());

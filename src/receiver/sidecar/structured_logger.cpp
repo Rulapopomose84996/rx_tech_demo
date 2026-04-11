@@ -1,9 +1,14 @@
 ﻿#include "internal/structured_logger.h"
 
+#include <chrono>
+#include <ctime>
+#include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <sstream>
 #include <utility>
 
 #include "internal/event_logger.h"
@@ -36,6 +41,38 @@ namespace rxtech
                 return StructuredLogLevel::error;
             }
             return StructuredLogLevel::info;
+        }
+
+        std::string format_wall_clock_now()
+        {
+            const auto now = std::chrono::system_clock::now();
+            const std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+            std::tm local_time{};
+#ifdef _WIN32
+            localtime_s(&local_time, &now_time);
+#else
+            localtime_r(&now_time, &local_time);
+#endif
+            std::ostringstream out;
+            out << std::put_time(&local_time, "%Y-%m-%d %H:%M:%S");
+            return out.str();
+        }
+
+        std::uint64_t monotonic_now_ns()
+        {
+            return static_cast<std::uint64_t>(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now().time_since_epoch())
+                    .count());
+        }
+
+        const char *build_mode_name() noexcept
+        {
+#ifdef NDEBUG
+            return "release";
+#else
+            return "debug";
+#endif
         }
 
         int structured_log_level_rank(StructuredLogLevel level)
@@ -112,6 +149,12 @@ namespace rxtech
 
     } // namespace
 
+    std::string default_events_log_path(const RxConfig &config)
+    {
+        const std::string output_dir = config.operations.output_dir.empty() ? "results" : config.operations.output_dir;
+        return output_dir + "/events.jsonl";
+    }
+
     void configure_structured_logger(const RxConfig &config)
     {
         std::lock_guard<std::mutex> lock(g_logger_mutex);
@@ -128,6 +171,19 @@ namespace rxtech
 
         g_min_level = parse_structured_log_level(config.operations.log_level);
 
+        g_events_path = default_events_log_path(config);
+        const std::filesystem::path events_parent = std::filesystem::path(g_events_path).parent_path();
+        if (!events_parent.empty())
+        {
+            std::filesystem::create_directories(events_parent);
+        }
+
+        auto primary_sink = std::make_unique<FileEventSink>(g_events_path);
+        if (primary_sink->is_open())
+        {
+            g_owned_sinks.push_back(std::move(primary_sink));
+        }
+
         if (output == "stdout")
         {
             g_owned_sinks.push_back(std::make_unique<OstreamEventSink>(&std::cout));
@@ -138,10 +194,14 @@ namespace rxtech
         }
         else if (output == "file" && !config.operations.structured_log_file_path.empty())
         {
+            const std::filesystem::path mirror_path = config.operations.structured_log_file_path;
+            if (!mirror_path.parent_path().empty())
+            {
+                std::filesystem::create_directories(mirror_path.parent_path());
+            }
             auto sink = std::make_unique<FileEventSink>(config.operations.structured_log_file_path);
             if (sink->is_open())
             {
-                g_events_path = config.operations.structured_log_file_path;
                 g_owned_sinks.push_back(std::move(sink));
             }
         }
@@ -194,7 +254,18 @@ namespace rxtech
         EventEnvelope envelope;
         envelope.event = event;
         envelope.level = level;
+        envelope.ts_monotonic_ns = monotonic_now_ns();
+        envelope.ts_wall = format_wall_clock_now();
+        envelope.build_mode = build_mode_name();
         envelope.payload = fields.is_object() ? fields : nlohmann::json::object();
+        if (envelope.payload.contains("backend") && envelope.payload["backend"].is_string())
+        {
+            envelope.backend = envelope.payload["backend"].get<std::string>();
+        }
+        if (envelope.payload.contains("run_id") && envelope.payload["run_id"].is_string())
+        {
+            envelope.run_id = envelope.payload["run_id"].get<std::string>();
+        }
         g_event_logger->emit(envelope);
         g_event_logger->flush();
     }
