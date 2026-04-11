@@ -309,6 +309,7 @@ int main()
         assert(summary.protocol.cpi_count == 1U);
         assert(summary.protocol.prt_count == 1U);
         assert(summary.protocol.channel_count == 1U);
+        assert(summary.capture.capture_policy == "first_effective_cpi");
         assert(summary.active_prt.available);
         assert(summary.active_prt.packets_per_channel == 9U);
         assert(summary.active_prt.channel_count == 1U);

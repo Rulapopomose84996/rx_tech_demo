@@ -14,6 +14,7 @@
 
 #include "rxtech/owner_loop.h"
 #include "rxtech/raw_frame_recorder.h"
+#include "internal/debug_capture_writer.h"
 #include "../sidecar/internal/run_context_snapshot.h"
 #include "../sidecar/internal/summary_renderer.h"
 #include "internal/path_utils.h"
@@ -355,10 +356,17 @@ namespace rxtech
             OwnerLoop owner_loop;
             owner_loop.set_status_output(status_output_);
             CaptureArtifacts artifacts;
+            DebugCaptureWriter capture_writer(context.config.capture.capture_policy,
+                                              capture_enabled ? static_cast<std::ostream *>(&capture_packets_stream)
+                                                              : static_cast<std::ostream *>(&capture_packets_sink),
+                                              capture_enabled ? static_cast<std::ostream *>(&capture_index_stream)
+                                                              : static_cast<std::ostream *>(&capture_index_sink),
+                                              output_dir);
             artifacts.packet_stream = capture_enabled ? static_cast<std::ostream *>(&capture_packets_stream)
                                                       : static_cast<std::ostream *>(&capture_packets_sink);
             artifacts.index_stream = capture_enabled ? static_cast<std::ostream *>(&capture_index_stream)
                                                      : static_cast<std::ostream *>(&capture_index_sink);
+            artifacts.capture_writer = &capture_writer;
             artifacts.raw_frame_recorder = raw_frame_recorder.enabled() ? &raw_frame_recorder : nullptr;
 
             const auto start_time = std::chrono::steady_clock::now();
@@ -387,6 +395,7 @@ namespace rxtech
             const RawFrameRecorderStats raw_record_stats = raw_frame_recorder.snapshot();
             summary.backend.available = true;
             summary.backend.status = "available";
+            summary.capture.capture_policy = capture_policy_name(context.config.capture.capture_policy);
             summary.capture.packets_path = capture_packets_path;
             summary.capture.index_path = capture_index_path;
             summary.capture.captured_packets = artifacts.captured_packets;

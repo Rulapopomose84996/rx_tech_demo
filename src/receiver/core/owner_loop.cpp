@@ -30,6 +30,7 @@
 #include "rxtech/raw_frame_recorder.h"
 #include "rxtech/time_utils.h"
 #include "runtime_status_reporter.h"
+#include "internal/debug_capture_writer.h"
 
 namespace rxtech
 {
@@ -251,23 +252,27 @@ namespace rxtech
                         // 记录已捕获的数据包统计
                         runtime_state.record_captured_packet(processed.interpreted);
 
-                        // 将 UDP 载荷写入数据包输出流
-                        artifacts.packet_stream->write(
-                            reinterpret_cast<const char *>(processed.udp_frame.udp_payload.data()),
-                            static_cast<std::streamsize>(processed.udp_frame.udp_payload.size()));
+                        if (artifacts.capture_writer != nullptr)
+                        {
+                            DebugCaptureRecord record;
+                            record.cpi = processed.interpreted.cpi;
+                            record.channel = processed.interpreted.channel;
+                            record.prt = processed.interpreted.prt;
+                            record.packet_index = processed.interpreted.packet_index;
+                            record.packet_kind = packet_kind_name(processed.interpreted.kind);
+                            record.valid = processed.interpreted.valid;
+                            record.payload.assign(
+                                reinterpret_cast<const char *>(processed.udp_frame.udp_payload.data()),
+                                static_cast<std::size_t>(processed.udp_frame.udp_payload.size()));
 
-                        // 将数据包元数据写入索引流（CSV 格式）
-                        *artifacts.index_stream << processed.interpreted.cpi << ',' << processed.interpreted.channel
-                                                << ',' << processed.interpreted.prt << ','
-                                                << processed.interpreted.packet_index << ','
-                                                << packet_kind_name(processed.interpreted.kind) << ','
-                                                << processed.udp_frame.udp_payload.size() << ','
-                                                << (processed.interpreted.valid ? "true" : "false") << '\n';
+                            if (artifacts.capture_writer->record(record))
+                            {
+                                artifacts.file_offset += processed.udp_frame.udp_payload.size();
+                                artifacts.recorded_bytes += processed.udp_frame.udp_payload.size();
+                                ++artifacts.recorded_packets;
+                            }
+                        }
 
-                        // 更新捕获统计信息
-                        artifacts.file_offset += processed.udp_frame.udp_payload.size();
-                        artifacts.recorded_bytes += processed.udp_frame.udp_payload.size();
-                        ++artifacts.recorded_packets;
                         artifacts.captured_bytes += processed.udp_frame.udp_payload.size();
                         ++artifacts.captured_packets;
                     });

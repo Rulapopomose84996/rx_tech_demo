@@ -111,6 +111,7 @@ namespace rxtech
 
     struct CaptureSummary
     {
+        std::string capture_policy;
         std::string packets_path;
         std::string index_path;
         std::string raw_record_output_dir;

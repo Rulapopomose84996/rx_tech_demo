@@ -26,6 +26,7 @@ add_library(rx_receiver_core
     runtime/rx_config.cpp
     runtime/raw_frame_recorder.cpp
     runtime/receive_runner.cpp
+    runtime/debug_capture_writer.cpp
     verify/cpi_verifier.cpp
 )
 

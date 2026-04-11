@@ -18,6 +18,7 @@ namespace rxtech
 {
 
     class RawFrameRecorder;
+    class DebugCaptureWriter;
 
     /**
      * @brief 构建运行摘要的人类可读字符串表示
@@ -39,6 +40,7 @@ namespace rxtech
     {
         std::ostream *packet_stream = nullptr;          ///< 数据包输出流，用于写入捕获的数据包内容
         std::ostream *index_stream = nullptr;           ///< 索引输出流，用于写入数据包索引信息
+        DebugCaptureWriter *capture_writer = nullptr;   ///< 调试抓包写入器
         RawFrameRecorder *raw_frame_recorder = nullptr; ///< 原始帧记录器，用于记录原始帧数据
         std::uint64_t file_offset = 0;                  ///< 文件偏移量，记录当前写入位置
         std::uint64_t recorded_packets = 0;             ///< 已记录的数据包数量
