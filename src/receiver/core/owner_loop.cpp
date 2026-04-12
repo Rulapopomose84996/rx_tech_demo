@@ -36,7 +36,7 @@ namespace rxtech
 
     namespace
     {
-        void handle_traffic_transition(const std::optional<TrafficStateTransition> &transition,
+        void handle_traffic_transition(const std::optional<TrafficTransitionEvent> &transition,
                                        const std::string &backend_name)
         {
             if (!transition)

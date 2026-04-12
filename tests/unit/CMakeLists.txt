@@ -120,6 +120,7 @@ rxtech_apply_warnings(test_data_order_tracker)
 
 add_executable(test_owner_loop_bridge_safety test_owner_loop_bridge_safety.cpp)
 target_link_libraries(test_owner_loop_bridge_safety PRIVATE rx_receiver_core)
+target_include_directories(test_owner_loop_bridge_safety PRIVATE ${CMAKE_SOURCE_DIR}/src/receiver/runtime/internal)
 add_test(NAME test_owner_loop_bridge_safety COMMAND test_owner_loop_bridge_safety)
 set_tests_properties(test_owner_loop_bridge_safety PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(test_owner_loop_bridge_safety)

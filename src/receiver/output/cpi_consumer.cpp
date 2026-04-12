@@ -1,6 +1,24 @@
-﻿#include "rxtech/cpi_consumer.h"
+#include "rxtech/cpi_consumer.h"
 
+#if defined(__i386__) || defined(__x86_64__)
 #include <emmintrin.h>
+#endif
+
+#include <thread>
+
+namespace
+{
+    inline void cpu_pause_hint() noexcept
+    {
+#if defined(__i386__) || defined(__x86_64__)
+        _mm_pause();
+#elif defined(__aarch64__) || defined(__arm__)
+        __asm__ __volatile__("yield" ::: "memory");
+#else
+        std::this_thread::yield();
+#endif
+    }
+} // namespace
 
 namespace rxtech
 {
@@ -12,7 +30,7 @@ namespace rxtech
         {
             if (!output_ring_.pop(output))
             {
-                _mm_pause();
+                cpu_pause_hint();
                 continue;
             }
 
@@ -39,7 +57,7 @@ namespace rxtech
                 {
                     break;
                 }
-                _mm_pause();
+                cpu_pause_hint();
             }
 
             processed_count_.fetch_add(1U, std::memory_order_release);

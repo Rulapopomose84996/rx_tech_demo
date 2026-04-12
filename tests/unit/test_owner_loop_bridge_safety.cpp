@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "debug_capture_writer.h"
 #include "rxtech/metrics.h"
 #include "rxtech/owner_loop.h"
 #include "rxtech/receive_context.h"
@@ -100,9 +101,12 @@ int main()
 
     std::ostringstream packet_sink;
     std::ostringstream index_sink;
+    rxtech::DebugCaptureWriter capture_writer(rxtech::CapturePolicy::first_effective_cpi, &packet_sink, &index_sink,
+                                              "results/test_owner_loop_bridge_safety");
     rxtech::CaptureArtifacts artifacts;
     artifacts.packet_stream = &packet_sink;
     artifacts.index_stream = &index_sink;
+    artifacts.capture_writer = &capture_writer;
 
     rxtech::OwnerLoop owner_loop;
     const auto *backend = static_cast<const MissingRawFrameBackend *>(context.backend.get());
