@@ -13,8 +13,9 @@
   - 公共头统一到 `include/rxtech`
   - `src/receiver` 模块实现文件已收平到模块根目录
   - `app` 入口层包含两个可执行入口：`main_dpdk.cpp` 和 `main_socket.cpp`
-  - 热路径模块拆分为 PacketPipeline、CpiStateCoordinator、DataOrderTracker、RuntimeStatusReporter、CpiConsumer 输出流水线等独立组件
-  - OwnerLoop 只保留流程协调，不再承载大块协议与状态细节
+  - 热路径真实协议入口是 `UdpDatagramPipeline`；`PacketPipeline` 只保留为 legacy frame adapter
+  - `OwnerLoop` 负责装配和流程协调，sidecar 逻辑下沉到 `RuntimeStatusReporter`、`TrafficStateTracker`、`DebugCaptureWriter`
+  - 本轮业务逻辑优化已经落回主线：热路径去除了 `std::function` 回调、按包 wall clock 格式化、capture `std::string` 组包，以及 pool 耗尽时的阻塞退避
 
 ## 目录概览
 
@@ -69,7 +70,7 @@ docs/
 4. 校验配置并初始化所选 backend：
    - `dpdk`：当前权威主运行路径，内部完成 `raw frame -> UDP datagram` 适配
    - `socket`：Linux UDP datagram ingress，直接交付 UDP datagram 视图
-5. **创建模块化组件**：PacketPipeline、CpiStateCoordinator、DataOrderTracker、RuntimeStatusReporter，以及基于 SPSC ring 的 CPI 输出流水线。
+5. **创建模块化组件**：`UdpDatagramPipeline`、`CpiStateCoordinator`、`DataOrderTracker`、`TrafficStateTracker`、`RuntimeStatusReporter`，以及基于 SPSC ring 的 CPI 输出流水线。
 6. 批量收包。
    - `dpdk` 路径会在 ingress 层按需应答 ARP
    - `socket` 路径用 `recvmmsg()` 批量收 UDP datagram，并使用固定 slot 保存 burst 生命周期
@@ -81,26 +82,37 @@ docs/
 8. **数据包过滤和指标收集**
 9. **对于业务协议包**：
    - DataOrderTracker：监控数据顺序完整性
-  - CpiStateCoordinator：CPI 准入决策、slot 写入、进度推进和 finalize
-  - CpiConsumer：后台消费 finalized CPI，并通过 recycle ring 归还上下文池位
+   - CpiStateCoordinator：CPI 准入决策、slot 写入、进度推进和 finalize
+   - CpiConsumer：后台消费 finalized CPI，并通过 recycle ring 归还上下文池位
 10. **周期性状态报告**：RuntimeStatusReporter 按秒刷新中文状态面板
-11. 把有效包的 UDP payload 直接写入 `capture_packets.bin`，并把语义索引直接写入 `capture_index.csv`。
+11. 把 capture policy 允许写出的 UDP payload 写入 `capture_packets.bin`，并把语义索引写入 `capture_index.csv`。
 12. 持续接收模式下按秒刷新中文状态面板：未见业务协议流量时只保留链路层单面板；见到业务协议流量后切换到包含协议层与结果层的扩展面板。
 13. 结果层除全局 CPI / PRT / 通道计数外，还会显示"当前 PRT 覆盖"，用于区分"当前 PRT 仍在接收中"与"解析顺序异常"。
 14. 程序结束时，RuntimeStatusReporter 构建最终 RunSummary 并渲染人类可读的总结报告
 
-## 实时优先输出边界
+## 当前优化后的热路径边界
+
+- `UdpDatagramPipeline::process_datagram()` 已改为模板回调，`OwnerLoop` 直接以内联 lambda 接收 `ProcessedPacket`，主线不再为每个 datagram 走 `std::function` 类型擦除。
+- 热路径调用点现在统一使用具体类型 `MetricsCollector&`；`IMetricsCollector` 仍保留在摘要聚合和扩展接口层，不再承担主链路的按包分发。
+- `TrafficStateTracker` 只在 `first_seen`、`resumed`、`interrupted` 三种状态切换时生成 wall clock 字符串，正常每包路径只传 `monotonic_ns`。
+- `DebugCaptureRecord` 已改成 `PacketKind + payload_data + payload_len` 的轻量结构，capture 路径不再为每个包构造 payload `std::string`。
+- `CpiContextPool::release()` 只回收槽位，不再做 release 时冗余 reset；真正 reset 发生在下一次 `acquire()`。
+- `UdpPayloadBuffer` 现为 move-only，避免误拷贝时触发隐藏堆分配。
+
+## 实时优先与降级边界
 
 当前接收主链遵循"实时优先"原则：
 
 - `OwnerLoop` 主线程对输出侧零阻塞。`CpiStateCoordinator` 在 finalize 后只做一次非阻塞 `output_ring.push()`；push 失败时立即释放上下文池位，不重试、不等待。
+- `open_active()` 在池耗尽时只做有限次 recycle drain 重试；仍无法获取上下文时把本次数据包按 `degraded` 口径丢弃并继续运行，不再 `sleep_for` 阻塞主线程，也不会直接终止 run。
 - 输出侧允许退化。当 `CpiConsumer` 消费速度不足，导致 `output_ring` 满时，finalized CPI 会被丢弃，但丢弃事件会被计数并纳入运行结论。
 - 运行结论分级：
   - `success`：无输出退化
-  - `degraded`：主链保持实时，但发生过输出丢弃（默认策略 `output_drop_policy=degrade`）
-  - `error`：配置为 `output_drop_policy=error` 时，输出丢弃使运行结论升级为错误
+  - `degraded`：主链保持实时，但发生过输出丢弃或 pool exhaustion 降级（默认策略 `output_drop_policy=degrade`）
+  - `error`：配置为 `output_drop_policy=error` 时，输出丢弃会把运行结论升级为错误
 - 无论 `degraded` 还是 `error`，主线程行为不变——始终零阻塞。
-- 退化事件可在实时状态面板的"输出链路统计"区域和最终汇总的"输出退化次数"字段观测到。
+- `CpiConsumer` 空轮询会给 CPU pause hint；recycle ring 回推也有有界自旋上限，避免 consumer 线程无限忙等。
+- 退化事件可在实时状态面板的"输出链路统计"区域和最终汇总中的 `output_backpressure_count`、`pool_exhaustion_count` 观测到。
 
 ## 配置与 CLI
 
@@ -135,6 +147,15 @@ docs/
 - `[runtime]`
 - `[protocol]`
 - `[log]`
+- `[metrics]`
+
+`[capture]` 常用键包括：
+
+- `enabled`
+- `policy`
+- `output_dir`
+- `index_filename`
+- `data_filename`
 
 `[runtime]` 常用键包括：
 
@@ -186,74 +207,54 @@ socket 路径的当前配置规则：
 
 项目规则要求：Windows 侧只做代码编辑和文档更新，权威构建与测试必须在 Linux 服务器完成。
 
-进入服务器工作目录：
+当前服务器基线不支持 `cmake --preset`，而且最近一轮验证里 `scripts/compile/server_shared_cache.sh` 因 CRLF 会在服务器上触发 `set: pipefail\r`。因此权威验证以隔离目录里的手动 `cmake` 命令为准。
+
+进入服务器验证目录：
 
 ```bash
-cd /home/devuser/WorkSpace/rx_tech_demo
+cd /home/devuser/WorkSpace/rx_tech_demo_validation
 ```
 
 构建：
 
 ```bash
-cd /home/devuser/WorkSpace/rx_tech_demo
-bash ./scripts/compile/server_shared_cache.sh
+cd /home/devuser/WorkSpace/rx_tech_demo_validation
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DRXTECH_THIRD_PARTY_CACHE=/home/devuser/WorkSpace/ThirdPartyCache
+cmake --build build -j
 ```
-
-如果服务器上的 CMake 版本支持 presets，也可以使用仓库根目录新增的 `linux-server-werror` preset 做手动质量闸口验证：
-
-```bash
-cd /home/devuser/WorkSpace/rx_tech_demo
-cmake --preset linux-server-werror
-cmake --build --preset linux-server-werror
-```
-
-这个 preset 只用于 Linux 服务器手动验证，保持现有第三方缓存路径，并额外打开 `-DRXTECH_WARNINGS_AS_ERRORS=ON`。
 
 单元测试：
 
 ```bash
-cd /home/devuser/WorkSpace/rx_tech_demo/build/tests/unit
+cd /home/devuser/WorkSpace/rx_tech_demo_validation/build/tests/unit
 ctest --output-on-failure
 ```
 
 集成测试：
 
 ```bash
-cd /home/devuser/WorkSpace/rx_tech_demo/build/tests/integration
+cd /home/devuser/WorkSpace/rx_tech_demo_validation/build/tests/integration
 ctest --output-on-failure
 ```
 
 查看命令行参数：
 
 ```bash
-cd /home/devuser/WorkSpace/rx_tech_demo
+cd /home/devuser/WorkSpace/rx_tech_demo_validation
 ./build/src/receiver/rx_receiver_dpdk --help
 ./build/src/receiver/rx_receiver_socket --help
 ```
 
 ## 当前已验证结果
 
-最近一轮 datagram-first 主线的 Linux 服务器复验采用隔离目录完成，以避免共享服务器工作区漂移影响结果：
+最近一轮业务逻辑优化后的 Linux 服务器权威验证结果如下：
 
-- 代码构建与定向权威验证：
-  - `/home/devuser/WorkSpace/rx_tech_demo_task4_validation`
-    - `test_linux_socket_backend`
-    - `test_udp_datagram_pipeline`
-    - 通过
-  - `/home/devuser/WorkSpace/rx_tech_demo_task5_validation`
-    - `test_owner_loop_summary`
-    - `test_linux_socket_backend`
-    - `test_metrics`
-    - 通过
-- 最终 Task 6 权威验证：
-  - `/home/devuser/WorkSpace/rx_tech_demo_task6_validation`
-    - full unit suite：23/23 通过
-    - `rx_receiver_socket --config configs/socket_loopback.conf --duration 5 --status-interval 1`：退出码 `0`
-    - 运行态总结显示：
-      - 后端类型：`socket`
-      - 后端接收批次：`0`
-      - 后端最大突发批次：`0`
-      - 内核丢弃：`0`
+- 验证目录：`/home/devuser/WorkSpace/rx_tech_demo_validation`
+- 构建：`cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DRXTECH_THIRD_PARTY_CACHE=/home/devuser/WorkSpace/ThirdPartyCache` 与 `cmake --build build -j` 通过
+- 单元测试：`build/tests/unit` 下 `ctest --output-on-failure`，`31/31` 通过
+- 集成测试：`build/tests/integration` 下 `ctest --output-on-failure`，`2/2` 通过
+- 兼容性修正已经并入主线：`CpiConsumer` 的 pause hint 现按架构分流，避免 ARM64 服务器因 `emmintrin.h` 直接失败
+- 真实数据面联调：本轮未执行；当前权威验证仍停留在构建、测试和进程级运行层
 
 当前对 socket 路径已经确认的事实是：
 
@@ -289,15 +290,13 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 - `capture_packets.bin`
 - `capture_index.csv`
 
+默认 `capture_policy=first_effective_cpi`，因此落盘文件默认只保留首个有效 CPI；若改成 `full`，才会记录所有被 capture 路径接受的控制表包和数据包。
+
 启用 `raw_record` 时，接收端还会在判决、过滤和协议解析之前，把原始接收帧异步写入：
 
 - `/data/rx_tech_demo/raw_frames/*.rawbin`
 
-当前 capture index 列为：
-
-```text
-cpi,channel,prt,packet_index,packet_kind,payload_len,valid
-```
+当前 capture 记录的是 UDP payload，而不是原始二层帧；索引文件记录 `cpi/channel/prt/packet_index/packet_kind/valid` 等语义信息。
 
 持续接收状态面板的当前口径：
 
@@ -341,7 +340,7 @@ cd /home/devuser/WorkSpace/rx_tech_demo
 这条路径适合验证：
 
 - socket backend 的配置校验和启动装配
-- UDP payload 是否能继续进入统一的 PacketPipeline
+- UDP payload 是否能继续进入统一的 `UdpDatagramPipeline`
 - capture 输出和最终汇总是否正常生成
 
 ### 3. DPDK 固定时长接收
@@ -375,4 +374,4 @@ head -n 5 "${LATEST_RUN_DIR}/capture_index.csv"
 - 当前 DPDK 仍是权威真实网卡主路径；socket 是已经接入统一主线的第二后端策略。
 - 当前 socket 最新运行态验证是在 Linux 服务器根命名空间的 loopback 上完成的真实进程级收发与落盘，不等同于 `ns_sender -> ns_receiver` 光口链路联调。
 - `ns_sender` / `ns_receiver` 路径当前需要 sudo 口令才能进入 namespace，本轮没有把这条光口链路作为已完成验证写死到文档里。
-- 当前 integration 套件并非全绿：`rxtech_integration_slow_consumer_tests` 仍失败，因此不能把本轮结果表述成“全部集成验证通过”。
+- 当前可以对外确认的是：Linux 服务器上的构建、unit、integration 已通过；真实 sender、真实链路、真实网卡数据面仍未在本轮作为已完成验证对外宣称。
