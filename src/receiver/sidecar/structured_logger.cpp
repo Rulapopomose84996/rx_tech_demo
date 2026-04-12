@@ -1,8 +1,8 @@
 ﻿#include "internal/structured_logger.h"
 
 #include <chrono>
+#include <cerrno>
 #include <ctime>
-#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -10,6 +10,12 @@
 #include <mutex>
 #include <sstream>
 #include <utility>
+#ifdef _WIN32
+#include <direct.h>
+#else
+#include <sys/stat.h>
+#include <sys/types.h>
+#endif
 
 #include "internal/event_logger.h"
 
@@ -25,6 +31,132 @@ namespace rxtech
         std::vector<std::unique_ptr<IEventSink>> g_owned_sinks;
         std::string g_backend_name = "disabled";
         std::string g_events_path;
+
+        bool is_directory_separator(const char ch) noexcept
+        {
+            return ch == '/' || ch == '\\';
+        }
+
+        std::string parent_directory(const std::string &path)
+        {
+            const std::string::size_type pos = path.find_last_of("/\\");
+            if (pos == std::string::npos)
+            {
+                return std::string();
+            }
+            if (pos == 0)
+            {
+                return path.substr(0, 1);
+            }
+            return path.substr(0, pos);
+        }
+
+        bool directory_exists(const std::string &path)
+        {
+            if (path.empty())
+            {
+                return false;
+            }
+#ifdef _WIN32
+            struct _stat info
+            {
+            };
+            return _stat(path.c_str(), &info) == 0 && (info.st_mode & _S_IFDIR) != 0;
+#else
+            struct stat info
+            {
+            };
+            return stat(path.c_str(), &info) == 0 && S_ISDIR(info.st_mode);
+#endif
+        }
+
+        bool create_single_directory(const std::string &path)
+        {
+            if (path.empty() || directory_exists(path))
+            {
+                return true;
+            }
+#ifdef _WIN32
+            return _mkdir(path.c_str()) == 0 || errno == EEXIST;
+#else
+            return mkdir(path.c_str(), 0755) == 0 || errno == EEXIST;
+#endif
+        }
+
+        bool ensure_directory_tree(const std::string &path)
+        {
+            if (path.empty() || directory_exists(path))
+            {
+                return true;
+            }
+
+            std::string current;
+            std::size_t index = 0;
+
+            if (path.size() >= 2 && path[1] == ':')
+            {
+                current = path.substr(0, 2);
+                index = 2;
+                while (index < path.size() && is_directory_separator(path[index]))
+                {
+                    current.push_back(path[index]);
+                    ++index;
+                }
+            }
+            else if (is_directory_separator(path[0]))
+            {
+                current.push_back(path[0]);
+                index = 1;
+                while (index < path.size() && is_directory_separator(path[index]))
+                {
+                    ++index;
+                }
+            }
+
+            while (index < path.size())
+            {
+                while (index < path.size() && is_directory_separator(path[index]))
+                {
+                    ++index;
+                }
+                if (index >= path.size())
+                {
+                    break;
+                }
+
+                const std::size_t next = path.find_first_of("/\\", index);
+                const std::string segment = path.substr(index, next == std::string::npos ? std::string::npos : next - index);
+                if (!segment.empty())
+                {
+                    if (!current.empty() && !is_directory_separator(current[current.size() - 1]))
+                    {
+                        current.push_back('/');
+                    }
+                    current += segment;
+                    if (!create_single_directory(current))
+                    {
+                        return false;
+                    }
+                }
+
+                if (next == std::string::npos)
+                {
+                    break;
+                }
+                index = next + 1;
+            }
+
+            return true;
+        }
+
+        void ensure_parent_directory(const std::string &file_path)
+        {
+            const std::string parent = parent_directory(file_path);
+            if (!parent.empty())
+            {
+                ensure_directory_tree(parent);
+            }
+        }
 
         StructuredLogLevel parse_structured_log_level(const std::string &level)
         {
@@ -172,11 +304,7 @@ namespace rxtech
         g_min_level = parse_structured_log_level(config.operations.log_level);
 
         g_events_path = default_events_log_path(config);
-        const std::filesystem::path events_parent = std::filesystem::path(g_events_path).parent_path();
-        if (!events_parent.empty())
-        {
-            std::filesystem::create_directories(events_parent);
-        }
+        ensure_parent_directory(g_events_path);
 
         auto primary_sink = std::make_unique<FileEventSink>(g_events_path);
         if (primary_sink->is_open())
@@ -194,11 +322,7 @@ namespace rxtech
         }
         else if (output == "file" && !config.operations.structured_log_file_path.empty())
         {
-            const std::filesystem::path mirror_path = config.operations.structured_log_file_path;
-            if (!mirror_path.parent_path().empty())
-            {
-                std::filesystem::create_directories(mirror_path.parent_path());
-            }
+            ensure_parent_directory(config.operations.structured_log_file_path);
             auto sink = std::make_unique<FileEventSink>(config.operations.structured_log_file_path);
             if (sink->is_open())
             {

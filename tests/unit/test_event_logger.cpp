@@ -6,6 +6,11 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#ifdef _WIN32
+#include <direct.h>
+#else
+#include <unistd.h>
+#endif
 
 #include <nlohmann/json.hpp>
 
@@ -16,6 +21,15 @@
 
 namespace
 {
+    void remove_directory_if_exists(const char *path)
+    {
+#ifdef _WIN32
+        _rmdir(path);
+#else
+        rmdir(path);
+#endif
+    }
+
     class VectorSink final : public rxtech::IEventSink
     {
       public:
@@ -141,6 +155,35 @@ int main()
         assert(parsed_transition.at("event") == "traffic.interrupted");
         assert(parsed_transition.at("payload").at("current_state") == "interrupted");
         std::remove(config.operations.structured_log_file_path.c_str());
+    }
+
+    {
+        const std::string nested_dir = "tmp_test_event_logger";
+        const std::string nested_subdir = nested_dir + "/nested";
+        const std::string nested_path = nested_subdir + "/mirror.jsonl";
+        std::remove(nested_path.c_str());
+        remove_directory_if_exists(nested_subdir.c_str());
+        remove_directory_if_exists(nested_dir.c_str());
+
+        rxtech::RxConfig config = rxtech::load_default_config();
+        config.operations.structured_log_output = "file";
+        config.operations.structured_log_file_path = nested_path;
+
+        rxtech::configure_structured_logger(config);
+        rxtech::structured_log(rxtech::StructuredLogLevel::info, "run.started",
+                               {{"backend", "socket"}, {"run_id", "nested-path-case"}});
+        rxtech::shutdown_structured_logger();
+
+        std::ifstream input(nested_path);
+        assert(input.is_open());
+        std::string line;
+        std::getline(input, line);
+        const nlohmann::json parsed_nested = nlohmann::json::parse(line);
+        assert(parsed_nested.at("event") == "run.started");
+
+        std::remove(nested_path.c_str());
+        remove_directory_if_exists(nested_subdir.c_str());
+        remove_directory_if_exists(nested_dir.c_str());
     }
     return 0;
 }
