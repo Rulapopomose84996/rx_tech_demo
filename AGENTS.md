@@ -1,128 +1,124 @@
 # AGENTS.md
 
-## Project Identity
+## Project Structure
 
-- This project is a Linux-only radar receiver demo.
-- The long-term goal is to build a complete radar data receiving module.
-- Development must proceed in phases. Every phase should have a clear, realistic intermediate goal.
-- Do not describe an intermediate implementation as if the final receiver module is already complete.
+当前仓库的真实主线是 Linux-only、`datagram-first` 的接收端实现。
 
-## Non-Negotiable Execution Rules
+- 正式 CLI 入口：
+  - `src/receiver/app/main_dpdk.cpp`
+  - `src/receiver/app/main_socket.cpp`
+- 当前正式运行后端：
+  - `rx_receiver_dpdk`
+  - `rx_receiver_socket`
+- 当前协议主入口：
+  - `src/receiver/protocol/udp_datagram_pipeline.cpp`
+- 当前主循环与运行装配：
+  - `src/receiver/core/owner_loop.cpp`
+  - `src/receiver/runtime/receive_runner.cpp`
+- 当前主要可观测性产物：
+  - `events.jsonl`
+  - `summary.json`
+  - `summary.txt`
 
-- Do not compile, run, benchmark, or validate this project on Windows.
-- Do not treat Windows build results, IDE analysis, or local dry-runs as authoritative validation.
-- All authoritative build, test, runtime, and integration validation must happen on the Linux server.
-- The default remote entrypoint is `ssh kds`.
-- When server validation is requested, or when validation is necessary to support a completion claim, use the skill [$server-test-via-kds](C:\Users\Klein\.codex\skills\server-test-via-kds\SKILL.md).
-- Follow this repository rule even if local tooling appears to work.
+顶层目录职责：
 
-## Development Workflow
+- `include/rxtech`
+  - 公共接口、配置和共享数据结构
+- `src/receiver/app`
+  - CLI 入口与启动装配
+- `src/receiver/runtime`
+  - 配置、运行器、capture/raw_record 路径
+- `src/receiver/ingress`
+  - DPDK / socket / replay 等后端接入
+- `src/receiver/protocol`
+  - datagram 协议处理主线与 legacy frame adapter
+- `src/receiver/core`
+  - CPI 生命周期与主循环协调
+- `src/receiver/sidecar`
+  - 状态、指标、日志、summary 输出
+- `tests/unit`
+  - 单元测试
+- `tests/integration`
+  - 集成测试
+- `docs`
+  - 活动文档与评审记录
 
-- Code reading, editing, refactoring, and documentation updates are performed locally on Windows.
-- Build, test, runtime checks, and acceptance validation are performed on the Linux server.
-- Sync local changes to the server using either:
-  - `git push` + server-side `git pull`, or
-  - `scp` / archive copy for isolated validation directories.
-- Choose the sync method based on change scope and risk:
-  - prefer `git push/pull` for normal branch-based work,
-  - prefer isolated copy/sync when validation should not disturb an existing remote workspace.
-- Make the sync step explicit before server validation when remote code must reflect local edits.
-- Prefer non-destructive remote actions first.
-- If `ssh kds` is unavailable before project commands can run, only then consider the WSL fallback path described by the server validation skill and project docs.
+更细的目录规则应尽量放在更接近目标目录的位置；离当前目录更近的规则优先于本文件。
 
-## Technical Baseline
+## Development Startup Commands
 
-- Language standard: `C++17`
-- Build system baseline: `CMake 3.16.x`
-- Preferred generator: `Ninja`
-- Current server validation toolchain constraints:
-  - server `cmake 3.16.5` does not support `cmake --preset`; when validating on server, expand preset parameters manually or use repo scripts
-  - server `g++ 7.3.0` is part of the active compatibility baseline; do not assume `std::filesystem` is available just because code is compiled with `-std=c++17`
-  - when adding path or directory utilities in hot codepaths, prefer compatibility helpers that work on the server baseline instead of newer standard library filesystem APIs
-- Current runtime mainline:
-  - `DPDK` in `src/receiver`
-- Common third-party libraries may include:
-  - `libdpdk`
-  - `Google Test`
-- Shared third-party cache reference:
-  - `/home/devuser/WorkSpace/ThirdPartyCache/rx_tech_demo`
-- Do not silently upgrade language standard, build baseline, or dependency assumptions without updating project docs and validation flow.
+本地 Windows 只用于读代码、改代码、改文档，不作为权威验证环境。
 
-## Code Organization Principles
+服务器相关工作流：
 
-- Keep the current mainline centered in `src/receiver`.
-- Public headers live in `include/rxtech`.
-- Private helper headers should stay in module-local `internal/` directories.
-- Place new or changed logic in the smallest module that matches its responsibility:
-  - `app`: process entry, CLI, startup assembly
-  - `runtime`: config, context, run loop setup, output path preparation
-  - `ingress`: backend-specific packet acquisition
-  - `core`: hot-path orchestration
-  - `protocol`: UDP payload assembly, parsing, validation, sequence interpretation
-  - `sidecar`: metrics and observation
-  - `storage`: CPI context, slot write, progress tracking
-  - `admit`: CPI admission policy
-  - `finalize`: CPI finalize and finalized output structure
-- Avoid mixing these concerns in one file when extending the system.
-- Prefer stable interfaces between layers, such as:
-  - `IRxBackend`
-  - `ReceiveContext`
-  - `RunSummary`
-  - parser/validator result types
-- Keep the receiver mainline understandable as a pipeline:
-  - acquire packets
-  - extract UDP payload
-  - parse
-  - validate
-  - record
-  - summarize
+- 默认入口：`ssh kds`
+- 需要服务器验证、同步到服务器、远程拉代码构建、或 `ssh kds` 不通时的 fallback 流程时，直接使用技能 [$server-test-via-kds](C:\Users\Klein\.codex\skills\server-test-via-kds\SKILL.md)
 
-## Runtime And Validation Rules
+当前构建基线：
 
-- Treat the current DPDK receiver path as the only active runtime path unless project code and docs explicitly change that.
-- Do not reintroduce AF_XDP assumptions into mainline docs, config semantics, or runtime status fields without explicit user direction.
-- Treat fake tests, parser tests, and isolated unit tests as useful evidence, but not as proof of real network-path success.
-- For server validation commands derived from `CMakePresets.json`, remember that the preset file is authoritative for parameters but may not be invokable directly on the server because of the `cmake 3.16.5` baseline.
-- Only claim “real closed-loop validation” when the required external sender, network path, and receiver runtime are actually validated on the server.
-- If the external sender is unavailable, say so explicitly and limit claims to the level that was truly validated.
-- When build or test guidance is needed, prefer active project docs and current repository instructions over historical planning text.
-- When docs conflict, prefer the more specific and actively maintained build/deployment/validation guidance.
+- 语言标准：`C++17`
+- 构建系统基线：`CMake 3.16.x`
+- 推荐生成器：`Ninja`
 
-## Documentation Rules
+当前服务器工具链现实约束：
 
-- Server environment baseline references:
-  - [docs/设计方案/服务器环境基线.md](D:\WorkSpace\Company\Tower\rx_tech_demo\docs\设计方案\服务器环境基线.md)
-  - [docs/设计方案/平台与环境适配说明.md](D:\WorkSpace\Company\Tower\rx_tech_demo\docs\设计方案\平台与环境适配说明.md)
-- These environment/baseline documents may be updated as the real platform and setup evolve.
-- Code-logic summary document:
-  - [docs/当前接收端代码实现与执行逻辑详解.md](D:\WorkSpace\Company\Tower\rx_tech_demo\docs\当前接收端代码实现与执行逻辑详解.md)
-- Keep `README.md` aligned with:
-  - current mainline entrypoints
-  - current source layout
-  - real build/test path
-  - actual packet pipeline
-  - current validation boundary
-- Do not write future plans, ideal architecture, or intended end-state as if they are already implemented.
+- server `cmake 3.16.5` 不支持 `cmake --preset`
+- `CMakePresets.json` 可以作为参数来源，但不要假设服务器能直接执行 `cmake --preset ...`
+- server `g++ 7.3.0` 属于当前兼容性下限，不要默认 `std::filesystem` 可用
 
-## Git And Branching Guidance
+## Test Commands
 
-- Keep `main` focused on real product code and necessary project docs.
-- Use separate branches for:
-  - staged feature work
-  - reading/annotation work
-  - experimental validation work if needed
-- Keep commits logically grouped:
-  - behavior change
-  - build/test wiring
-  - docs
-  - annotation-only changes
+权威构建、测试、运行验证必须在 Linux 服务器完成。
 
-## Agent Behavior In This Repository
+当前主要服务器构建方式：
 
-- Before making implementation or validation decisions, inspect the current repository state and the active docs relevant to the task.
-- Prefer concise, enforceable project rules over broad generic advice.
-- When uncertain, bias toward:
-  - preserving Linux-server-first validation
-  - keeping the DPDK receiver pipeline boundaries clear
-  - reporting validated facts rather than assumptions
-  - distinguishing current mainline from removed historical paths
+- 手动展开 `linux-server-werror` 对应参数
+- 或使用仓库内活动脚本
+
+当前高频验证入口：
+
+- unit tests：`tests/unit`
+- integration tests：`tests/integration`
+- socket 运行验证：`rx_receiver_socket`
+- DPDK 运行验证：`rx_receiver_dpdk`
+
+具体命令、工作目录、同步策略、fallback 规则，不在本文件重复维护，统一以 [$server-test-via-kds](C:\Users\Klein\.codex\skills\server-test-via-kds\SKILL.md) 和活动项目文档为准。
+
+## Style And Architecture Constraints
+
+- 当前真实协议主线是 `UdpDatagramPipeline`，不要把 `PacketPipeline` 当作当前主线。
+- `PacketPipeline` 当前只应视为 legacy frame adapter；只有明确需要 frame-native 辅助路径时才触碰它。
+- 新逻辑优先放入职责最小、边界最清楚的模块，不要把 `app`、`runtime`、`protocol`、`core`、`sidecar` 职责混写到一个文件里。
+- 新增路径、目录和文件操作时，优先采用兼容当前服务器工具链的实现，不要只按本地较新标准库能力写代码。
+- `socket` 和 `dpdk` 的能力边界要明确区分：
+  - `socket` 是正式后端，但不提供 raw frame
+  - `dpdk` 是当前真实网卡主路径
+- 文档描述必须服从当前真实实现，不要把历史路径、计划路径或理想架构写成已实现事实。
+- 遇到服务器现实与文档不一致时，以服务器实际结果为准，并回写到项目文档。
+
+## Prohibited
+
+- 不要在 Windows 上宣称本项目“已构建通过 / 已测试通过 / 已运行验证通过”。
+- 不要把服务器工作区当作代码真源。
+- 不要默认假设 server 有较新 CMake / GCC / 标准库能力。
+- 不要默认假设 `devuser` 拥有任意 root 权限。
+- 不要把没有真实 sender / 真实链路参与的验证表述成“真实闭环验证”。
+- 不要把局部验证、假数据验证或 fake backend 验证表述成真实数据面成功。
+- 不要在 `main` 上堆积实验性改动。
+- 不要把未来计划、理想终态或待做事项写成已完成实现。
+
+## Definition Of Done
+
+一个改动只有在以下条件同时满足时，才能对外宣称完成：
+
+1. 代码和文档修改已经落回本地仓库并纳入版本控制。
+2. 已按当前项目实际边界说明完成了哪些验证层级：
+   - 构建
+   - 启动
+   - 功能
+   - 回归
+3. 权威验证结论来自 Linux 服务器，而不是 Windows 本地推断。
+4. 若发现新的服务器约束、权限边界、工具链坑点或构建前提，已回写到 `AGENTS.md` 或活动文档。
+5. 输出结论与实际证据一致，没有扩大宣称范围。
+
+若缺少真实 sender、真实链路、真实网卡数据面或对应环境前提，必须明确写出“完成到哪一层、尚未完成哪一层”。
