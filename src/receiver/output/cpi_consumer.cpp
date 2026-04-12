@@ -1,5 +1,7 @@
 ﻿#include "rxtech/cpi_consumer.h"
 
+#include <emmintrin.h>
+
 namespace rxtech
 {
 
@@ -10,8 +12,7 @@ namespace rxtech
         {
             if (!output_ring_.pop(output))
             {
-                // Spin-yield when idle — avoid busy-wait on empty ring
-                // (A future improvement could use a futex/eventfd for wakeup.)
+                _mm_pause();
                 continue;
             }
 
@@ -25,13 +26,20 @@ namespace rxtech
             ReleaseToken token;
             token.output_id = output.output_id;
             token.ctx_pool_index = output.pool_index;
-            // If the recycle ring is full we still need to push — spin until space.
-            while (!recycle_ring_.push(token))
+            // Spin with bounded retries — if recycle ring stays full, drop the token
+            // to avoid indefinite blocking on the consumer thread.
+            static constexpr int kMaxRecycleSpins = 1024;
+            for (int spin = 0; spin < kMaxRecycleSpins; ++spin)
             {
+                if (recycle_ring_.push(token))
+                {
+                    break;
+                }
                 if (stop_flag.load(std::memory_order_relaxed))
                 {
                     break;
                 }
+                _mm_pause();
             }
 
             processed_count_.fetch_add(1U, std::memory_order_release);

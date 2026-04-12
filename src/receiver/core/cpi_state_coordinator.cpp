@@ -1,8 +1,6 @@
 #include "internal/cpi_state_coordinator.h"
 
 #include <algorithm>
-#include <chrono>
-#include <thread>
 
 #include "rxtech/time_utils.h"
 
@@ -161,7 +159,7 @@ namespace rxtech
         bind_control_snapshot(*active_ctx_, snapshot);
     }
 
-    bool CpiStateCoordinator::check_timeout(std::uint64_t now_ns, IMetricsCollector &metrics)
+    bool CpiStateCoordinator::check_timeout(std::uint64_t now_ns, MetricsCollector &metrics)
     {
         bool timed_out = false;
 
@@ -208,7 +206,7 @@ namespace rxtech
         return timed_out;
     }
 
-    bool CpiStateCoordinator::open_active(std::uint16_t cpi_id, IMetricsCollector &metrics, std::string &run_status,
+    bool CpiStateCoordinator::open_active(std::uint16_t cpi_id, MetricsCollector &metrics, std::string &run_status,
                                           std::string &run_error)
     {
         // Release only the active context, not the previous (dual-window).
@@ -243,21 +241,12 @@ namespace rxtech
 
         if (!try_acquire_active())
         {
-            static constexpr std::chrono::microseconds kPoolAcquireBackoff[] = {
-                std::chrono::microseconds(1),
-                std::chrono::microseconds(10),
-                std::chrono::microseconds(100),
-            };
-
-            for (const auto delay : kPoolAcquireBackoff)
+            // Non-blocking retry: drain recycle ring and retry acquire
+            // without any sleep_for to avoid violating the zero-blocking
+            // guarantee on the real-time owner thread.
+            static constexpr int kMaxDrainRetries = 3;
+            for (int attempt = 0; attempt < kMaxDrainRetries; ++attempt)
             {
-                drain_recycle_once();
-                if (try_acquire_active())
-                {
-                    break;
-                }
-
-                std::this_thread::sleep_for(delay);
                 drain_recycle_once();
                 if (try_acquire_active())
                 {
@@ -269,10 +258,10 @@ namespace rxtech
         if (active_ctx_ == nullptr)
         {
             active_ctx_index_ = kInvalidPoolIndex;
-            run_status = "error";
-            run_error = "cpi context pool exhausted";
+            // Degrade gracefully: drop the packet but do not terminate the run.
+            // The caller will see open_active() return false and skip the packet.
+            run_status = "degraded";
             metrics.on_pool_exhaustion();
-            metrics.on_error();
             return false;
         }
 
@@ -281,13 +270,14 @@ namespace rxtech
         return true;
     }
 
-    void CpiStateCoordinator::finalize_active(std::uint32_t trigger, IMetricsCollector &metrics)
+    void CpiStateCoordinator::finalize_ctx(CpiContext *&ctx, std::uint32_t &ctx_index, std::uint32_t trigger,
+                                           MetricsCollector &metrics)
     {
-        if (active_ctx_ == nullptr)
+        if (ctx == nullptr)
         {
             return;
         }
-        const std::optional<CpiOutput> output = finalizer_.try_finalize(*active_ctx_, trigger);
+        const std::optional<CpiOutput> output = finalizer_.try_finalize(*ctx, trigger);
         if (output.has_value())
         {
             closed_ring_.push(output->cpi_id, output->seal_tsc, output->decision);
@@ -297,65 +287,37 @@ namespace rxtech
                 out.output_id = next_output_id_++;
                 if (!output_ring_->push(out))
                 {
-                    // SPSC full — zero-blocking drop: discard and release immediately
                     metrics.on_output_backpressure();
-                    ctx_pool_.release(active_ctx_index_);
-                    output_degraded_.store(true, std::memory_order_relaxed);
+                    ctx_pool_.release(ctx_index);
+                    output_degraded_ = true;
                 }
-                // else: pool slot stays occupied until consumer returns ReleaseToken
             }
             else
             {
-                // No output ring attached — legacy path, release immediately
-                ctx_pool_.release(active_ctx_index_);
+                ctx_pool_.release(ctx_index);
             }
         }
         else
         {
-            // Finalization declined — release pool slot
-            ctx_pool_.release(active_ctx_index_);
+            ctx_pool_.release(ctx_index);
         }
-        active_ctx_index_ = kInvalidPoolIndex;
-        active_ctx_ = nullptr;
+        ctx_index = kInvalidPoolIndex;
+        ctx = nullptr;
     }
 
-    void CpiStateCoordinator::finalize_previous(std::uint32_t trigger, IMetricsCollector &metrics)
+    void CpiStateCoordinator::finalize_active(std::uint32_t trigger, MetricsCollector &metrics)
     {
-        if (previous_ctx_ == nullptr)
-        {
-            return;
-        }
-        const std::optional<CpiOutput> output = finalizer_.try_finalize(*previous_ctx_, trigger);
-        if (output.has_value())
-        {
-            closed_ring_.push(output->cpi_id, output->seal_tsc, output->decision);
-            if (output_ring_ != nullptr)
-            {
-                CpiOutput out = *output;
-                out.output_id = next_output_id_++;
-                if (!output_ring_->push(out))
-                {
-                    metrics.on_output_backpressure();
-                    ctx_pool_.release(previous_ctx_index_);
-                    output_degraded_.store(true, std::memory_order_relaxed);
-                }
-            }
-            else
-            {
-                ctx_pool_.release(previous_ctx_index_);
-            }
-        }
-        else
-        {
-            ctx_pool_.release(previous_ctx_index_);
-        }
-        previous_ctx_index_ = kInvalidPoolIndex;
-        previous_ctx_ = nullptr;
+        finalize_ctx(active_ctx_, active_ctx_index_, trigger, metrics);
+    }
+
+    void CpiStateCoordinator::finalize_previous(std::uint32_t trigger, MetricsCollector &metrics)
+    {
+        finalize_ctx(previous_ctx_, previous_ctx_index_, trigger, metrics);
     }
 
     CpiProcessResult CpiStateCoordinator::process_data_packet(const ParsedPacketView &parsed,
                                                               const InterpretedPacketView &packet,
-                                                              const ProtocolSpec &spec, IMetricsCollector &metrics,
+                                                              const ProtocolSpec &spec, MetricsCollector &metrics,
                                                               std::string &run_status, std::string &run_error)
     {
         CpiProcessResult result;
@@ -430,7 +392,7 @@ namespace rxtech
         return result;
     }
 
-    void CpiStateCoordinator::drain_recycle(IMetricsCollector & /*metrics*/)
+    void CpiStateCoordinator::drain_recycle(MetricsCollector & /*metrics*/)
     {
         if (recycle_ring_ == nullptr)
         {
@@ -443,7 +405,7 @@ namespace rxtech
         }
     }
 
-    void CpiStateCoordinator::finalize_active_for_shutdown(IMetricsCollector &metrics)
+    void CpiStateCoordinator::finalize_active_for_shutdown(MetricsCollector &metrics)
     {
         finalize_previous(TriggerStop, metrics);
         if (active_ctx_ != nullptr)

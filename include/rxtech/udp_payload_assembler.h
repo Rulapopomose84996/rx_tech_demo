@@ -20,32 +20,12 @@ namespace rxtech
 
         UdpPayloadBuffer() = default;
 
-        UdpPayloadBuffer(const UdpPayloadBuffer &other)
-        {
-            *this = other;
-        }
+        UdpPayloadBuffer(const UdpPayloadBuffer &) = delete;
+        UdpPayloadBuffer &operator=(const UdpPayloadBuffer &) = delete;
 
         UdpPayloadBuffer(UdpPayloadBuffer &&other) noexcept
         {
             *this = std::move(other);
-        }
-
-        UdpPayloadBuffer &operator=(const UdpPayloadBuffer &other)
-        {
-            if (this == &other)
-            {
-                return *this;
-            }
-
-            if (other.has_owned_payload())
-            {
-                owned_payload_ = other.owned_payload_;
-                sync_view_to_owned();
-                return *this;
-            }
-
-            assign(other.view_, other.size_);
-            return *this;
         }
 
         UdpPayloadBuffer &operator=(UdpPayloadBuffer &&other) noexcept

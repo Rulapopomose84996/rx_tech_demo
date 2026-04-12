@@ -15,7 +15,6 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
-#include <ctime>
 #include <ostream>
 #include <sstream>
 #include <thread>
@@ -37,25 +36,56 @@ namespace rxtech
 
     namespace
     {
-
-        std::string format_wall_clock_now()
+        void handle_traffic_transition(const std::optional<TrafficStateTransition> &transition,
+                                       const std::string &backend_name)
         {
-            const std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-            std::tm local_time{};
-#ifdef _WIN32
-            localtime_s(&local_time, &now);
-#else
-            localtime_r(&now, &local_time);
-#endif
-            char buffer[32] = {};
-            if (std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &local_time) == 0U)
+            if (!transition)
             {
-                return {};
+                return;
             }
-            return buffer;
+            switch (transition->transition)
+            {
+            case TrafficTransition::first_seen:
+                structured_log(StructuredLogLevel::info, "traffic.first_seen",
+                               {{"backend", backend_name},
+                                {"current_state", "active"},
+                                {"first_seen_wall", transition->wall_time}});
+                break;
+            case TrafficTransition::resumed:
+                structured_log(StructuredLogLevel::info, "traffic.resumed",
+                               {{"backend", backend_name},
+                                {"current_state", "active"},
+                                {"last_resumed_wall", transition->wall_time}});
+                break;
+            case TrafficTransition::interrupted:
+                break;
+            }
         }
 
-    } // namespace
+        void maybe_write_capture(CaptureArtifacts &artifacts, const ProcessedPacket &processed)
+        {
+            if (artifacts.capture_writer == nullptr)
+            {
+                return;
+            }
+            DebugCaptureRecord record;
+            record.cpi = processed.interpreted.cpi;
+            record.channel = processed.interpreted.channel;
+            record.prt = processed.interpreted.prt;
+            record.packet_index = processed.interpreted.packet_index;
+            record.kind = processed.interpreted.kind;
+            record.valid = processed.interpreted.valid;
+            record.payload_data = processed.udp_frame.udp_payload.data();
+            record.payload_len = processed.udp_frame.udp_payload.size();
+
+            if (artifacts.capture_writer->record(record))
+            {
+                artifacts.file_offset += processed.udp_frame.udp_payload.size();
+                artifacts.recorded_bytes += processed.udp_frame.udp_payload.size();
+                ++artifacts.recorded_packets;
+            }
+        }
+    } // anonymous namespace
 
     /**
      * @brief 设置状态输出流
@@ -193,86 +223,37 @@ namespace rxtech
                     datagram, *context.metrics, status_reporter.diagnostic_output(), invalid_dumped,
                     [&](const ProcessedPacket &processed)
                     {
-                        // 记录协议层数据包统计
                         runtime_state.record_protocol_packet(processed.interpreted);
                         if (processed.interpreted.valid)
                         {
-                            const std::uint64_t now_ns = steady_clock_now_ns();
-                            const std::string wall_time = format_wall_clock_now();
-                            if (const auto transition =
-                                    traffic_tracker.observe_valid_business_packet(now_ns, wall_time))
-                            {
-                                switch (transition->transition)
-                                {
-                                case TrafficTransition::first_seen:
-                                    structured_log(StructuredLogLevel::info, "traffic.first_seen",
-                                                   {{"backend", context.backend->name()},
-                                                    {"current_state", "active"},
-                                                    {"first_seen_wall", transition->wall_time}});
-                                    break;
-                                case TrafficTransition::resumed:
-                                    structured_log(StructuredLogLevel::info, "traffic.resumed",
-                                                   {{"backend", context.backend->name()},
-                                                    {"current_state", "active"},
-                                                    {"last_resumed_wall", transition->wall_time}});
-                                    break;
-                                case TrafficTransition::interrupted:
-                                    break;
-                                }
-                            }
+                            handle_traffic_transition(
+                                traffic_tracker.observe_valid_business_packet(steady_clock_now_ns()),
+                                context.backend->name());
                         }
 
-                        // 处理控制表包：更新 CPI 状态协调器
                         if (processed.interpreted.kind == PacketKind::control_table)
                         {
                             cpi_state_coordinator.process_control_packet(processed.parsed);
                         }
 
-                        // 处理数据包：验证顺序、更新 CPI 状态、写入输出
                         if (processed.interpreted.kind == PacketKind::data_packet)
                         {
-                            // 观察数据包顺序，检测乱序
                             data_order_tracker.observe(processed.interpreted);
 
-                            // 处理数据包并获取 CPI 处理结果
                             const CpiProcessResult cpi_result = cpi_state_coordinator.process_data_packet(
                                 processed.parsed, processed.interpreted, spec, *context.metrics,
                                 runtime_state.run_status, runtime_state.run_error);
 
-                            // 如果 CPI 不接受该数据包，跳过后续处理
                             if (!cpi_result.accepted)
                             {
                                 return;
                             }
 
-                            // 记录已接受的数据包统计
                             runtime_state.record_data_packet(processed.parsed, processed.interpreted, spec);
                         }
 
-                        // 记录已捕获的数据包统计
                         runtime_state.record_captured_packet(processed.interpreted);
-
-                        if (artifacts.capture_writer != nullptr)
-                        {
-                            DebugCaptureRecord record;
-                            record.cpi = processed.interpreted.cpi;
-                            record.channel = processed.interpreted.channel;
-                            record.prt = processed.interpreted.prt;
-                            record.packet_index = processed.interpreted.packet_index;
-                            record.packet_kind = packet_kind_name(processed.interpreted.kind);
-                            record.valid = processed.interpreted.valid;
-                            record.payload.assign(
-                                reinterpret_cast<const char *>(processed.udp_frame.udp_payload.data()),
-                                static_cast<std::size_t>(processed.udp_frame.udp_payload.size()));
-
-                            if (artifacts.capture_writer->record(record))
-                            {
-                                artifacts.file_offset += processed.udp_frame.udp_payload.size();
-                                artifacts.recorded_bytes += processed.udp_frame.udp_payload.size();
-                                ++artifacts.recorded_packets;
-                            }
-                        }
-
+                        maybe_write_capture(artifacts, processed);
                         artifacts.captured_bytes += processed.udp_frame.udp_payload.size();
                         ++artifacts.captured_packets;
                     });
@@ -310,7 +291,7 @@ namespace rxtech
             // 从 consumer 线程回收已处理的 CPI 资源
             cpi_state_coordinator.drain_recycle(*context.metrics);
 
-            if (const auto transition = traffic_tracker.observe_timeout(steady_clock_now_ns(), format_wall_clock_now()))
+            if (const auto transition = traffic_tracker.observe_timeout(steady_clock_now_ns()))
             {
                 structured_log(StructuredLogLevel::warn, "traffic.interrupted",
                                {{"backend", context.backend->name()},
@@ -354,9 +335,8 @@ namespace rxtech
 
         // 记录结束时间并生成最终摘要
         const auto end_time = std::chrono::steady_clock::now();
-        RunSummary summary =
-            status_reporter.build_final_summary(context, artifacts, runtime_state, data_order_tracker, traffic_tracker,
-                                               end_time);
+        RunSummary summary = status_reporter.build_final_summary(context, artifacts, runtime_state, data_order_tracker,
+                                                                 traffic_tracker, end_time);
 
         // 渲染并输出最终摘要
         status_reporter.render_final(summary, end_time - start_time);

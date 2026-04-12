@@ -42,10 +42,8 @@ namespace rxtech
     {
       public:
         explicit TrafficStateTracker(std::uint32_t interrupt_timeout_ms);
-        std::optional<TrafficTransitionEvent> observe_valid_business_packet(std::uint64_t monotonic_ns,
-                                                                            const std::string &wall_time);
-        std::optional<TrafficTransitionEvent> observe_timeout(std::uint64_t monotonic_ns,
-                                                              const std::string &wall_time);
+        std::optional<TrafficTransitionEvent> observe_valid_business_packet(std::uint64_t monotonic_ns);
+        std::optional<TrafficTransitionEvent> observe_timeout(std::uint64_t monotonic_ns);
         TrafficStateSnapshot snapshot() const noexcept;
 
       private:

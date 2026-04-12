@@ -180,6 +180,13 @@ add_test(NAME test_cpi_timeout COMMAND test_cpi_timeout)
 set_tests_properties(test_cpi_timeout PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 rxtech_apply_warnings(test_cpi_timeout)
 
+add_executable(test_pool_exhaustion_degradation test_pool_exhaustion_degradation.cpp)
+target_link_libraries(test_pool_exhaustion_degradation PRIVATE rx_receiver_core)
+target_include_directories(test_pool_exhaustion_degradation PRIVATE ${CMAKE_SOURCE_DIR}/src/receiver/core/internal)
+add_test(NAME test_pool_exhaustion_degradation COMMAND test_pool_exhaustion_degradation)
+set_tests_properties(test_pool_exhaustion_degradation PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+rxtech_apply_warnings(test_pool_exhaustion_degradation)
+
 add_executable(test_dynamic_prt test_dynamic_prt.cpp)
 target_link_libraries(test_dynamic_prt PRIVATE rx_receiver_core)
 target_include_directories(test_dynamic_prt PRIVATE ${CMAKE_SOURCE_DIR}/src/receiver/core/internal)

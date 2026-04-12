@@ -2,8 +2,8 @@
 
 #include <array>
 #include <cstdint>
-#include <functional>
 #include <iosfwd>
+#include <utility>
 
 #include "rxtech/udp_datagram.h"
 #include "rxtech/metrics.h"
@@ -24,9 +24,21 @@ namespace rxtech
       public:
         UdpDatagramPipeline(const RxConfig &config, const ProtocolSpec &spec);
 
-        PacketProcessStats process_datagram(const UdpDatagramDesc &datagram, IMetricsCollector &metrics,
+        DatagramParseResult prepare_datagram(const UdpDatagramDesc &datagram, MetricsCollector &metrics,
+                                             std::ostream *diagnostic_output, std::uint32_t &invalid_dumped);
+
+        template <typename Callback>
+        PacketProcessStats process_datagram(const UdpDatagramDesc &datagram, MetricsCollector &metrics,
                                             std::ostream *diagnostic_output, std::uint32_t &invalid_dumped,
-                                            const std::function<void(const ProcessedPacket &)> &on_packet);
+                                            Callback &&on_packet)
+        {
+            DatagramParseResult result = prepare_datagram(datagram, metrics, diagnostic_output, invalid_dumped);
+            if (result.has_packet)
+            {
+                on_packet(result.processed);
+            }
+            return result.stats;
+        }
 
       private:
         bool matches_packet_filter(const UdpPayloadFrame &frame) const;

@@ -47,7 +47,8 @@ namespace rxtech
             {
                 return;
             }
-            pool_[index].reset(0U, index);
+            // Skip full reset here — acquire() will reset before reuse.
+            // Only mark state and release the slot.
             pool_[index].header.state = CpiState::RECYCLED;
             in_use_[index].store(false, std::memory_order_release);
         }

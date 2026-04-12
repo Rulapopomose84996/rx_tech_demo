@@ -6,12 +6,14 @@
 #include "rxtech/rx_backend.h"
 #include "rxtech/rx_config.h"
 
-namespace rxtech {
+namespace rxtech
+{
 
-struct ReceiveContext {
-    RxConfig config;
-    BackendPtr backend;
-    std::unique_ptr<IMetricsCollector> metrics;
-};
+    struct ReceiveContext
+    {
+        RxConfig config;
+        BackendPtr backend;
+        std::unique_ptr<MetricsCollector> metrics;
+    };
 
-}  // namespace rxtech
+} // namespace rxtech

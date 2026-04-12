@@ -26,4 +26,11 @@ namespace rxtech
         std::uint64_t filtered_packets = 0;
     };
 
+    struct DatagramParseResult
+    {
+        PacketProcessStats stats;
+        bool has_packet = false;
+        ProcessedPacket processed;
+    };
+
 } // namespace rxtech

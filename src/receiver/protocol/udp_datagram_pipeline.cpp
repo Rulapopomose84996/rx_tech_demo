@@ -162,22 +162,22 @@ namespace rxtech
     }
 #endif
 
-    PacketProcessStats
-    UdpDatagramPipeline::process_datagram(const UdpDatagramDesc &datagram, IMetricsCollector &metrics,
-                                          std::ostream *diagnostic_output, std::uint32_t &invalid_dumped,
-                                          const std::function<void(const ProcessedPacket &)> &on_packet)
+    DatagramParseResult UdpDatagramPipeline::prepare_datagram(const UdpDatagramDesc &datagram,
+                                                              MetricsCollector &metrics,
+                                                              std::ostream *diagnostic_output,
+                                                              std::uint32_t &invalid_dumped)
     {
-        PacketProcessStats stats;
+        DatagramParseResult result;
         if (is_malformed_descriptor(datagram))
         {
             metrics.on_error();
-            return stats;
+            return result;
         }
 
         if (datagram.truncated)
         {
             metrics.on_reject(RejectReason::truncated_datagram);
-            return stats;
+            return result;
         }
 
         UdpPayloadFrame udp_frame;
@@ -192,12 +192,12 @@ namespace rxtech
 
         if (!matches_packet_filter(udp_frame))
         {
-            ++stats.filtered_packets;
-            return stats;
+            ++result.stats.filtered_packets;
+            return result;
         }
 
-        stats.accepted_bytes += udp_frame.udp_payload.size();
-        ++stats.accepted_packets;
+        result.stats.accepted_bytes += udp_frame.udp_payload.size();
+        ++result.stats.accepted_packets;
 
         if (datagram.has_global_sequence)
         {
@@ -218,7 +218,7 @@ namespace rxtech
             (void)diagnostic_output;
             (void)invalid_dumped;
 #endif
-            return stats;
+            return result;
         }
 
         const InterpretedPacketView interpreted = interpreter_.interpret(parsed);
@@ -232,7 +232,7 @@ namespace rxtech
                                               invalid_dumped);
             }
 #endif
-            return stats;
+            return result;
         }
 
         metrics.on_valid_packet(interpreted.kind);
@@ -241,14 +241,13 @@ namespace rxtech
             metrics.on_packet_latency_ns(datagram.ts_ns);
         }
 
-        ProcessedPacket processed;
-        processed.udp_frame = std::move(udp_frame);
-        processed.parsed = parsed;
-        processed.interpreted = interpreted;
-        processed.source_queue_id = datagram.queue_id;
-        processed.source_ts_ns = datagram.ts_ns;
-        on_packet(processed);
-        return stats;
+        result.has_packet = true;
+        result.processed.udp_frame = std::move(udp_frame);
+        result.processed.parsed = parsed;
+        result.processed.interpreted = interpreted;
+        result.processed.source_queue_id = datagram.queue_id;
+        result.processed.source_ts_ns = datagram.ts_ns;
+        return result;
     }
 
 } // namespace rxtech

@@ -14,22 +14,27 @@ int main()
     assert(initial.state == rxtech::TrafficState::idle);
     assert(!initial.first_seen_wall.has_value());
 
-    tracker.observe_valid_business_packet(1'000'000'000ULL, "2026-04-12 00:00:01");
+    const auto first = tracker.observe_valid_business_packet(1'000'000'000ULL);
+    assert(first.has_value());
+    assert(first->transition == rxtech::TrafficTransition::first_seen);
+    assert(!first->wall_time.empty());
     const auto active = tracker.snapshot();
     assert(active.state == rxtech::TrafficState::active);
     assert(active.first_seen_wall.has_value());
     assert(active.last_seen_wall.has_value());
 
-    const auto interrupted = tracker.observe_timeout(5'001'000'000ULL, "2026-04-12 00:00:05");
+    const auto interrupted = tracker.observe_timeout(5'001'000'000ULL);
     assert(interrupted.has_value());
     assert(interrupted->transition == rxtech::TrafficTransition::interrupted);
+    assert(!interrupted->wall_time.empty());
     assert(tracker.snapshot().state == rxtech::TrafficState::interrupted);
 
-    const auto resumed = tracker.observe_valid_business_packet(6'000'000'000ULL, "2026-04-12 00:00:06");
+    const auto resumed = tracker.observe_valid_business_packet(6'000'000'000ULL);
     assert(resumed.has_value());
     assert(resumed->transition == rxtech::TrafficTransition::resumed);
+    assert(!resumed->wall_time.empty());
     assert(tracker.snapshot().state == rxtech::TrafficState::active);
-    assert(tracker.snapshot().last_interrupted_wall == "2026-04-12 00:00:05");
-    assert(tracker.snapshot().last_resumed_wall == "2026-04-12 00:00:06");
+    assert(tracker.snapshot().last_interrupted_wall.has_value());
+    assert(tracker.snapshot().last_resumed_wall.has_value());
     return 0;
 }

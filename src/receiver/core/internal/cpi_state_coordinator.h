@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 #include <cstdint>
 #include <string>
 
@@ -94,7 +93,7 @@ namespace rxtech
          * @param metrics 指标收集器引用，用于记录超时事件和相关统计信息
          * @return bool 如果检测到超时并执行了完成操作则返回true，否则返回false
          */
-        bool check_timeout(std::uint64_t now_ns, IMetricsCollector &metrics);
+        bool check_timeout(std::uint64_t now_ns, MetricsCollector &metrics);
 
         /**
          * @brief 处理数据数据包
@@ -116,7 +115,7 @@ namespace rxtech
          * @return CpiProcessResult 处理结果，标识数据包是否被成功接受
          */
         CpiProcessResult process_data_packet(const ParsedPacketView &parsed, const InterpretedPacketView &packet,
-                                             const ProtocolSpec &spec, IMetricsCollector &metrics,
+                                             const ProtocolSpec &spec, MetricsCollector &metrics,
                                              std::string &run_status, std::string &run_error);
 
         /**
@@ -127,7 +126,7 @@ namespace rxtech
          *
          * @param metrics 指标收集器引用，用于记录资源回收统计
          */
-        void drain_recycle(IMetricsCollector &metrics);
+        void drain_recycle(MetricsCollector &metrics);
 
         /**
          * @brief 为干净关闭完成活动和之前的CPI上下文
@@ -137,7 +136,7 @@ namespace rxtech
          *
          * @param metrics 指标收集器引用，用于记录关闭时的统计信息
          */
-        void finalize_active_for_shutdown(IMetricsCollector &metrics);
+        void finalize_active_for_shutdown(MetricsCollector &metrics);
 
         /**
          * @brief 配置输出丢弃策略
@@ -163,7 +162,7 @@ namespace rxtech
          */
         bool output_degraded() const
         {
-            return output_degraded_.load(std::memory_order_relaxed);
+            return output_degraded_;
         }
 
         /**
@@ -187,7 +186,7 @@ namespace rxtech
          * @param run_error 错误信息字符串，用于返回激活失败的详细原因
          * @return bool 如果成功激活新的CPI则返回true，否则返回false（如池耗尽）
          */
-        bool open_active(std::uint16_t cpi_id, IMetricsCollector &metrics, std::string &run_status,
+        bool open_active(std::uint16_t cpi_id, MetricsCollector &metrics, std::string &run_status,
                          std::string &run_error);
 
         /**
@@ -199,18 +198,11 @@ namespace rxtech
          * @param trigger 触发完成的原因代码，如正常完成、超时、错误等
          * @param metrics 指标收集器引用，用于记录CPI完成事件和统计信息
          */
-        void finalize_active(std::uint32_t trigger, IMetricsCollector &metrics);
+        void finalize_active(std::uint32_t trigger, MetricsCollector &metrics);
 
-        /**
-         * @brief 完成前一个CPI上下文
-         *
-         * 清理前一个CPI的资源，将其上下文索引返回到回收环中。
-         * 这确保了资源的及时释放，防止上下文池耗尽。
-         *
-         * @param trigger 触发完成的原因代码
-         * @param metrics 指标收集器引用，用于记录资源释放事件
-         */
-        void finalize_previous(std::uint32_t trigger, IMetricsCollector &metrics);
+        void finalize_previous(std::uint32_t trigger, MetricsCollector &metrics);
+
+        void finalize_ctx(CpiContext *&ctx, std::uint32_t &ctx_index, std::uint32_t trigger, MetricsCollector &metrics);
 
         /**
          * @brief 绑定控制快照到活动CPI
@@ -238,7 +230,7 @@ namespace rxtech
         std::uint32_t previous_ctx_index_ = kInvalidPoolIndex;            ///< 前一个CPI上下文在池中的索引，用于延迟清理
         CpiContext *previous_ctx_ = nullptr;                              ///< 指向前一个CPI上下文的指针
         OutputDropPolicy output_drop_policy_ = OutputDropPolicy::degrade; ///< 输出丢弃策略
-        std::atomic<bool> output_degraded_{false};                        ///< 是否已发生输出退化
+        bool output_degraded_{false};                                     ///< 是否已发生输出退化 (owner-thread only)
     };
 
 } // namespace rxtech

@@ -6,8 +6,8 @@
 namespace rxtech
 {
 
-    DebugCaptureWriter::DebugCaptureWriter(CapturePolicy policy, std::ostream *packet_stream, std::ostream *index_stream,
-                                           std::string run_dir)
+    DebugCaptureWriter::DebugCaptureWriter(CapturePolicy policy, std::ostream *packet_stream,
+                                           std::ostream *index_stream, std::string run_dir)
         : policy_(policy), packet_stream_(packet_stream), index_stream_(index_stream), run_dir_(std::move(run_dir))
     {
         manifest_.policy = capture_policy_name(policy_);
@@ -33,15 +33,17 @@ namespace rxtech
             }
         }
 
-        if (packet_stream_ != nullptr)
+        if (packet_stream_ != nullptr && record.payload_data != nullptr && record.payload_len > 0U)
         {
-            (*packet_stream_) << record.payload;
+            packet_stream_->write(reinterpret_cast<const char *>(record.payload_data),
+                                  static_cast<std::streamsize>(record.payload_len));
         }
 
         if (index_stream_ != nullptr)
         {
             (*index_stream_) << record.cpi << ',' << record.channel << ',' << record.prt << ',' << record.packet_index
-                             << ',' << record.packet_kind << ',' << (record.valid ? "true" : "false") << '\n';
+                             << ',' << packet_kind_name(record.kind) << ',' << (record.valid ? "true" : "false")
+                             << '\n';
         }
         return true;
     }
