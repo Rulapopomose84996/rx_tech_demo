@@ -35,6 +35,10 @@
 - Language standard: `C++17`
 - Build system baseline: `CMake 3.16.x`
 - Preferred generator: `Ninja`
+- Current server validation toolchain constraints:
+  - server `cmake 3.16.5` does not support `cmake --preset`; when validating on server, expand preset parameters manually or use repo scripts
+  - server `g++ 7.3.0` is part of the active compatibility baseline; do not assume `std::filesystem` is available just because code is compiled with `-std=c++17`
+  - when adding path or directory utilities in hot codepaths, prefer compatibility helpers that work on the server baseline instead of newer standard library filesystem APIs
 - Current runtime mainline:
   - `DPDK` in `src/receiver`
 - Common third-party libraries may include:
@@ -78,6 +82,7 @@
 - Treat the current DPDK receiver path as the only active runtime path unless project code and docs explicitly change that.
 - Do not reintroduce AF_XDP assumptions into mainline docs, config semantics, or runtime status fields without explicit user direction.
 - Treat fake tests, parser tests, and isolated unit tests as useful evidence, but not as proof of real network-path success.
+- For server validation commands derived from `CMakePresets.json`, remember that the preset file is authoritative for parameters but may not be invokable directly on the server because of the `cmake 3.16.5` baseline.
 - Only claim “real closed-loop validation” when the required external sender, network path, and receiver runtime are actually validated on the server.
 - If the external sender is unavailable, say so explicitly and limit claims to the level that was truly validated.
 - When build or test guidance is needed, prefer active project docs and current repository instructions over historical planning text.

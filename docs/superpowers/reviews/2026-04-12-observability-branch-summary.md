@@ -122,12 +122,65 @@
 - `summary.json` / `summary.txt` 可生成
 - `summary.capture.capture_policy == "first_effective_cpi"`
 
+### Linux 服务器权威验证（2026-04-12）
+
+已完成的服务器侧动作：
+
+- 本地分支 `codex/observability-logging-stage1` 已确认推送到 `gitea`
+- 服务器工作区 `/home/devuser/WorkSpace/rx_tech_demo` 已切换到：
+  - 分支：`codex/observability-logging-stage1`
+  - 提交：`067818e386fcb40a8f9cbadb03ef3393241f0ccf`
+- 已在服务器按 `linux-server-werror` 对应参数手动展开配置：
+  - 原因：服务器 `cmake 3.16.5` 不支持 `cmake --preset`
+  - 实际配置方式：`cmake -S . -B build-preset-werror -G Ninja -DBUILD_TESTS=ON -DBUILD_REPLAY=OFF -DCMAKE_BUILD_TYPE=Debug -DRXTECH_THIRD_PARTY_CACHE=/home/devuser/WorkSpace/ThirdPartyCache -DRXTECH_WARNINGS_AS_ERRORS=ON`
+
+服务器权威结论：
+
+- 初次权威构建曾被 `src/receiver/sidecar/structured_logger.cpp` 的 `std::filesystem` 用法阻断
+- 服务器编译环境：
+  - `cmake 3.16.5`
+  - `g++ 7.3.0`
+- 已修复方式：
+  - 将 `structured_logger.cpp` 的目录创建逻辑改为不依赖 `std::filesystem` 的兼容实现
+  - 为 `test_event_logger` 补充“镜像日志父目录不存在时自动创建”的回归用例
+- 修复后重新在服务器完成：
+  - `linux-server-werror` 全量构建通过
+  - 关键 unit 闸口通过：
+    - `test_event_logger`
+    - `test_summary_renderer`
+    - `test_traffic_state_tracker`
+    - `test_debug_capture_writer`
+    - `test_owner_loop_summary`
+    - `test_rx_config`
+    - `test_metrics_exporter`
+  - `rxtech_integration_fake_tests` 通过
+  - `socket_loopback` 5 秒固定时长运行通过
+- 本次 socket loopback 权威运行产物：
+  - 运行目录：`results/20260412_113036_socket_loopback`
+  - 已生成：
+    - `events.jsonl`
+    - `summary.json`
+    - `summary.txt`
+    - `capture_index.csv`
+    - `capture_packets.bin`
+- 本次 socket loopback 权威运行观察：
+  - 有 `run.header`
+  - 有持续 `status.snapshot`
+  - 无真实业务流量，因此 `traffic.*` 事件缺失符合预期
+  - `summary.txt` / `summary.json` 可解析，后端为 `socket`
+
+本次未安排的验证：
+
+- 未安排真实 sender 配合
+- 因此未开展真实 10G 网口链路接收验证
+- 未开展 `traffic.interrupted` / `traffic.resumed` 的真实生产链路验证
+- 未开展 `first_effective_cpi` 在真实业务流量下的验证
+- 未开展 `raw_record` 在真实 DPDK 数据面下的专项验证
+
 ## 尚未完成的权威验证
 
 当前仍不能宣称以下事项已完成：
 
-- Linux 服务器权威构建通过
-- Linux 服务器权威 unit / integration 测试通过
 - 真实 10G 网口路径收包验证
 - sender 中断后的 `traffic.interrupted` / `traffic.resumed` 生产路径验证
 - 首个有效 CPI 样本在真实业务流量下的有效性验证
@@ -136,13 +189,14 @@
 ## 风险与注意事项
 
 - 当前分支验证依赖 WSL fallback，只能作为开发侧证明，不能替代服务器权威结论
+- 2026-04-12 已发现并修复服务器 `g++ 7.3.0` 下的 `std::filesystem` 兼容性问题，但这也说明后续路径相关代码必须继续遵守该服务器工具链基线
 - 当前仓库还有 1 个未提交的无关文档改动，不属于这轮可观测性提交链
 - `RawFrameRecorder` 仍保留旧实现机制，本轮只补了角色定位与事件留痕，没有改写其内部 writer 线程模型
 
 ## 建议的下一步
 
-- 优先恢复 `ssh kds` 或等价服务器入口
-- 按服务器验证清单逐项完成权威验证
+- 等真实 sender 就位后，再执行真实 10G 网口与 DPDK 链路验证
+- 在后续功能开发中，把服务器 `cmake 3.16.5 + g++ 7.3.0` 视作真实兼容性下限，避免再次引入仅在较新工具链可用的标准库路径能力
 - 服务器验证完成后，再决定是否：
   - 推送当前分支
   - 整理 PR
